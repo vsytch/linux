@@ -1244,6 +1244,11 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		ohci_hcd_tilegx_driver
 #endif
 
+#ifdef CONFIG_MACH_NPCM750
+#include "ohci-npcmx50.c"
+#define PLATFORM_DRIVER		ohci_hcd_npcmx50_driver
+#endif
+
 static int __init ohci_hcd_mod_init(void)
 {
 	int retval = 0;

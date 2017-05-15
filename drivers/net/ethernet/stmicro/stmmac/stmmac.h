@@ -126,6 +126,7 @@ struct stmmac_priv {
 	int use_riwt;
 	int irq_wake;
 	spinlock_t ptp_lock;
+	spinlock_t lpi_lock;
 	void __iomem *mmcaddr;
 	void __iomem *ptpaddr;
 	u32 rx_tail_addr;

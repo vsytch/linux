@@ -5,7 +5,7 @@
 config NET_VENDOR_NUVOTON
 	bool "Nuvoton devices"
 	default y
-	depends on ARM && ARCH_W90X900
+	depends on ARM && (ARCH_W90X900 || ARCH_NPCMX50)
 	---help---
 	  If you have a network (Ethernet) card belonging to this class, say Y.
 
@@ -24,5 +24,36 @@ config W90P910_ETH
 	---help---
 	  Say Y here if you want to use built-in Ethernet ports
 	  on w90p910 processor.
+
+config NPCM750_EMC_ETH
+	bool "Nuvoton NPCM750 Ethernet EMC"
+	depends on ARM && ARCH_NPCMX50 && MACH_NPCM750
+	select PHYLIB
+	select NET_CORE
+	select MII
+	---help---
+	  Say Y here if you want to use built-in Ethernet MAC
+	  on NPCM750 MCU.
+
+config NPCM750_EMC_ETH_DEBUG
+	bool "Nuvoton NPCM750 Ethernet EMC debug"
+	depends on NPCM750_EMC_ETH
+	---help---
+	  Say Y here if you want debug info via /proc/driver/npcm750_emc.x
+
+config NPCM750_EMC_ETH_DEBUG_EXT
+	bool "Nuvoton NPCM750 Ethernet EMC extra debug"
+	depends on NPCM750_EMC_ETH_DEBUG
+	---help---
+	  Say Y here if you want extra debug info via /proc/driver/npcm750_emc.x
+
+config NPCMX50_GMAC_ETH
+	bool "Nuvoton NPCMX50 GMAC ethernet driver (STMicro based)"
+	depends on ARM && ARCH_NPCMX50 && MACH_NPCM750
+	select NET_VENDOR_STMICRO
+	select STMMAC_ETH
+	select STMMAC_PLATFORM
+	help 
+	 no	
 
 endif # NET_VENDOR_NUVOTON

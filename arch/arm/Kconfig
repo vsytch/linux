@@ -642,6 +642,15 @@ config ARCH_OMAP1
 	help
 	  Support for older TI OMAP1 (omap7xx, omap15xx or omap16xx)
 
+config ARCH_NPCMX50
+	bool "Nuvoton NPCMX50 Architecture"
+	select ARCH_REQUIRE_GPIOLIB
+	select USE_OF
+	select PINCTRL
+	select PINCTRL_NPCMX50
+	help
+	  Nuvoton NPCMX50 CPU based systems.
+
 endchoice
 
 menu "Multiple platform selection"
@@ -773,6 +782,8 @@ source "arch/arm/mach-mv78xx0/Kconfig"
 source "arch/arm/mach-imx/Kconfig"
 
 source "arch/arm/mach-mediatek/Kconfig"
+
+source "arch/arm/mach-npcmX50/Kconfig"
 
 source "arch/arm/mach-mxs/Kconfig"
 

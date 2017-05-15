@@ -268,7 +268,8 @@ stmmac_probe_config_dt(struct platform_device *pdev, const char **mac)
 	if (of_device_is_compatible(np, "st,spear600-gmac") ||
 		of_device_is_compatible(np, "snps,dwmac-3.50a") ||
 		of_device_is_compatible(np, "snps,dwmac-3.70a") ||
-		of_device_is_compatible(np, "snps,dwmac")) {
+		of_device_is_compatible(np, "snps,dwmac") 		||
+		of_device_is_compatible(np, "nuvoton,npcm750-gmac")) {
 		/* Note that the max-frame-size parameter as defined in the
 		 * ePAPR v1.1 spec is defined as max-frame-size, it's
 		 * actually used as the IEEE definition of MAC Client

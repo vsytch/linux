@@ -556,5 +556,14 @@ config CRYPTO_DEV_ROCKCHIP
 source "drivers/crypto/chelsio/Kconfig"
 
 source "drivers/crypto/virtio/Kconfig"
-
+	  
+config CRYPTO_DEV_NPCMX50
+	bool "Support Nuvoton BMC npcmx50 HW crypto engines"
+	depends on CPU_NPCM750
+	default n
+	help
+	  Support Nuvoton BMC npcmx50 HW crypto engines.
+	  
+source drivers/crypto/npcmX50/Kconfig
+ 
 endif # CRYPTO_HW

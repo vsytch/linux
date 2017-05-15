@@ -250,9 +250,13 @@ static void stmmac_enable_eee_mode(struct stmmac_priv *priv)
  */
 void stmmac_disable_eee_mode(struct stmmac_priv *priv)
 {
+	unsigned long flags;
+    
 	priv->hw->mac->reset_eee_mode(priv->hw);
 	del_timer_sync(&priv->eee_ctrl_timer);
+	spin_lock_irqsave(&priv->lpi_lock, flags);
 	priv->tx_path_in_lpi_mode = false;
+	spin_unlock_irqrestore(&priv->lpi_lock, flags);
 }
 
 /**
@@ -1377,6 +1381,7 @@ static void stmmac_tx_clean(struct stmmac_priv *priv)
 	priv->dirty_tx = entry;
 
 	netdev_completed_queue(priv->dev, pkts_compl, bytes_compl);
+	netif_tx_unlock(priv->dev);
 
 	if (unlikely(netif_queue_stopped(priv->dev) &&
 	    stmmac_tx_avail(priv) > STMMAC_TX_THRESH)) {
@@ -1385,11 +1390,14 @@ static void stmmac_tx_clean(struct stmmac_priv *priv)
 		netif_wake_queue(priv->dev);
 	}
 
-	if ((priv->eee_enabled) && (!priv->tx_path_in_lpi_mode)) {
-		stmmac_enable_eee_mode(priv);
-		mod_timer(&priv->eee_ctrl_timer, STMMAC_LPI_T(eee_timer));
-	}
-	netif_tx_unlock(priv->dev);
+    if (priv->eee_enabled) {
+        unsigned long flags;
+        spin_lock_irqsave(&priv->lpi_lock, flags);
+        if (!priv->tx_path_in_lpi_mode) {
+            mod_timer(&priv->eee_ctrl_timer, STMMAC_LPI_T(eee_timer));
+        }
+        spin_unlock_irqrestore(&priv->lpi_lock, flags);
+    }
 }
 
 static inline void stmmac_enable_dma_irq(struct stmmac_priv *priv)
@@ -1783,6 +1791,17 @@ static int stmmac_open(struct net_device *dev)
 			return ret;
 		}
 	}
+
+	#if !defined (POLEG_DRB_HW)
+		
+	if (priv->mii)
+	{
+		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0xD34);	  // In Phy Reg 17h -> Enable Top Level Expantion Register 34H
+		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x15, 0x3);	  // In Phy Reg 15h (34h) -> Enable 125MHZ clock output 
+		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0x0);	  // In Phy Reg 17h -> Disable Top Level Expantion Register 34H  
+	}
+	
+	#endif
 
 	/* Extra statistics */
 	memset(&priv->xstats, 0, sizeof(struct stmmac_extra_stats));
@@ -3347,6 +3366,8 @@ int stmmac_dvr_probe(struct device *device,
 	netif_napi_add(ndev, &priv->napi, stmmac_poll, 64);
 
 	spin_lock_init(&priv->lock);
+	spin_lock_init(&priv->lpi_lock);
+
 
 	/* If a specific clk_csr value is passed from the platform
 	 * this means that the CSR Clock Range selection cannot be

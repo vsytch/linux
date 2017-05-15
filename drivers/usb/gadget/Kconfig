@@ -480,4 +480,11 @@ source "drivers/usb/gadget/legacy/Kconfig"
 
 endchoice
 
+# EDM Keyboard/Mouse and Mass Storage select this.
+config USB_GADGET_DUALSPEED
+    bool
+
+config USB_EDM_ENABLE_DMA_TRANSFER
+    bool
+
 endif # USB_GADGET

@@ -1,6 +1,12 @@
 #
 # USB gadget drivers
 #
+ifndef RUN_ONLY_ONCE
+ USB_GADGET_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+ $(shell ln -s -f $(USB_GADGET_DIR)/mass_storage.c $(USB_GADGET_DIR)/mass_storage1.c )
+ $(shell ln -s -f $(USB_GADGET_DIR)/mass_storage.c $(USB_GADGET_DIR)/mass_storage2.c )
+ RUN_ONLY_ONCE := 1
+endif
 
 ccflags-y			:= -I$(srctree)/drivers/usb/gadget/
 ccflags-y			+= -I$(srctree)/drivers/usb/gadget/udc/
@@ -13,6 +19,9 @@ g_serial-y			:= serial.o
 g_midi-y			:= gmidi.o
 gadgetfs-y			:= inode.o
 g_mass_storage-y		:= mass_storage.o
+g_mass_storage1-y		:= mass_storage1.o
+g_mass_storage2-y		:= mass_storage2.o
+g_edm_kbdmouse-y		:= edmKbdMouse.o
 g_printer-y			:= printer.o
 g_cdc-y				:= cdc2.o
 g_multi-y			:= multi.o
@@ -30,6 +39,9 @@ obj-$(CONFIG_USB_ETH)		+= g_ether.o
 obj-$(CONFIG_USB_GADGETFS)	+= gadgetfs.o
 obj-$(CONFIG_USB_FUNCTIONFS)	+= g_ffs.o
 obj-$(CONFIG_USB_MASS_STORAGE)	+= g_mass_storage.o
+obj-$(CONFIG_USB_MASS_STORAGE)	+= g_mass_storage1.o
+obj-$(CONFIG_USB_MASS_STORAGE)	+= g_mass_storage2.o
+obj-$(CONFIG_USB_EDM_KBD_MOUSE)	+= g_edm_kbdmouse.o
 obj-$(CONFIG_USB_G_SERIAL)	+= g_serial.o
 obj-$(CONFIG_USB_G_PRINTER)	+= g_printer.o
 obj-$(CONFIG_USB_MIDI_GADGET)	+= g_midi.o

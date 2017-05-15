@@ -70,6 +70,7 @@ err_remove_config_dt:
 }
 
 static const struct of_device_id dwmac_generic_match[] = {
+	{ .compatible = "nuvoton,npcm750-gmac"},
 	{ .compatible = "st,spear600-gmac"},
 	{ .compatible = "snps,dwmac-3.50a"},
 	{ .compatible = "snps,dwmac-3.610"},

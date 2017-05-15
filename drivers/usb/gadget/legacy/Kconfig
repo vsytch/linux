@@ -257,6 +257,24 @@ config USB_GADGET_TARGET
 	  alternative interface 1. Both protocols can work on USB2.0 and USB3.0.
 	  UAS utilizes the USB 3.0 feature called streams support.
 
+config USB_EDM_KBD_MOUSE
+    tristate "EDM Keyboard/Mouse Gadget"
+    select USB_GADGET_DUALSPEED
+    select USB_EDM_ENABLE_DMA_TRANSFER
+    select USB_LIBCOMPOSITE
+    help
+        Avocent's version of a keyboard/mouse gadget.
+        Say "y" to link the driver statically, or "m" to build
+        a dynamically linkded module called "g_edm_kbdmouse".
+
+config USB_MOUSE_RELATIVE
+    bool "Relative mouse interface"
+    depends on USB_EDM_KBD_MOUSE
+    default n
+    help
+        This option enables an extra interface on the keyboard/mouse
+        gadget used for relative mouse functionality.
+
 config USB_G_SERIAL
 	tristate "Serial Gadget (with CDC ACM and CDC OBEX support)"
 	depends on TTY

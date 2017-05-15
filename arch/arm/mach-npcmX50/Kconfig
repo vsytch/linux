@@ -1,0 +1,97 @@
+if ARCH_NPCMX50
+
+comment "NPCMX50 CPU type"
+
+config CPU_WPCM450
+	depends on ARCH_NPCMX50
+	bool "Support for WPCM450 BMC CPU (Hermon)"
+	select CPU_ARM926T
+	help
+	  Support for WPCM450 BMC CPU (Hermon).
+
+config CPU_NPCM650
+	depends on ARCH_NPCMX50
+	bool "Support for NPCM650 BMC CPU (Yarkon)"
+	select CPU_ARM926T    
+	help
+	  Support for NPCM650 BMC CPU (Yarkon).
+
+config CPU_NPCM750
+	depends on ARCH_NPCMX50
+	bool "Support for NPCM750 BMC CPU (Poleg)"
+	select CACHE_L2X0
+	select CPU_V7
+	select ARM_GIC
+	select ARM_ERRATA_754322
+	select ARM_ERRATA_764369
+	select USB_EHCI_ROOT_HUB_TT
+	select USB_ARCH_HAS_HCD
+	select USB_ARCH_HAS_EHCI
+	select USB_EHCI_HCD
+	select USB_ARCH_HAS_OHCI
+	select USB_OHCI_HCD
+	select USB
+	select FIQ
+	select CPU_USE_DOMAINS	
+	select COMMON_CLK if OF
+#	select MIGHT_HAVE_CACHE_L2X0
+	help
+	  Support for NPCM750 BMC CPU (Poleg).
+
+config CPU_NPCM750_SMP
+	depends on ARCH_NPCMX50
+	bool "Support for NPCM750 BMC CPU SMP (Poleg)"
+	select HAVE_SMP
+	select HAVE_ARM_SCU
+	select ARM_ERRATA_458693
+	select ARM_ERRATA_742231
+	select ARM_ERRATA_794072
+	select PL310_ERRATA_588369
+	select PL310_ERRATA_727915
+	select ARM_ERRATA_720789
+	select DEBUG_SPINLOCK
+	select GENERIC_CLOCKEVENTS
+	select SMP
+	select HAVE_ARM_TWD if SMP
+	select HAVE_ARM_SCU if SMP
+	select CLKDEV_LOOKUP
+	select COMMON_CLK if OF
+#	select MIGHT_HAVE_CACHE_L2X0
+	help
+	  Support for NPCM750 BMC CPU (Poleg).
+      
+comment "NPCMX50 Machines"
+
+config MACH_WPCM450
+	depends on ARCH_NPCMX50
+	bool "Nuvoton WPCM450 Machine"
+	select CPU_WPCM450
+	help
+	  Nuvoton WPCM450 Machine
+      
+config MACH_NPCM650
+	depends on ARCH_NPCMX50
+	bool "Nuvoton NPCM650 Machine"
+	select CPU_NPCM650
+	help
+	  Nuvoton NPCM650 Machine
+
+config MACH_NPCM750
+	depends on ARCH_NPCMX50
+	bool "Nuvoton NPCM750 Machine"
+	select CPU_NPCM750
+	help
+	  Nuvoton NPCM750 Machine
+
+config NPCMX50_PCI
+	depends on ARCH_NPCMX50
+	bool "Nuvoton NPCM750 PCI support"
+	default n
+	select PCI
+	select PCI_MSI
+	help
+	  NPCM750 PCIe Root Complex support.
+
+	  If unsure, say Y.
+	  
+endif
