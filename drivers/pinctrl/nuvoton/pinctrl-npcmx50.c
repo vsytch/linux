@@ -351,25 +351,24 @@ static void npcmgpio_gpio_free(struct gpio_chip *chip, unsigned offset)
  * IRQ code
  *==============================================*/
 #ifdef GPIO_DRIVER
-static void npcmgpio_irq_handler(unsigned int irq, struct irq_desc *desc)
+static void npcmgpio_irq_handler(struct irq_desc *desc)
 {
 	struct irq_chip *chip;
 	struct npcm_reg *bank;
 	u32 sts, en, bit, virq;
 
 	chip = irq_desc_get_chip(desc);
-	bank = irq_get_handler_data(irq);
+	bank = irq_desc_get_handler_data(desc);
 
 	chained_irq_enter(chip, desc);
 	sts = npcm_read32(bank->base + GPnEVST);
 	en  = npcm_read32(bank->base + GPnEVEN);
-	DRV_MSG2("==> got irq %u %.8x %.8x\n", irq, sts, en);
+	DRV_MSG2("==> got irq sts %.8x %.8x\n", sts, en);
 
 	sts &= en;
 	for_each_set_bit(bit, (const void *)&sts, GPIO_PER_BANK) {
 		virq = irq_find_mapping(npcm.domain, bank->irqbase + bit);
-		pr_info(" irq_handler[%d] gpio:%u irq:%u\n", irq,
-			bank->irqbase + bit, virq);
+		pr_info(" gpio:%u irq:%u\n", bank->irqbase + bit, virq);
 		if (virq) {
 			/* Pass off to virtual interrupt handler */
 			generic_handle_irq(virq);
