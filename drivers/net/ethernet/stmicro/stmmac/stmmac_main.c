@@ -2190,6 +2190,10 @@ static netdev_tx_t stmmac_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct dma_desc *desc, *first;
 	unsigned int enh_desc;
 	unsigned int des;
+	
+	if (priv->tx_path_in_lpi_mode)
+		stmmac_disable_eee_mode(priv);
+
 
 	/* Manage oversized TCP frames for GMAC4 device */
 	if (skb_is_gso(skb) && priv->tso) {
@@ -2207,9 +2211,6 @@ static netdev_tx_t stmmac_xmit(struct sk_buff *skb, struct net_device *dev)
 		}
 		return NETDEV_TX_BUSY;
 	}
-
-	if (priv->tx_path_in_lpi_mode)
-		stmmac_disable_eee_mode(priv);
 
 	entry = priv->cur_tx;
 	first_entry = entry;
@@ -2801,6 +2802,17 @@ static int stmmac_set_features(struct net_device *netdev,
 	return 0;
 }
 
+static void stmmac_lpi_mode(struct stmmac_priv *priv, int status)
+{
+	spin_lock(&priv->lpi_lock);
+			/* For LPI we need to save the tx status */
+			if (status & CORE_IRQ_TX_PATH_IN_LPI_MODE)
+				priv->tx_path_in_lpi_mode = true;
+			if (status & CORE_IRQ_TX_PATH_EXIT_LPI_MODE)
+				priv->tx_path_in_lpi_mode = false;
+	spin_unlock(&priv->lpi_lock);
+}
+
 /**
  *  stmmac_interrupt - main ISR
  *  @irq: interrupt number.
@@ -2830,11 +2842,7 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
 		int status = priv->hw->mac->host_irq_status(priv->hw,
 							    &priv->xstats);
 		if (unlikely(status)) {
-			/* For LPI we need to save the tx status */
-			if (status & CORE_IRQ_TX_PATH_IN_LPI_MODE)
-				priv->tx_path_in_lpi_mode = true;
-			if (status & CORE_IRQ_TX_PATH_EXIT_LPI_MODE)
-				priv->tx_path_in_lpi_mode = false;
+			stmmac_lpi_mode(priv, status);
 			if (status & CORE_IRQ_MTL_RX_OVERFLOW && priv->hw->dma->set_rx_tail_ptr)
 				priv->hw->dma->set_rx_tail_ptr(priv->ioaddr,
 							priv->rx_tail_addr,
