@@ -134,6 +134,8 @@ CONFIG_UEVENT_HELPER_PATH="/sbin/hotplug"
 # Bus devices
 #
 CONFIG_MTD=y
+CONFIG_MTD_SPI_NOR=y
+CONFIG_SPI_NUVOTON=y
 
 #
 # User Modules And Translation Layers
