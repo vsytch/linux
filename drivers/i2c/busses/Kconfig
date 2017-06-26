@@ -704,6 +704,16 @@ config I2C_NOMADIK
 	  I2C interface from ST-Ericsson's Nomadik and Ux500 architectures,
 	  as well as the STA2X11 PCIe I/O HUB.
 
+config I2C_NPCMX50
+	tristate "Nuvoton I2C Controller"
+	depends on ARCH_NPCMX50
+	help
+	  If you say yes to this option, support will be included for the
+	  Nuvoton I2C controller.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called i2c-npcmx50.
+
 config I2C_OCORES
 	tristate "OpenCores I2C Controller"
 	help
@@ -1234,5 +1244,16 @@ config I2C_OPAL
 
 	  This driver can also be built as a module. If so, the module will be
 	  called as i2c-opal.
+
+config I2C_FSI
+	tristate "FSI I2C driver"
+	depends on FSI
+	help
+	  Driver for FSI bus attached I2C masters. These are I2C masters that
+	  are connected to the system over a FSI bus, instead of the more
+	  common PCI or MMIO interface.
+
+	  This driver can also be built as a module. If so, the module will be
+	  called as i2c-fsi.
 
 endmenu

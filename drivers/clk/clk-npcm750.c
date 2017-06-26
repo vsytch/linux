@@ -424,6 +424,7 @@ u32 npcm750_clk_Delay_Since (u32 microSecDelay, u32 t0_time[2])
     /*-----------------------------------------------------------------------------------------------------*/
     return (u32)(timeElapsedSince / NPCMX50_EXT_CLOCK_FREQUENCY_MHZ);
 }
+EXPORT_SYMBOL(npcm750_clk_Delay_Since);
 
 /*---------------------------------------------------------------------------------------------------------*/
 /* Function:        npcm750_clk_EnableEMCClock                                                             */

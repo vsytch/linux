@@ -20,5 +20,6 @@
 #define __LINUX_CLK_NUVOTON_H_
 
 void nuvoton_npcm750_clock_init(void);
+u32 npcm750_clk_Delay_Since (u32 microSecDelay, u32 t0_time[2]);
 
 #endif
