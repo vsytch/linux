@@ -24,16 +24,6 @@ config NPCMX50_I2C
 	  To compile this driver as a module, choose M here: the
 	  module will be called aess_i2cdrv.
 
-config NPCMX50_ADC
-	tristate "support npcmx50 ADC bus connection"
-	depends on ARCH_NPCMX50
-	default y
-	help
-	  Say Y here if you want ioctl npcmx50 ADC bus connection.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called aess_adcdrv.
-
 config NPCMX50_PWM
 	tristate "support npcmx50 PWM bus connection"
 	depends on ARCH_NPCMX50
