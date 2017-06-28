@@ -38,7 +38,91 @@
 #include <asm/irq.h>
 
 //#include <mach/hardware.h>
-#include <mach/hal.h>
+//#include <mach/hal.h>
+
+
+//#include <asm/io.h>
+
+/*---------------------------------------------------------------------------------------------------------*/
+/*                                                CONSTANTS                                                */
+/*---------------------------------------------------------------------------------------------------------*/
+#ifndef  FALSE
+#define  FALSE      (BOOLEAN)0
+#endif
+
+#ifndef  TRUE
+#define  TRUE       (BOOLEAN)1
+#endif
+
+#ifndef  NULL
+#define  NULL       0
+#endif
+
+#define ENABLE      1
+#define DISABLE     0
+
+/*---------------------------------------------------------------------------------------------------------*/
+/*                                        GENERIC TYPES DEFINITIONS                                        */
+/*---------------------------------------------------------------------------------------------------------*/
+typedef unsigned char  UINT8;                       /* Unsigned  8 bit quantity                            */
+typedef signed   char  INT8;                        /* Signed    8 bit quantity                            */
+typedef unsigned short UINT16;                      /* Unsigned 16 bit quantity                            */
+typedef short          INT16;                       /* Signed   16 bit quantity                            */
+
+/*-----------------------------------------------------------------------------------------------------*/
+/* unsigned int is 32bit for linux kernel and uboot                                                    */
+/*-----------------------------------------------------------------------------------------------------*/
+typedef unsigned int   UINT32;                 /* Unsigned 32 bit quantity                            */
+typedef signed   int   INT32;                  /* Signed   32 bit quantity                            */
+
+
+/*-------------------------------------------------------------------------------------------------*/
+/* long long type is 64bit                                                                         */
+/*-------------------------------------------------------------------------------------------------*/
+typedef unsigned long long  UINT64;         /* Unsigned 64 bit quantity                            */
+typedef long long           INT64;          /* Signed 64 bit quantity                              */
+
+
+/*---------------------------------------------------------------------------------------------------------*/
+/* Core dependent types                                                                                    */
+/*---------------------------------------------------------------------------------------------------------*/
+typedef UINT32              UINT;                       /* Native type of the core that fits the core's    */
+typedef INT32               INT;                        /* internal registers                              */
+typedef UINT                BOOLEAN;
+
+
+/*---------------------------------------------------------------------------------------------------------*/
+/* Frequency (basic unit : hertz)                                                                          */
+/*---------------------------------------------------------------------------------------------------------*/
+#define _1Hz_           1UL
+#define _1KHz_          (1000 * _1Hz_ )
+#define _1MHz_          (1000 * _1KHz_)
+#define _1GHz_          (1000 * _1MHz_)
+
+/*---------------------------------------------------------------------------------------------------------*/
+/* Extracting Nibble - 4 bit: MSN, LSN                                                                     */
+/*---------------------------------------------------------------------------------------------------------*/
+#define MSN(u8)        ((UINT8)((UINT8)(u8) >> 4))
+#define LSN(u8)        ((UINT8)((UINT8)u8 & 0x0F))
+
+/*---------------------------------------------------------------------------------------------------------*/
+/* Extracting Byte - 8 bit: MSB, LSB                                                                       */
+/*---------------------------------------------------------------------------------------------------------*/
+#define MSB(u16)        ((UINT8)((UINT16)(u16) >> 8))
+#define LSB(u16)        ((UINT8)(u16))
+
+/*---------------------------------------------------------------------------------------------------------*/
+/* Extracting Word - 16 bit: MSW, LSW                                                                      */
+/*---------------------------------------------------------------------------------------------------------*/
+#define MSW(u32)        ((UINT16)((UINT32)(u32) >> 16))
+#define LSW(u32)        ((UINT16)(u32))
+
+/*---------------------------------------------------------------------------------------------------------*/
+/* Extracting Double Word - 32 bit: MSD, LSD                                                               */
+/*---------------------------------------------------------------------------------------------------------*/
+#define MSD(u64)        ((UINT32)((UINT64)(u64) >> 32))
+#define LSD(u64)        ((UINT32)(u64))
+
 
 #define PORT_NPCMX50    101
 
@@ -54,7 +138,10 @@
 
 #define NPCMX50_UART_NUM_OF_MODULES             4
 
-
+typedef struct bit_field {
+    u8 offset;
+    u8 size;
+} bit_field_t;
 
 /*---------------------------------------------------------------------------------------------------------*/
 /* UART REGS                                                                                               */
@@ -63,110 +150,109 @@
 /**************************************************************************************************************************/
 /*   Receive Buffer Register (RBR)                                                                                        */
 /**************************************************************************************************************************/
-#define  UART_RBR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0000) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0000h */
-#define  RBR_Transmit                    0 , 8               /* Transmit Holding Register (THR)                                                                                       */
+#define  UART_RBR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0000)        /* Offset: UART_BA + 0000h */
+static const bit_field_t RBR_Transmit =   { 0 , 8 };  /* Transmit Holding Register (THR)                                                                                       */
 
 /**************************************************************************************************************************/
 /*   Transmit Holding Register (THR)                                                                                      */
 /**************************************************************************************************************************/
-#define  UART_THR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0000) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0000h */
+#define  UART_THR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0000)        /* Offset: UART_BA + 0000h */
 
 /**************************************************************************************************************************/
 /*   Interrupt Enable Register (IER)                                                                                      */
 /**************************************************************************************************************************/
-#define  UART_IER(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0004) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0004h */
-#define  IER_nDBGACK_EN                  4 , 1               /* 4 nDBGACK_EN (ICE Debug Mode Acknowledge Enable).                                                                     */
-#define  IER_MSIE                        3 , 1               /* 3 MSIE (Modem Status Interrupt (Irpt_MOS) Enable).                                                                    */
-#define  IER_RLSIE                       2 , 1               /* 2 RLSIE (Receive Line Status Interrupt (Irpt_RLS) Enable).                                                            */
-#define  IER_THREIE                      1 , 1               /* 1 THREIE (Transmit Holding Register Empty Interrupt (Irpt_THRE) Enable).                                              */
-#define  IER_RDAIE                       0 , 1               /* 0 RDAIE (Receive Data Available Interrupt (Irpt_RDA) Enable and Timeout Interrupt (Irpt_TOUT) Enable).                */
+#define  UART_IER(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0004)        /* Offset: UART_BA + 0004h */
+static const bit_field_t IER_nDBGACK_EN = { 4 , 1 };  /* 4 nDBGACK_EN (ICE Debug Mode Acknowledge Enable).                                                                     */
+static const bit_field_t IER_MSIE =       { 3 , 1 };  /* 3 MSIE (Modem Status Interrupt (Irpt_MOS) Enable).                                                                    */
+static const bit_field_t IER_RLSIE =      { 2 , 1 };  /* 2 RLSIE (Receive Line Status Interrupt (Irpt_RLS) Enable).                                                            */
+static const bit_field_t IER_THREIE =     { 1 , 1 };  /* 1 THREIE (Transmit Holding Register Empty Interrupt (Irpt_THRE) Enable).                                              */
+static const bit_field_t IER_RDAIE =      { 0 , 1 };  /* 0 RDAIE (Receive Data Available Interrupt (Irpt_RDA) Enable and Timeout Interrupt (Irpt_TOUT) Enable).                */
 
 /**************************************************************************************************************************/
 /*   Divisor Latch (Low Byte) Register (DLL)                                                                              */
 /**************************************************************************************************************************/
-#define  UART_DLL(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0000) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0000h */
+#define  UART_DLL(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0000)        /* Offset: UART_BA + 0000h */
 
 /**************************************************************************************************************************/
 /*   Divisor Latch (High Byte) Register (DLM)                                                                             */
 /**************************************************************************************************************************/
-#define  UART_DLM(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0004) , NPCMX50_UART_ACCESS, 8         /* Offset: UART_BA + 0004h */
-#define  DLM_Baud                   0 , 8                    /* 7-0 Baud Rate Divisor (High Byte). The high byte of the baud rate divisor.                                            */
+#define  UART_DLM(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0004)         /* Offset: UART_BA + 0004h */
+static const bit_field_t DLM_Baud =  { 0 , 8 };  /* 7-0 Baud Rate Divisor (High Byte). The high byte of the baud rate divisor.                                            */
 
 /**************************************************************************************************************************/
 /*   Interrupt Identification Register (IIR)                                                                              */
 /**************************************************************************************************************************/
-#define  UART_IIR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0008) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0008h */
-#define  IIR_FMES                        7 , 1               /* 7 FMES (FIFO Mode Enable Status). Indicates whether FIFO mode is enabled or not. Since FIFO mode is                   */
-#define  IIR_RFTLS                       5 , 2               /* 6-5 RFTLS (RxFIFO Threshold Level Status). Shows the current setting of the receiver FIFO threshold level             */
-#define  IIR_DMS                         4 , 1               /* 4 DMS (DMA Mode Select). The DMA function is not implemented in this version. When reading IIR, the DMS               */
-#define  IIR_IID                         1 , 3               /* 3-1 IID (Interrupt Identification). IID together with NIP indicates the current interrupt request from the UART.      */
-#define  IIR_NIP                         0 , 1               /* 0 NIP (No Interrupt Pending).                                                                                         */
+#define  UART_IIR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0008)        /* Offset: UART_BA + 0008h */
+static const bit_field_t IIR_FMES =       { 7 , 1 };  /* 7 FMES (FIFO Mode Enable Status). Indicates whether FIFO mode is enabled or not. Since FIFO mode is                   */
+static const bit_field_t IIR_RFTLS =      { 5 , 2 };  /* 6-5 RFTLS (RxFIFO Threshold Level Status). Shows the current setting of the receiver FIFO threshold level             */
+static const bit_field_t IIR_DMS =        { 4 , 1 };  /* 4 DMS (DMA Mode Select). The DMA function is not implemented in this version. When reading IIR, the DMS               */
+static const bit_field_t IIR_IID =        { 1 , 3 };  /* 3-1 IID (Interrupt Identification). IID together with NIP indicates the current interrupt request from the UART.      */
+static const bit_field_t IIR_NIP =        { 0 , 1 };  /* 0 NIP (No Interrupt Pending).                                                                                         */
 
 /**************************************************************************************************************************/
 /*   FIFO Control Register (FCR)                                                                                          */
 /**************************************************************************************************************************/
-#define  UART_FCR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0008) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0008h */
-#define  FCR_RFITL                       4 , 4               /* 7-4 RFITL (RxFIFO Interrupt (Irpt_RDA) Trigger Level).                                                                */
-#define  FCR_DMS                         3 , 1               /* 3 DMS (DMA Mode Select). The DMA function is not implemented in this version.                                         */
-#define  FCR_TFR                         2 , 1               /* 2 TFR (TxFIFO Reset). Setting this bit generates a reset to the TxFIFO. The TxFIFO becomes empty (Tx pointer          */
-#define  FCR_RFR                         1 , 1               /* 1 RFR (RxFIFO Reset). Setting this bit generates an OSC cycle reset pulse to reset the RxFIFO. The RxFIFO             */
-#define  FCR_FME                         0 , 1               /* 0 FME (FIFO Mode Enable). The UART always operates in FIFO mode; therefore, writing this bit has no effect            */
+#define  UART_FCR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0008)        /* Offset: UART_BA + 0008h */
+static const bit_field_t FCR_RFITL =      { 4 , 4 };  /* 7-4 RFITL (RxFIFO Interrupt (Irpt_RDA) Trigger Level).                                                                */
+static const bit_field_t FCR_DMS =        { 3 , 1 };  /* 3 DMS (DMA Mode Select). The DMA function is not implemented in this version.                                         */
+static const bit_field_t FCR_TFR =        { 2 , 1 };  /* 2 TFR (TxFIFO Reset). Setting this bit generates a reset to the TxFIFO. The TxFIFO becomes empty (Tx pointer          */
+static const bit_field_t FCR_RFR =        { 1 , 1 };  /* 1 RFR (RxFIFO Reset). Setting this bit generates an OSC cycle reset pulse to reset the RxFIFO. The RxFIFO             */
+static const bit_field_t FCR_FME =        { 0 , 1 };  /* 0 FME (FIFO Mode Enable). The UART always operates in FIFO mode; therefore, writing this bit has no effect            */
 
 /**************************************************************************************************************************/
 /*   Line Control Register (LCR)                                                                                          */
 /**************************************************************************************************************************/
-#define  UART_LCR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x000C) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 000Ch */
-#define  LCR_DLAB                        7 , 1               /* 7 DLAB (Divisor Latch Access Bit).                                                                                    */
-#define  LCR_BCB                         6 , 1               /* 6 BCB (Break Control Bit). When this bit is set to logic 1, the serial data output (SOUT) is forced to the Spacing    */
-#define  LCR_SPE                         5 , 1               /* 5 SPE (Stick Parity Enable).                                                                                          */
-#define  LCR_EPE                         4 , 1               /* 4 EPE (Even Parity Enable).                                                                                           */
-#define  LCR_PBE                         3 , 1               /* 3 PBE (Parity Bit Enable).                                                                                            */
-#define  LCR_NSB                         2 , 1               /* 2 NSB (Number of "STOP Bits").                                                                                        */
-#define  LCR_WLS                         0 , 2               /* 1-0 WLS (Word Length Select).                                                                                         */
-#define  LCR_Word                        10 , 1              /* 10 Word Length                                                                                                        */
+#define  UART_LCR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x000C)        /* Offset: UART_BA + 000Ch */
+static const bit_field_t LCR_DLAB =       { 7 , 1 };  /* 7 DLAB (Divisor Latch Access Bit).                                                                                    */
+static const bit_field_t LCR_BCB =        { 6 , 1 };  /* 6 BCB (Break Control Bit). When this bit is set to logic 1, the serial data output (SOUT) is forced to the Spacing    */
+static const bit_field_t LCR_SPE =        { 5 , 1 };  /* 5 SPE (Stick Parity Enable).                                                                                          */
+static const bit_field_t LCR_EPE =        { 4 , 1 };  /* 4 EPE (Even Parity Enable).                                                                                           */
+static const bit_field_t LCR_PBE =        { 3 , 1 };  /* 3 PBE (Parity Bit Enable).                                                                                            */
+static const bit_field_t LCR_NSB =        { 2 , 1 };  /* 2 NSB (Number of "STOP Bits").                                                                                        */
+static const bit_field_t LCR_WLS =        { 0 , 2 };  /* 1-0 WLS (Word Length Select).                                                                                         */
+static const bit_field_t LCR_Word =       { 10 , 1 };  /* 10 Word Length                                                                                                        */
 
 /**************************************************************************************************************************/
 /*   Modem Control Register (MCR)                                                                                         */
 /**************************************************************************************************************************/
-#define  UART_MCR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0010) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0010h */
-#define  MCR_LBME                        4 , 1               /* 4 LBME (Loopback Mode Enable).                                                                                        */
-#define  MCR_OUT2                        3 , 1               /* 3 OUT2. Used in loopback mode to drive DCD input.                                                                     */
-#define  MCR_RTS                         1 , 1               /* 1 RTS (Request to Send Signal). Complement version of Request to Send (RTS) signal.                                   */
-#define  MCR_DTR                         0 , 1               /* 0 DTR (Data Terminal Ready Signal). Complement version of Data Terminal Ready (DTR) signal.                           */
+#define  UART_MCR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0010)        /* Offset: UART_BA + 0010h */
+static const bit_field_t MCR_LBME =       { 4 , 1 };  /* 4 LBME (Loopback Mode Enable).                                                                                        */
+static const bit_field_t MCR_OUT2 =       { 3 , 1 };  /* 3 OUT2. Used in loopback mode to drive DCD input.                                                                     */
+static const bit_field_t MCR_RTS =        { 1 , 1 };  /* 1 RTS (Request to Send Signal). Complement version of Request to Send (RTS) signal.                                   */
+static const bit_field_t MCR_DTR =        { 0 , 1 };  /* 0 DTR (Data Terminal Ready Signal). Complement version of Data Terminal Ready (DTR) signal.                           */
 
 /**************************************************************************************************************************/
 /*   Line Status Control Register (LSR)                                                                                   */
 /**************************************************************************************************************************/
-#define  UART_LSR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0014) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0014h */
-#define  LSR_ERR_Rx                      7 , 1               /* 7 ERR_Rx (RxFIFO Error).                                                                                              */
-#define  LSR_TE                          6 , 1               /* 6 TE (Transmitter Empty).                                                                                             */
-#define  LSR_THRE                        5 , 1               /* 5 THRE (Transmitter Holding Register Empty).                                                                          */
-#define  LSR_BII                         4 , 1               /* 4 BII (Break Interrupt Indicator). Is set to a logic 1 when the received data input is held in the "spacing state"    */
-#define  LSR_FEI                         3 , 1               /* 3 FEI (Framing Error Indicator). Is set to logic 1 when the received character does not have a valid "stop bit"       */
-#define  LSR_PEI                         2 , 1               /* 2 PEI (Parity Error Indicator). This bit is set to logic 1 when the received character does not have a valid "parity  */
-#define  LSR_OEI                         1 , 1               /* 1 OEI (Overrun Error Indicator). An overrun error occurs only after the RxFIFO is full and the next character has     */
-#define  LSR_RFDR                        0 , 1               /* 0 RFDR (RxFIFO Data Ready).                                                                                           */
+#define  UART_LSR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x0014)        /* Offset: UART_BA + 0014h */
+static const bit_field_t LSR_ERR_Rx =     { 7 , 1 };  /* 7 ERR_Rx (RxFIFO Error).                                                                                              */
+static const bit_field_t LSR_TE =         { 6 , 1 };  /* 6 TE (Transmitter Empty).                                                                                             */
+static const bit_field_t LSR_THRE =       { 5 , 1 };  /* 5 THRE (Transmitter Holding Register Empty).                                                                          */
+static const bit_field_t LSR_BII =        { 4 , 1 };  /* 4 BII (Break Interrupt Indicator). Is set to a logic 1 when the received data input is held in the "spacing state"    */
+static const bit_field_t LSR_FEI =        { 3 , 1 };  /* 3 FEI (Framing Error Indicator). Is set to logic 1 when the received character does not have a valid "stop bit"       */
+static const bit_field_t LSR_PEI =        { 2 , 1 };  /* 2 PEI (Parity Error Indicator). This bit is set to logic 1 when the received character does not have a valid "parity  */
+static const bit_field_t LSR_OEI =        { 1 , 1 };  /* 1 OEI (Overrun Error Indicator). An overrun error occurs only after the RxFIFO is full and the next character has     */
+static const bit_field_t LSR_RFDR =       { 0 , 1 };  /* 0 RFDR (RxFIFO Data Ready).                                                                                           */
 
 /**************************************************************************************************************************/
 /*   Modem Status Register (MSR)                                                                                          */
 /**************************************************************************************************************************/
 #define  UART_MSR(n)                            ( npcmX50_serial_ports[n].port.membase , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 0018h */
-#define  MSR_DCD                         7 , 1               /* 7 DCD. (Data Carrier Detect). Complement version of Data Carrier Detect (DCD) input.                                  */
-#define  MSR_RI                          6 , 1               /* 6 RI. (Ring Indicator) Complement version of Ring Indicator (RI) input.                                               */
-#define  MSR_DSR                         5 , 1               /* 5 DSR (Data Set Ready). Complement version of Data Set Ready (DSR) input.                                             */
-#define  MSR_CTS                         4 , 1               /* 4 CTS (Clear to Send). Complement version of Clear To Send (CTS) input).                                              */
-#define  MSR_DDCD                        3 , 1               /* 3 DDCD (DCD State Change). Is set when DCD input changes state; it is reset if the CPU reads the MSR. When            */
-#define  MSR_DRI                         2 , 1               /* 2 DRI (RI State Change). It is set when RI input changes state to asserted; it is reset if the CPU reads the MSR.     */
-#define  MSR_DDSR                        1 , 1               /* 1 DDSR (DSR State Change). It is set when DSR input changes state; it is reset if the CPU reads the MSR.              */
-#define  MSR_DCTS                        0 , 1               /* 0 DCTS (CTS State Change). It is set when CTS input changes state; it is reset if the CPU reads the MSR.              */
+static const bit_field_t MSR_DCD =        { 7 , 1 };  /* 7 DCD. (Data Carrier Detect). Complement version of Data Carrier Detect (DCD) input.                                  */
+static const bit_field_t MSR_RI =         { 6 , 1 };  /* 6 RI. (Ring Indicator) Complement version of Ring Indicator (RI) input.                                               */
+static const bit_field_t MSR_DSR =        { 5 , 1 };  /* 5 DSR (Data Set Ready). Complement version of Data Set Ready (DSR) input.                                             */
+static const bit_field_t MSR_CTS =        { 4 , 1 };  /* 4 CTS (Clear to Send). Complement version of Clear To Send (CTS) input).                                              */
+static const bit_field_t MSR_DDCD =       { 3 , 1 };  /* 3 DDCD (DCD State Change). Is set when DCD input changes state; it is reset if the CPU reads the MSR. When            */
+static const bit_field_t MSR_DRI =        { 2 , 1 };  /* 2 DRI (RI State Change). It is set when RI input changes state to asserted; it is reset if the CPU reads the MSR.     */
+static const bit_field_t MSR_DDSR =       { 1 , 1 };  /* 1 DDSR (DSR State Change). It is set when DSR input changes state; it is reset if the CPU reads the MSR.              */
+static const bit_field_t MSR_DCTS =       { 0 , 1 };  /* 0 DCTS (CTS State Change). It is set when CTS input changes state; it is reset if the CPU reads the MSR.              */
 
 /**************************************************************************************************************************/
 /*   Timeout Register (TOR)                                                                                               */
 /**************************************************************************************************************************/
-#define  UART_TOR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x001C) , NPCMX50_UART_ACCESS, 8        /* Offset: UART_BA + 001Ch */
-#define  TOR_TOIE                        7 , 1               /* 7 TOIE (Timeout Interrupt Enable). Enabled only when this bit is set and IER register bit 0 is set.                   */
-#define  TOR_TOIC                        0 , 7               /* 6-0 TOIC (Timeout Interrupt Comparator). The timeout counter resets and starts counting (the counting clock =         */
-
+#define  UART_TOR(n)                            ( npcmX50_serial_ports[n].port.membase + 0x001C)        /* Offset: UART_BA + 001Ch */
+static const bit_field_t TOR_TOIE =       { 7 , 1 };  /* 7 TOIE (Timeout Interrupt Enable). Enabled only when this bit is set and IER register bit 0 is set.                   */
+static const bit_field_t TOR_TOIC =       { 0 , 7 };  /* 6-0 TOIC (Timeout Interrupt Comparator). The timeout counter resets and starts counting (the counting clock =         */
 
 enum FCR_RFITL_type
 {
@@ -368,7 +454,7 @@ static int npcmx50_uart_putc_NB(NPCMX50_UART_DEV_T devNum, const u8 c );
 static int npcmx50_uart_getc_NB( NPCMX50_UART_DEV_T devNum, u8* c );
 static bool npcmx50_uart_test_rx( NPCMX50_UART_DEV_T devNum );
 static bool npcmx50_uart_test_tx( NPCMX50_UART_DEV_T devNum );
-static int npcmx50_uart_reset_fifo(NPCMX50_UART_DEV_T devNum, bool txFifo, bool rxFifo);
+       int npcmx50_uart_reset_fifo(NPCMX50_UART_DEV_T devNum, bool txFifo, bool rxFifo);
 static int npcmx50_uart_set_rx_irq_state(NPCMX50_UART_DEV_T devNum, bool On);
 // static int npcmx50_uart_set_tx_config(NPCMX50_UART_DEV_T devNum, u8 timeout, NPCMX50_UART_RXFIFO_TRIGGER_T triggerLevel);
 static int npcmx50_uart_set_rx_config(NPCMX50_UART_DEV_T devNum, u8 timeout, NPCMX50_UART_RXFIFO_TRIGGER_T triggerLevel);
@@ -411,6 +497,68 @@ static void npcmX50_console_putchar(struct uart_port *port, int ch);
 static int __init npcmX50_console_setup(struct console *co, char *options);
 static void npcmX50_console_write(struct console *co, const char *s, unsigned int count);
 static int npcmX50_console_init(void);
+
+#ifdef REG_READ
+#undef REG_READ
+#endif
+static inline UINT8 REG_READ(unsigned char __iomem *mem ) {
+    return ioread8(mem);
+}
+
+#ifdef REG_WRITE
+#undef REG_WRITE
+#endif   
+static inline void REG_WRITE(unsigned char __iomem *mem, UINT8 val ) {
+    iowrite8(val, mem);
+}
+
+#ifdef SET_REG_FIELD
+#undef SET_REG_FIELD
+#endif  
+/*---------------------------------------------------------------------------------------------------------*/
+/* Set field of a register / variable according to the field offset and size                               */
+/*---------------------------------------------------------------------------------------------------------*/
+static inline void SET_REG_FIELD(unsigned char __iomem *mem, bit_field_t bit_field, UINT8 val) {
+    UINT8 tmp = ioread8(mem);
+    tmp &= ~(((1 << bit_field.size) - 1) << bit_field.offset); // mask the field size
+    tmp |= val << bit_field.offset;  // or with the requested value
+    iowrite8(tmp, mem);
+}
+
+#ifdef SET_VAR_FIELD
+#undef SET_VAR_FIELD
+#endif 
+// bit_field should be of bit_field_t type
+#define SET_VAR_FIELD(var, bit_field, value) { \
+    typeof(var) tmp = var;                 \
+    tmp &= ~(((1 << bit_field.size) - 1) << bit_field.offset); /* mask the field size */ \
+    tmp |= value << bit_field.offset;  /* or with the requested value */               \
+    var = tmp;                                                                         \
+}
+
+#ifdef READ_REG_FIELD
+#undef READ_REG_FIELD
+#endif 
+/*---------------------------------------------------------------------------------------------------------*/
+/* Get field of a register / variable according to the field offset and size                               */
+/*---------------------------------------------------------------------------------------------------------*/
+static inline UINT8 READ_REG_FIELD(unsigned char __iomem *mem, bit_field_t bit_field) {
+    UINT8 tmp = ioread8(mem);
+    tmp = tmp >> bit_field.offset;     // shift right the offset
+    tmp &= (1 << bit_field.size) - 1;  // mask the size
+    return tmp;
+}
+
+#ifdef READ_VAR_FIELD
+#undef READ_VAR_FIELD
+#endif 
+// bit_field should be of bit_field_t type
+#define READ_VAR_FIELD(var, bit_field) ({ \
+    typeof(var) tmp = var;           \
+    tmp = tmp >> bit_field.offset;     /* shift right the offset */ \
+    tmp &= (1 << bit_field.size) - 1;  /* mask the size */          \
+    tmp;                                                     \
+})
 
 #ifdef CONFIG_OF
 static const struct of_device_id uart_dt_id[];
@@ -465,7 +613,7 @@ static struct npcmX50_uart_port npcmX50_serial_ports[NPCMX50_UART_NUM_OF_MODULES
         },
         .type = PORT_NPCMX50,
     },
-    
+
     /*-----------------------------------------------------------------------------------------------------*/
     /* Uart2 port                                                                                          */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -481,7 +629,7 @@ static struct npcmX50_uart_port npcmX50_serial_ports[NPCMX50_UART_NUM_OF_MODULES
         },
         .type = PORT_NPCMX50,
     },
-    
+
         /*-----------------------------------------------------------------------------------------------------*/
     /* Uart3 port                                                                                          */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -498,7 +646,7 @@ static struct npcmX50_uart_port npcmX50_serial_ports[NPCMX50_UART_NUM_OF_MODULES
         .type = PORT_NPCMX50,
     },
 
-    
+
 };
 
 
@@ -547,7 +695,7 @@ static struct npcmX50_uart_port npcmX50_serial_ports[NPCMX50_UART_NUM_OF_MODULES
 /*---------------------------------------------------------------------------------------------------------*/
 static int npcmx50_uart_init(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_MUX_T muxMode, NPCMX50_UART_BAUDRATE_T baudRate)
 {
-    u32 FCR_Val      = 0;
+    u8 FCR_Val      = 0;
 
     bool CoreSP  = FALSE;
     bool sp1     = FALSE;
@@ -566,7 +714,7 @@ static int npcmx50_uart_init(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_MUX_T muxMo
     /* Reseting the module                                                                                 */
     /*-----------------------------------------------------------------------------------------------------*/
     // removed since resets all UARTS
-    //CLK_ResetUART(devNum); 
+    //CLK_ResetUART(devNum);
 
     /*-----------------------------------------------------------------------------------------------------*/
     /* Muxing for UART0                                                                                    */
@@ -652,7 +800,7 @@ static int npcmx50_uart_init(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_MUX_T muxMo
         /*---------------------------------------------------------------------------------------------*/
         /* Illegal mux mode                                                                            */
         /*---------------------------------------------------------------------------------------------*/
-        default: return DEFS_STATUS_INVALID_PARAMETER;
+        default: return -1;
     }
 #endif
     if (muxMode != NPCMX50_UART_MUX_SKIP_CONFIG)
@@ -897,8 +1045,8 @@ static bool npcmx50_uart_test_tx( NPCMX50_UART_DEV_T devNum )
 /* Description:                                                                                            */
 /*                  This routine performs FIFO reset                                                       */
 /*---------------------------------------------------------------------------------------------------------*/
-static int npcmx50_uart_reset_fifo(NPCMX50_UART_DEV_T devNum, bool txFifo, bool rxFifo)
-{
+int npcmx50_uart_reset_fifo(NPCMX50_UART_DEV_T devNum, bool txFifo, bool rxFifo)
+{    
     /*-----------------------------------------------------------------------------------------------------*/
     /* Parameters check                                                                                    */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -1176,8 +1324,8 @@ static int npcmx50_uart_set_baud_rate(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_BA
         uart_clock =  npcmX50_serial_ports[devNum].port.uartclk   ;      // CLK_ConfigureUartClock();
     else{
 		NPCMX50_SERIAL_MSG("%s: warning, uart clock unknown!\n", __FUNCTION__);
-		uart_clock = 24*_1MHz_;  
-	}		
+		uart_clock = 24*_1MHz_;
+	}
 
     // uart_clock = CLK_ConfigureUartClock();
     /*-----------------------------------------------------------------------------------------------------*/
@@ -1186,7 +1334,7 @@ static int npcmx50_uart_set_baud_rate(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_BA
     divisor = ((int)uart_clock / ((int)baudrate * 16)) - 2;
 
     // since divisor is rounded down check if it is better when rounded up
-    if ( ((int)uart_clock / (16 * (divisor + 2)) - (int)baudrate) > 
+    if ( ((int)uart_clock / (16 * (divisor + 2)) - (int)baudrate) >
          ((int)baudrate - (int)uart_clock / (16 * ((divisor+1) + 2))) )
     {
         divisor++;
@@ -1432,7 +1580,7 @@ static void npcmX50_serial_stop_tx(struct uart_port *port)
 static void npcmX50_serial_start_tx(struct uart_port *port)
 {
 	struct circ_buf *xmit = &port->state->xmit;
-	
+
     if ((!tx_enabled(port))&&(!uart_circ_empty(xmit)))
     {
         npcmx50_uart_set_tx_irq_state((NPCMX50_UART_DEV_T)port->line, TRUE);
@@ -1783,9 +1931,9 @@ static int npcmX50_serial_startup(struct uart_port *port)
     /* Initializing the port's HW                                                                          */
     /*-----------------------------------------------------------------------------------------------------*/
     // skip this, already done it in console startup which runs very early
-    // warning: the next function is not protected by spinlock. 
-    // it is assumed to run early. 
-#ifndef CONFIG_SERIAL_NPCMX50_CONSOLE    
+    // warning: the next function is not protected by spinlock.
+    // it is assumed to run early.
+#ifndef CONFIG_SERIAL_NPCMX50_CONSOLE
     npcmx50_uart_init((NPCMX50_UART_DEV_T)port->line, NPCMX50_UART_MUX_MODE3_HSP1_UART1__HSP2_UART2__UART3_SI2, NPCMX50_SERIAL_BAUD);
 #endif
     /*-----------------------------------------------------------------------------------------------------*/
@@ -2147,7 +2295,7 @@ static int npcmX50_serial_init_port(struct npcmX50_uart_port *ourport,
 {
     struct uart_port *port      = &ourport->port;
     int ret = 0;
-	
+
 #ifdef CONFIG_OF
 	struct resource *res;
 	struct clk* ser_clk = NULL;
@@ -2169,28 +2317,28 @@ static int npcmX50_serial_init_port(struct npcmX50_uart_port *ourport,
     /*-----------------------------------------------------------------------------------------------------*/
     /* Configure UART clocks and return CLK value                                                          */
     /*-----------------------------------------------------------------------------------------------------*/
-    #ifdef CONFIG_OF	
+    #ifdef CONFIG_OF
     ser_clk = devm_clk_get(&platdev->dev, NULL);
-    
-    if (IS_ERR(ser_clk))		
+
+    if (IS_ERR(ser_clk))
         return PTR_ERR(ser_clk);
 
-    NPCMX50_SERIAL_MSG("\tserial clock is %ld\n" , clk_get_rate(ser_clk)); 
-    
+    NPCMX50_SERIAL_MSG("\tserial clock is %ld\n" , clk_get_rate(ser_clk));
+
     port->uartclk   = clk_get_rate(ser_clk);
     #else
     port->uartclk   = 24*_1MHz_;
     #endif // CONFIG_OF
-    
+
 
     /*-----------------------------------------------------------------------------------------------------*/
     /* Setting MEMBASE address                                                                             */
     /*-----------------------------------------------------------------------------------------------------*/
 #ifdef CONFIG_OF
     res = platform_get_resource(platdev, IORESOURCE_MEM, 0);
-	NPCMX50_SERIAL_MSG("\tmemory resource is 0x%lx, statically it was 0x%lx\n" , (long unsigned int)res, (long unsigned int)port->membase); 
+	NPCMX50_SERIAL_MSG("\tmemory resource is 0x%lx, statically it was 0x%lx\n" , (long unsigned int)res, (long unsigned int)port->membase);
 
-	
+
 	if (!request_mem_region(res->start, resource_size(res), platdev->name)) {
 		ret = -EBUSY;
 	}
@@ -2199,14 +2347,14 @@ static int npcmX50_serial_init_port(struct npcmX50_uart_port *ourport,
     	dev_set_drvdata(&platdev->dev, res);
     	port->membase = ioremap(res->start, resource_size(res));
     }
-#else	
+#else
     port->membase = (void*)UART_VIRT_BASE_ADDR(port->line);
 #endif
 
 
-	
-	NPCMX50_SERIAL_MSG("\tmemory resource is 0x%lx\n" ,(long unsigned int)port->membase); 
-	
+
+	NPCMX50_SERIAL_MSG("\tmemory resource is 0x%lx\n" ,(long unsigned int)port->membase);
+
    /*-----------------------------------------------------------------------------------------------------*/
     /* Get irq from the device                                                                             */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -2216,7 +2364,7 @@ static int npcmX50_serial_init_port(struct npcmX50_uart_port *ourport,
     /* Init Fifosize                                                                                       */
     /*-----------------------------------------------------------------------------------------------------*/
     port->fifosize  = NPCMX50_SERIAL_TX_FIFO_SIZE;
-	
+
     NPCMX50_SERIAL_MSG("NPCMX50 Serial platform: Port %2d initialized mem=%08x, irq=%d, clock=%d\n", port->line, (int)npcmX50_serial_ports[port->line].port.membase, port->irq, port->uartclk);
 
     return ret;
@@ -2238,8 +2386,8 @@ static int npcmX50_serial_init_port(struct npcmX50_uart_port *ourport,
 static int npcmX50_serial_probe(struct platform_device *dev)
 {
     struct npcmX50_uart_port *ourport;
-    int ret;	
-		
+    int ret;
+
 	#ifdef CONFIG_OF
 	struct device_node *np;
 	#endif
@@ -2252,7 +2400,7 @@ static int npcmX50_serial_probe(struct platform_device *dev)
 
 
     NPCMX50_SERIAL_MSG("NPCMX50 Serial platform: Called function %s with ID=%d\n", __FUNCTION__, dev->id);
-	
+
 	#ifdef CONFIG_OF
 	np = dev->dev.of_node;
 	dev->id = of_alias_get_id(np, "serial");
@@ -2449,7 +2597,7 @@ static int __init npcmX50_console_setup(struct console *co, char *options)
     struct uart_port *port;
 
      //   int n = 0;
-    
+
     /*-----------------------------------------------------------------------------------------------------*/
     /* Setting default values                                                                              */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -2479,7 +2627,7 @@ static int __init npcmX50_console_setup(struct console *co, char *options)
         //return -1;
     }
 
-    
+
     // warning: this function is invoked during init (console_initcall)
         // it is called before the driver is probed, so we have no choise but to select the HW resources statically.
      //   for (n = 0; n < NPCMX50_UART_NUM_OF_MODULES; n++)
@@ -2572,14 +2720,14 @@ static struct console npcmX50_serial_console =
 /*---------------------------------------------------------------------------------------------------------*/
 static int npcmX50_console_init(void)
 {
-    int    rc = 0; 
+    int    rc = 0;
 
 #ifdef CONFIG_OF
-	struct resource res;	
+	struct resource res;
 	struct device_node *np = NULL;
 
-#ifdef CLK_TREE_SUPPORT_IN_EARLY_INIT    
-	struct platform_device *pdev = NULL; 
+#ifdef CLK_TREE_SUPPORT_IN_EARLY_INIT
+	struct platform_device *pdev = NULL;
 	struct clk* ser_clk = NULL;
 #else
 	npcmX50_serial_ports[NPCMX50_SERIAL_CONSOLE_PORT].port.uartclk = 24*_1MHz_;
@@ -2589,15 +2737,15 @@ static int npcmX50_console_init(void)
     if (np == NULL){
         printk(KERN_ERR "%s- can't get device tree node\n", __FUNCTION__);
     }
-    
+
     rc = of_address_to_resource(np, 0, &res);
     if (rc) {
         pr_info("%s: of_address_to_resource fail ret %d \n", __FUNCTION__, rc);
         return -EINVAL;
     }
-    
+
     npcmX50_serial_ports[NPCMX50_SERIAL_CONSOLE_PORT].port.membase = ioremap(res.start, resource_size(&res));
-    
+
     if (!npcmX50_serial_ports[NPCMX50_SERIAL_CONSOLE_PORT].port.membase) {
                     pr_info("%s:serial_virt_addr fail \n", __FUNCTION__);
                     return -ENOMEM;
@@ -2608,17 +2756,17 @@ static int npcmX50_console_init(void)
         	//early_platform_driver_register(&early_npcmx50_uart_driver, "npcmX50-uart");
         	//early_platform_driver_probe(NPCMX50_SERIAL_NAME, NPCMX50_UART_NUM_OF_MODULES, 0);
 
-#ifdef CLK_TREE_SUPPORT_IN_EARLY_INIT  	
+#ifdef CLK_TREE_SUPPORT_IN_EARLY_INIT
     pdev = of_find_device_by_node(np);
     ser_clk = devm_clk_get(&pdev->dev, NULL);
-    
-    if (IS_ERR(ser_clk))		
+
+    if (IS_ERR(ser_clk))
         return PTR_ERR(ser_clk);
 
-    NPCMX50_SERIAL_MSG("%s: serial clock is %ld\n" , __FUNCTION__, clk_get_rate(ser_clk)); 
-    
+    NPCMX50_SERIAL_MSG("%s: serial clock is %ld\n" , __FUNCTION__, clk_get_rate(ser_clk));
+
     npcmX50_serial_ports[NPCMX50_SERIAL_CONSOLE_PORT].port.uartclk   = clk_get_rate(ser_clk);
-#endif //  CLK_TREE_SUPPORT_IN_EARLY_INIT    
+#endif //  CLK_TREE_SUPPORT_IN_EARLY_INIT
 
 #else
     npcmX50_serial_ports[NPCMX50_SERIAL_CONSOLE_PORT].port.uartclk = 24*_1MHz_;

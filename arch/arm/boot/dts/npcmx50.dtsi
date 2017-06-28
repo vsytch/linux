@@ -449,17 +449,6 @@
 			clock-names = "clk_apb5";
 		};
 
-		smb: smb@f0080000 {
-			compatible = "nuvoton,npcm750-smb";
-			reg = <0xf0080000 0x10000>;
-			interrupts = <0 64 4>, <0 65 4>, <0 66 4>, <0 67 4>,
-				<0 68 4>, <0 69 4>, <0 70 4>, <0 71 4>,
-				<0 72 4>, <0 73 4>, <0 74 4>, <0 75 4>,
-				<0 76 4>, <0 77 4>, <0 78 4>, <0 79 4>;
-			clocks = <&clk NPCMX50_CLK_APB2>;
-			clock-names = "clk_apb2";	
-		};
-
 		mft: mft@0 {
 			compatible = "nuvoton,npcm750-mft";
 			reg = <0xf0180000 0x8000>;
@@ -584,6 +573,182 @@
 				   0xf0104000 0x1000>;
 			clocks = <&clk NPCMX50_CLK_APB3>;
 			clock-names = "clk_apb3";
+		};
+		
+		i2c0: i2c-bus@f0080000 {
+			reg = <0xf0080000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 64 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb0_pins>;
+			status = "disabled";
+		};
+		
+		i2c1: i2c-bus@f0081000 {
+			reg = <0xf0081000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 65 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb1_pins>;
+			status = "disabled";
+		};
+		
+		i2c2: i2c-bus@f0082000 {
+			reg = <0xf0082000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 66 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb2_pins>;
+			status = "disabled";
+		};
+		
+		i2c3: i2c-bus@f0083000 {
+			reg = <0xf0083000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 67 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb3_pins>;
+			status = "disabled";
+		};
+		
+		i2c4: i2c-bus@f0084000 {
+			reg = <0xf0084000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 68 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb4_pins>;
+			status = "disabled";
+		};
+		
+		i2c5: i2c-bus@f0085000 {
+			reg = <0xf0085000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 69 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb5_pins>;
+			status = "disabled";
+		};
+		
+		i2c6: i2c-bus@f0086000 {
+			reg = <0xf0086000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 70 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb6_pins>;
+			status = "disabled";
+		};
+		
+		i2c7: i2c-bus@f0087000 {
+			reg = <0xf0087000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 71 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb7_pins>;
+			status = "disabled";
+		};
+		
+		i2c8: i2c-bus@f0088000 {
+			reg = <0xf0088000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 72 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb8_pins>;
+			status = "disabled";
+		};
+		
+		i2c9: i2c-bus@f0089000 {
+			reg = <0xf0089000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 73 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb9_pins>;
+			status = "disabled";
+		};
+		
+		i2c10: i2c-bus@f008a000 {
+			reg = <0xf008a000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 74 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb10_pins>;
+			status = "disabled";
+		};
+		
+		i2c11: i2c-bus@f008b000 {
+			reg = <0xf008b000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 75 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb11_pins>;
+			status = "disabled";
+		};
+		
+		i2c12: i2c-bus@f008c000 {
+			reg = <0xf008c000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 76 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb12_pins>;
+			status = "disabled";
+		};
+		
+		i2c13: i2c-bus@f008d000 {
+			reg = <0xf008d000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 77 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb13_pins>;
+			status = "disabled";
+		};
+		
+		i2c14: i2c-bus@f008e000 {
+			reg = <0xf008e000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 78 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb14_pins>;
+			status = "disabled";
+		};
+		
+		i2c15: i2c-bus@f008f000 {
+			reg = <0xf008f000 0x1000>;
+			compatible = "nuvoton,npcm750-i2c-bus";
+			clocks = <&clk NPCMX50_CLK_APB2>;
+			bus-frequency = <100000>;
+			interrupts = <0 79 4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&smb15_pins>;
+			status = "disabled";
 		};
 	};
 

@@ -135,7 +135,7 @@ typedef double         FP64;                        /* Double precision floating
 /*---------------------------------------------------------------------------------------------------------*/
 /* Linux Kernel                                                                                            */
 /*---------------------------------------------------------------------------------------------------------*/
-#elif defined (KBUILD_STR) && defined(__KERNEL__) && !defined(__UBOOT__)
+#elif defined(__KERNEL__) && !defined(__UBOOT__)
 #define __LINUX_KERNEL_ONLY__
 #include "defs_os_linux.h"
 
