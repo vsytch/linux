@@ -450,7 +450,7 @@
 		};
 
 		mft: mft@0 {
-			compatible = "nuvoton,npcm750-mft";
+			compatible = "nuvoton,npcm750-fan";
 			reg = <0xf0180000 0x8000>;
 			interrupts = <0 96 4>, <0 97 4>, <0 98 4>, <0 99 4>,
 				<0 100 4>, <0 101 4>, <0 102 4>, <0 103 4>;

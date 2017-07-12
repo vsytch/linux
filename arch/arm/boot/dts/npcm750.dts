@@ -213,6 +213,27 @@
 			status = "okay";
 		};
 		
+		mft: mft@0 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&fanin0_pins
+                         &fanin1_pins
+                         &fanin2_pins
+                         &fanin3_pins
+                         &fanin4_pins
+                         &fanin5_pins
+                         &fanin6_pins
+                         &fanin7_pins
+                         &fanin8_pins
+                         &fanin9_pins
+                         &fanin10_pins
+                         &fanin11_pins
+                         &fanin12_pins
+                         &fanin13_pins
+                         &fanin14_pins
+                         &fanin15_pins>;
+			status = "okay";
+		};
+		
 		i2c1: i2c-bus@f0081000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -283,7 +304,7 @@
 					&gpio61o_pins
 					&gpio62o_pins
 					&gpio63o_pins
-					&gpio64_pins
+					/*&gpio64_pins
 					&gpio65_pins
 					&gpio66_pins
 					&gpio67_pins
@@ -298,7 +319,7 @@
 					&gpio76_pins
 					&gpio77_pins
 					&gpio78_pins
-					&gpio79_pins
+					&gpio79_pins*/
 					&gpio80_pins
 					&gpio81_pins
 					&gpio82_pins
