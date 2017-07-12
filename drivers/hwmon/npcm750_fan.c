@@ -817,7 +817,7 @@ static inline void npcm750_check_cmp(
          *  In these situation, the RPM output should be zero.
          */
         S_npcm750_fantach[fan_id].u16FanTachCnt = 0;
-        pr_warn("npcm750_check_cmp : it is timeout fan_id %d \n", fan_id);
+        DEBUG_MSG("npcm750_check_cmp : it is timeout fan_id %d \n", fan_id);
     }
     else
     {
