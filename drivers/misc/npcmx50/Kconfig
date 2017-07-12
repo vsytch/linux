@@ -13,26 +13,6 @@ config NPCMX50_GPIO
 	  To compile this driver as a module, choose M here: the
 	  module will be called aess_gpiodrv.
 
-config NPCMX50_PWM
-	tristate "support npcmx50 PWM bus connection"
-	depends on ARCH_NPCMX50
-	default y
-	help
-	  Say Y here if you want ioctl npcmx50 PWM bus connection.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called aess_pwmdrv.
-
-config NPCMX50_FAN
-	tristate "support npcmx50 FAN tachometer bus connection"
-	depends on ARCH_NPCMX50
-	default y
-	help
-	  Say Y here if you want ioctl npcmx50 FAN tachometer bus connection.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called aess_fansensordrv.
-
 config NPCMX50_KCS
 	tristate "support npcmx50 KCS on LPC"
 	depends on ARCH_NPCMX50
