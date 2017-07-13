@@ -234,6 +234,20 @@
 			status = "okay";
 		};
 		
+		/* lm75 on SVB */
+		i2c0: i2c-bus@f0080000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			lm75@48 {
+				compatible = "lm75";
+				reg = <0x48>;
+				status = "okay";
+			};
+		};
+		
+		/* lm75 on EB */
 		i2c1: i2c-bus@f0081000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -246,7 +260,21 @@
 			};
 		};
 		
+		/* tmp100 on EB */
 		i2c2: i2c-bus@f0082000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			tmp100@48 {
+				compatible = "tmp100";
+				reg = <0x48>;
+				status = "okay";
+			};
+		};
+		
+		/* tmp100 on SVB */
+		i2c6: i2c-bus@f0086000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";

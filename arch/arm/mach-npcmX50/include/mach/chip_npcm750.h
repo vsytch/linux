@@ -326,6 +326,8 @@
 
 #define NPCMX50_SMB_INTERRUPT(module)           (NPCMX50_SMB_INTERRUPT_0 + module)
 
+#define SMB_NUM_OF_MODULES               16
+
 
 /*---------------------------------------------------------------------------------------------------------*/
 /* KCS Module                                                                                            */
