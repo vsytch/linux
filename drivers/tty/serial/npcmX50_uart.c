@@ -498,62 +498,38 @@ static int __init npcmX50_console_setup(struct console *co, char *options);
 static void npcmX50_console_write(struct console *co, const char *s, unsigned int count);
 static int npcmX50_console_init(void);
 
-#ifdef REG_READ
-#undef REG_READ
-#endif
-static inline UINT8 REG_READ(unsigned char __iomem *mem ) {
-    return ioread8(mem);
-}
+#define regwrite8(mem, val) iowrite8(val, mem)
 
-#ifdef REG_WRITE
-#undef REG_WRITE
-#endif   
-static inline void REG_WRITE(unsigned char __iomem *mem, UINT8 val ) {
-    iowrite8(val, mem);
-}
-
-#ifdef SET_REG_FIELD
-#undef SET_REG_FIELD
-#endif  
 /*---------------------------------------------------------------------------------------------------------*/
 /* Set field of a register / variable according to the field offset and size                               */
 /*---------------------------------------------------------------------------------------------------------*/
-static inline void SET_REG_FIELD(unsigned char __iomem *mem, bit_field_t bit_field, UINT8 val) {
+static inline void set_reg_field8(unsigned char __iomem *mem, bit_field_t bit_field, UINT8 val) {
     UINT8 tmp = ioread8(mem);
     tmp &= ~(((1 << bit_field.size) - 1) << bit_field.offset); // mask the field size
     tmp |= val << bit_field.offset;  // or with the requested value
     iowrite8(tmp, mem);
 }
 
-#ifdef SET_VAR_FIELD
-#undef SET_VAR_FIELD
-#endif 
 // bit_field should be of bit_field_t type
-#define SET_VAR_FIELD(var, bit_field, value) { \
+#define set_var_field(var, bit_field, value) { \
     typeof(var) tmp = var;                 \
     tmp &= ~(((1 << bit_field.size) - 1) << bit_field.offset); /* mask the field size */ \
     tmp |= value << bit_field.offset;  /* or with the requested value */               \
     var = tmp;                                                                         \
 }
 
-#ifdef READ_REG_FIELD
-#undef READ_REG_FIELD
-#endif 
 /*---------------------------------------------------------------------------------------------------------*/
 /* Get field of a register / variable according to the field offset and size                               */
 /*---------------------------------------------------------------------------------------------------------*/
-static inline UINT8 READ_REG_FIELD(unsigned char __iomem *mem, bit_field_t bit_field) {
+static inline UINT8 read_reg_field8(unsigned char __iomem *mem, bit_field_t bit_field) {
     UINT8 tmp = ioread8(mem);
     tmp = tmp >> bit_field.offset;     // shift right the offset
     tmp &= (1 << bit_field.size) - 1;  // mask the size
     return tmp;
 }
 
-#ifdef READ_VAR_FIELD
-#undef READ_VAR_FIELD
-#endif 
 // bit_field should be of bit_field_t type
-#define READ_VAR_FIELD(var, bit_field) ({ \
+#define read_var_field(var, bit_field) ({ \
     typeof(var) tmp = var;           \
     tmp = tmp >> bit_field.offset;     /* shift right the offset */ \
     tmp &= (1 << bit_field.size) - 1;  /* mask the size */          \
@@ -812,8 +788,8 @@ static int npcmx50_uart_init(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_MUX_T muxMo
     /*-----------------------------------------------------------------------------------------------------*/
     /* Disable interrupts                                                                                  */
     /*-----------------------------------------------------------------------------------------------------*/
-    REG_WRITE(UART_LCR(devNum), 0);            // prepare to Init UART
-    REG_WRITE(UART_IER(devNum), 0x0);          // Disable all UART interrupt
+    regwrite8(UART_LCR(devNum), 0);            // prepare to Init UART
+    regwrite8(UART_IER(devNum), 0x0);          // Disable all UART interrupt
 
     /*-----------------------------------------------------------------------------------------------------*/
     /* Set baudrate                                                                                        */
@@ -831,13 +807,13 @@ static int npcmx50_uart_init(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_MUX_T muxMo
     /* Set the RX FIFO trigger level, reset RX, TX FIFO                                                    */
     /*-----------------------------------------------------------------------------------------------------*/
     FCR_Val = 0;
-    SET_VAR_FIELD(FCR_Val, FCR_RFITL, FCR_RFITL_4B);
-    SET_VAR_FIELD(FCR_Val, FCR_TFR, 1);
-    SET_VAR_FIELD(FCR_Val, FCR_RFR, 1);
-    SET_VAR_FIELD(FCR_Val, FCR_FME, 1);
+    set_var_field(FCR_Val, FCR_RFITL, FCR_RFITL_4B);
+    set_var_field(FCR_Val, FCR_TFR, 1);
+    set_var_field(FCR_Val, FCR_RFR, 1);
+    set_var_field(FCR_Val, FCR_FME, 1);
 
-    REG_WRITE(UART_FCR(devNum), FCR_Val);
-    REG_WRITE(UART_TOR(devNum), 0x0);
+    regwrite8(UART_FCR(devNum), FCR_Val);
+    regwrite8(UART_TOR(devNum), 0x0);
 
     if (ret > 0)
         return -1;
@@ -874,13 +850,13 @@ static int npcmx50_uart_putc(NPCMX50_UART_DEV_T devNum, const u8 c )
     /*-----------------------------------------------------------------------------------------------------*/
     /* wait until Tx ready                                                                                 */
     /*-----------------------------------------------------------------------------------------------------*/
-    while (!READ_REG_FIELD(UART_LSR(devNum), LSR_THRE));
+    while (!read_reg_field8(UART_LSR(devNum), LSR_THRE));
 
 
     /*-----------------------------------------------------------------------------------------------------*/
     /* Put the char                                                                                        */
     /*-----------------------------------------------------------------------------------------------------*/
-    REG_WRITE(UART_THR(devNum), (c & 0xFF));
+    regwrite8(UART_THR(devNum), (c & 0xFF));
 
     return 0;
 }
@@ -919,7 +895,7 @@ static u8 npcmx50_uart_getc( NPCMX50_UART_DEV_T devNum )
     /*-----------------------------------------------------------------------------------------------------*/
     /* Reading the char                                                                                    */
     /*-----------------------------------------------------------------------------------------------------*/
-    Ch = REG_READ(UART_RBR(devNum)) & 0xFF;
+    Ch = ioread8(UART_RBR(devNum)) & 0xFF;
 
     return Ch;
 }
@@ -950,7 +926,7 @@ static int npcmx50_uart_putc_NB(NPCMX50_UART_DEV_T devNum, const u8 c )
     /*-----------------------------------------------------------------------------------------------------*/
     /* Put the char                                                                                        */
     /*-----------------------------------------------------------------------------------------------------*/
-    REG_WRITE(UART_THR(devNum), (c & 0xFF));
+    regwrite8(UART_THR(devNum), (c & 0xFF));
 
     return 0;
 }
@@ -986,7 +962,7 @@ static int npcmx50_uart_getc_NB( NPCMX50_UART_DEV_T devNum, u8* c )
     /*-----------------------------------------------------------------------------------------------------*/
     /* Reading the char                                                                                    */
     /*-----------------------------------------------------------------------------------------------------*/
-    *c = (REG_READ(UART_RBR(devNum)) & 0xFF);
+    *c = (ioread8(UART_RBR(devNum)) & 0xFF);
 
     return 0;
 }
@@ -1006,7 +982,7 @@ static int npcmx50_uart_getc_NB( NPCMX50_UART_DEV_T devNum, u8* c )
 static bool npcmx50_uart_test_rx( NPCMX50_UART_DEV_T devNum )
 {
 
-    if (READ_REG_FIELD(UART_LSR(devNum), LSR_RFDR))
+    if (read_reg_field8(UART_LSR(devNum), LSR_RFDR))
         return TRUE;
     else
         return FALSE;
@@ -1024,7 +1000,7 @@ static bool npcmx50_uart_test_rx( NPCMX50_UART_DEV_T devNum )
 /*---------------------------------------------------------------------------------------------------------*/
 static bool npcmx50_uart_test_tx( NPCMX50_UART_DEV_T devNum )
 {
-    if (!READ_REG_FIELD(UART_LSR(devNum), LSR_THRE))
+    if (!read_reg_field8(UART_LSR(devNum), LSR_THRE))
         return TRUE;
     else
         return FALSE;
@@ -1060,12 +1036,12 @@ int npcmx50_uart_reset_fifo(NPCMX50_UART_DEV_T devNum, bool txFifo, bool rxFifo)
     /*-----------------------------------------------------------------------------------------------------*/
     if (txFifo)
     {
-        SET_REG_FIELD(UART_FCR(devNum), FCR_TFR, 1);
+        set_reg_field8(UART_FCR(devNum), FCR_TFR, 1);
     }
 
     if (rxFifo)
     {
-        SET_REG_FIELD(UART_FCR(devNum), FCR_RFR, 1);
+        set_reg_field8(UART_FCR(devNum), FCR_RFR, 1);
     }
 
     return 0;
@@ -1103,11 +1079,11 @@ static int npcmx50_uart_set_tx_irq_state(NPCMX50_UART_DEV_T devNum, bool On)
     /*-----------------------------------------------------------------------------------------------------*/
     if (On)
     {
-        SET_REG_FIELD(UART_IER(devNum), IER_THREIE, 1);
+        set_reg_field8(UART_IER(devNum), IER_THREIE, 1);
     }
     else
     {
-        SET_REG_FIELD(UART_IER(devNum), IER_THREIE, 0);
+        set_reg_field8(UART_IER(devNum), IER_THREIE, 0);
     }
 
     return 0;
@@ -1144,13 +1120,13 @@ static int npcmx50_uart_set_rx_irq_state(NPCMX50_UART_DEV_T devNum, bool On)
     /*-----------------------------------------------------------------------------------------------------*/
     if (On)
     {
-        SET_REG_FIELD(UART_IER(devNum), IER_RDAIE, 1);
-        SET_REG_FIELD(UART_TOR(devNum), TOR_TOIE, 1);
+        set_reg_field8(UART_IER(devNum), IER_RDAIE, 1);
+        set_reg_field8(UART_TOR(devNum), TOR_TOIE, 1);
     }
     else
     {
-        SET_REG_FIELD(UART_IER(devNum), IER_RDAIE, 0);
-        SET_REG_FIELD(UART_TOR(devNum), TOR_TOIE, 0);
+        set_reg_field8(UART_IER(devNum), IER_RDAIE, 0);
+        set_reg_field8(UART_TOR(devNum), TOR_TOIE, 0);
     }
 
     return 0;
@@ -1183,12 +1159,12 @@ static int npcmx50_uart_set_rx_config(NPCMX50_UART_DEV_T devNum, u8 timeout, NPC
     /*-----------------------------------------------------------------------------------------------------*/
     /* Setting Rx interrupt timeout                                                                        */
     /*-----------------------------------------------------------------------------------------------------*/
-    SET_REG_FIELD(UART_TOR(devNum), TOR_TOIC, (timeout & 0x7F));
+    set_reg_field8(UART_TOR(devNum), TOR_TOIC, (timeout & 0x7F));
 
     /*-----------------------------------------------------------------------------------------------------*/
     /* Setting Rx interrupt FIFO trigger level                                                             */
     /*-----------------------------------------------------------------------------------------------------*/
-    SET_REG_FIELD(UART_FCR(devNum), FCR_RFITL, (triggerLevel<<2));
+    set_reg_field8(UART_FCR(devNum), FCR_RFITL, (triggerLevel<<2));
 
     return 0;
 }
@@ -1223,16 +1199,16 @@ static int npcmx50_uart_set_parity(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_PARIT
         /*-------------------------------------------------------------------------------------------------*/
         /* Parity enable, choosing type                                                                    */
         /*-------------------------------------------------------------------------------------------------*/
-        SET_REG_FIELD(UART_LCR(devNum), LCR_PBE, 1);
+        set_reg_field8(UART_LCR(devNum), LCR_PBE, 1);
 
         if (parity == NPCMX50_UART_PARITY_EVEN)
         {
-            SET_REG_FIELD(UART_LCR(devNum), LCR_EPE, 1);
+            set_reg_field8(UART_LCR(devNum), LCR_EPE, 1);
 
         }
         else if (parity == NPCMX50_UART_PARITY_ODD)
         {
-            SET_REG_FIELD(UART_LCR(devNum), LCR_EPE, 0);
+            set_reg_field8(UART_LCR(devNum), LCR_EPE, 0);
         }
         else
         {
@@ -1249,7 +1225,7 @@ static int npcmx50_uart_set_parity(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_PARIT
     /*-----------------------------------------------------------------------------------------------------*/
     else
     {
-        SET_REG_FIELD(UART_LCR(devNum), LCR_PBE, 0);
+        set_reg_field8(UART_LCR(devNum), LCR_PBE, 0);
     }
 
     return 0;
@@ -1280,11 +1256,11 @@ static int npcmx50_uart_set_bits_per_char(NPCMX50_UART_DEV_T devNum, u32 bits)
 
     switch (bits)
     {
-        case 5:   SET_REG_FIELD(UART_LCR(devNum), LCR_WLS, LCR_WLS_5bit);   break;
-        case 6:   SET_REG_FIELD(UART_LCR(devNum), LCR_WLS, LCR_WLS_6bit);   break;
-        case 7:   SET_REG_FIELD(UART_LCR(devNum), LCR_WLS, LCR_WLS_7bit);   break;
+        case 5:   set_reg_field8(UART_LCR(devNum), LCR_WLS, LCR_WLS_5bit);   break;
+        case 6:   set_reg_field8(UART_LCR(devNum), LCR_WLS, LCR_WLS_6bit);   break;
+        case 7:   set_reg_field8(UART_LCR(devNum), LCR_WLS, LCR_WLS_7bit);   break;
         default:
-        case 8:   SET_REG_FIELD(UART_LCR(devNum), LCR_WLS, LCR_WLS_8bit);   break;
+        case 8:   set_reg_field8(UART_LCR(devNum), LCR_WLS, LCR_WLS_8bit);   break;
     }
 
     return 0;
@@ -1349,10 +1325,10 @@ static int npcmx50_uart_set_baud_rate(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_BA
     /*-----------------------------------------------------------------------------------------------------*/
     /* Set baud rate to baudRate bps                                                                       */
     /*-----------------------------------------------------------------------------------------------------*/
-    SET_REG_FIELD(UART_LCR(devNum), LCR_DLAB, 1);    // prepare to access Divisor
-    REG_WRITE(UART_DLL(devNum), LSB(divisor));
-    REG_WRITE(UART_DLM(devNum), MSB(divisor));
-    SET_REG_FIELD(UART_LCR(devNum), LCR_DLAB, 0);   // prepare to access RBR, THR, IER
+    set_reg_field8(UART_LCR(devNum), LCR_DLAB, 1);    // prepare to access Divisor
+    regwrite8(UART_DLL(devNum), LSB(divisor));
+    regwrite8(UART_DLM(devNum), MSB(divisor));
+    set_reg_field8(UART_LCR(devNum), LCR_DLAB, 0);   // prepare to access RBR, THR, IER
 
     return ret;
 
@@ -1386,11 +1362,11 @@ static int npcmx50_uart_set_stop_bit(NPCMX50_UART_DEV_T devNum, NPCMX50_UART_STO
 
     if (stopbit == NPCMX50_UART_STOPBIT_1)
     {
-        SET_REG_FIELD(UART_LCR(devNum), LCR_NSB, 0);
+        set_reg_field8(UART_LCR(devNum), LCR_NSB, 0);
     }
     else if (stopbit == NPCMX50_UART_STOPBIT_DYNAMIC)
     {
-        SET_REG_FIELD(UART_LCR(devNum), LCR_NSB, 1);
+        set_reg_field8(UART_LCR(devNum), LCR_NSB, 1);
     }
     else
     {
@@ -1427,11 +1403,11 @@ static int npcmx50_uart_set_break(NPCMX50_UART_DEV_T devNum, bool state)
 
     if (state)
     {
-        SET_REG_FIELD(UART_LCR(devNum), LCR_BCB, 1);
+        set_reg_field8(UART_LCR(devNum), LCR_BCB, 1);
     }
     else
     {
-        SET_REG_FIELD(UART_LCR(devNum), LCR_BCB, 0);
+        set_reg_field8(UART_LCR(devNum), LCR_BCB, 0);
     }
 
     return 0;
@@ -1457,12 +1433,12 @@ static int npcmx50_uart_isr(NPCMX50_UART_DEV_T devNum,  UART_irq_callback_t rxCa
                                         UART_irq_callback_t txCallback, void* txParam)
 {
     int  ret = 0;
-    u32      iir = REG_READ(UART_IIR(devNum)) & 0xF;
+    u32      iir = ioread8(UART_IIR(devNum)) & 0xF;
 
     /*-----------------------------------------------------------------------------------------------------*/
     /* Checking if we got any interrupts at all                                                            */
     /*-----------------------------------------------------------------------------------------------------*/
-    if (READ_VAR_FIELD(iir, IIR_NIP))
+    if (read_var_field(iir, IIR_NIP))
     {
         /*-------------------------------------------------------------------------------------------------*/
         /* if no interrupts actually occurred, we return "not handled"                                     */
@@ -1471,7 +1447,7 @@ static int npcmx50_uart_isr(NPCMX50_UART_DEV_T devNum,  UART_irq_callback_t rxCa
     }
     else
     {
-        switch (READ_VAR_FIELD(iir, IIR_IID))
+        switch (read_var_field(iir, IIR_IID))
         {
             /*---------------------------------------------------------------------------------------------*/
             /* We don't support modem interrups yet                                                        */
@@ -1501,14 +1477,14 @@ static int npcmx50_uart_isr(NPCMX50_UART_DEV_T devNum,  UART_irq_callback_t rxCa
             /*---------------------------------------------------------------------------------------------*/
             case IIR_IID_RLS:
             {
-                u32 lsr = REG_READ(UART_LSR(devNum));
-                if      (READ_VAR_FIELD(lsr, LSR_OEI))
+                u32 lsr = ioread8(UART_LSR(devNum));
+                if      (read_var_field(lsr, LSR_OEI))
                     ret = -EOVERFLOW;
-                else if (READ_VAR_FIELD(lsr, LSR_PEI))
+                else if (read_var_field(lsr, LSR_PEI))
                     ret = -EILSEQ          ; // HAL_ERROR_BAD_PARITY;
-                else if (READ_VAR_FIELD(lsr, LSR_FEI))
+                else if (read_var_field(lsr, LSR_FEI))
                     ret = -EMSGSIZE        ; // HAL_ERROR_BAD_FRAME;
-                else if (READ_VAR_FIELD(lsr, LSR_BII))
+                else if (read_var_field(lsr, LSR_BII))
                     ret = -EIO; // break
                 else
                     ret = -1;
@@ -2268,7 +2244,7 @@ static struct uart_ops npcmX50_serial_ops =
 static struct uart_driver npcmX50_uart_drv =
 {
     .owner          = THIS_MODULE,
-    .dev_name       = NPCMX50_SERIAL_NAME,
+    .dev_name       = "npcmX50_serial",
     .nr             = NPCMX50_UART_NUM_OF_MODULES,
     .cons           = NPCMX50_SERIAL_CONSOLE,
     .driver_name    = NPCMX50_SERIAL_NAME,

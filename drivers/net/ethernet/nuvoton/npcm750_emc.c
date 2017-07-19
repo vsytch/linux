@@ -40,7 +40,7 @@
 #endif
 
 #define DRV_MODULE_NAME		"npcm750-emc"
-#define DRV_MODULE_VERSION	"2.1"
+#define DRV_MODULE_VERSION	"2.3"
 
 
 /*---------------------------------------------------------------------------------------------------------*/
@@ -199,8 +199,17 @@
 #define CAM0		0x0
 #define RX_POLL_SIZE    16
 
-#define MAX_VLAN_SIZE           1518
-#define MAX_VLAN_SIZE_W_CRC     (MAX_VLAN_SIZE + 4) // 1522
+#ifdef CONFIG_VLAN_8021Q
+#define VLAN_SUPPORT
+#endif
+
+#ifdef VLAN_SUPPORT
+#define MAX_PACKET_SIZE           1518
+#define MAX_PACKET_SIZE_W_CRC     (MAX_PACKET_SIZE + 4) // 1522
+#else
+#define MAX_PACKET_SIZE           1514
+#define MAX_PACKET_SIZE_W_CRC     (MAX_PACKET_SIZE + 4) // 1518
+#endif
 #define MII_TIMEOUT	100
 
 
@@ -277,7 +286,6 @@ struct  npcm750_ether {
 	int speed;
 	int duplex;
     int need_reset;
-    char proc_filename[32];
     char* dump_buf;
 
 #ifdef CONFIG_NPCM750_EMC_ETH_DEBUG
@@ -294,6 +302,7 @@ struct  npcm750_ether {
 #endif
 };
 
+static void npcm750_ether_set_multicast_list(struct net_device *dev);
 static int  npcm750_info_dump(char* buf, int count, struct net_device *dev);
 #ifdef CONFIG_NPCM750_EMC_ETH_DEBUG
 void  npcm750_clk_GetTimeStamp (u32 time_quad[2]);
@@ -411,7 +420,7 @@ static void npcm750_write_cam(struct net_device *dev,
 
 static struct sk_buff * get_new_skb(struct net_device *dev, u32 i) {
 	struct npcm750_ether *ether = netdev_priv(dev);
-	struct sk_buff *skb = dev_alloc_skb(roundup(MAX_VLAN_SIZE_W_CRC, 4));
+	struct sk_buff *skb = dev_alloc_skb(roundup(MAX_PACKET_SIZE_W_CRC, 4));
 
 	if (skb == NULL)
 		return NULL;
@@ -424,7 +433,7 @@ static struct sk_buff * get_new_skb(struct net_device *dev, u32 i) {
 	skb->dev = dev;
 
 	(ether->rdesc + i)->buffer = dma_map_single(&dev->dev, skb->data,
-							roundup(MAX_VLAN_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
+							roundup(MAX_PACKET_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
 	ether->rx_skb[i] = skb;
 
 	return skb;
@@ -501,7 +510,7 @@ static int npcm750_init_desc(struct net_device *dev)
 
 			for(; i != 0; i--) {
 				dma_unmap_single(&dev->dev, (dma_addr_t)((ether->rdesc + i)->buffer),
-							roundup(MAX_VLAN_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
+							roundup(MAX_PACKET_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
 				dev_kfree_skb_any(ether->rx_skb[i]);
                 ether->rx_skb[i] = NULL;
 			}
@@ -544,7 +553,7 @@ static void npcm750_free_desc(struct net_device *dev, bool free_also_descriptors
 	for (i = 0; i < RX_DESC_SIZE; i++) {
 		skb = ether->rx_skb[i];
 		if(skb != NULL) {
-			dma_unmap_single(&dev->dev, (dma_addr_t)((ether->rdesc + i)->buffer), roundup(MAX_VLAN_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
+			dma_unmap_single(&dev->dev, (dma_addr_t)((ether->rdesc + i)->buffer), roundup(MAX_PACKET_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
 			dev_kfree_skb_any(skb);
             ether->rx_skb[i] = NULL;
 		}
@@ -577,10 +586,10 @@ static void npcm750_return_default_idle(struct net_device *dev)
 {
 	struct npcm750_ether *ether = netdev_priv(dev);
 	unsigned int val;
-	unsigned int saved_bits;
+	unsigned int mcmdr_bits;
 
 	val = __raw_readl(REG_MCMDR);
-    saved_bits = val & (MCMDR_FDUP | MCMDR_OPMOD);
+    mcmdr_bits = val & (MCMDR_FDUP | MCMDR_OPMOD);
     //EMC_DEBUG("REG_MCMDR = 0x%08X\n", val);
 	val |= SWR;
 	__raw_writel(val, REG_MCMDR);
@@ -590,7 +599,8 @@ static void npcm750_return_default_idle(struct net_device *dev)
     } while (val & SWR);
 
     //EMC_DEBUG("REG_MCMDR = 0x%08X\n", val);
-	__raw_writel(saved_bits, REG_MCMDR);
+    // restore values
+	__raw_writel(mcmdr_bits, REG_MCMDR);
 
 }
 
@@ -603,7 +613,9 @@ static void npcm750_enable_mac_interrupt(struct net_device *dev)
 	val =      ENRXINTR |  // Start of RX interrupts
                ENCRCE   |
                EMRXOV   |
-           //  ENPTLE   |  // Since we support VLAN we don't want interrupt on long packets
+#ifndef VLAN_SUPPORT               
+               ENPTLE   |  // Since we don't support VLAN we want interrupt on long packets
+#endif           
                ENRXGD   |
                ENALIE   |
                ENRP     |
@@ -642,11 +654,14 @@ static void npcm750_set_global_maccmd(struct net_device *dev)
 	val = __raw_readl(REG_MCMDR);
     //EMC_DEBUG("REG_MCMDR = 0x%08X\n", val);
 
+	val |= MCMDR_SPCRC | MCMDR_ENMDC | MCMDR_ACP | MCMDR_NDEF;
+#ifdef VLAN_SUPPORT	
     // we set ALP accept long packets since VLAN packets are 4 bytes longer than 1518
-	val |= MCMDR_SPCRC | MCMDR_ENMDC | MCMDR_ACP | MCMDR_NDEF | MCMDR_ALP;
-	__raw_writel(val, REG_MCMDR);
+	val |= MCMDR_ALP;
     // limit receive length to 1522 bytes due to VLAN
-	__raw_writel(MAX_VLAN_SIZE_W_CRC, REG_DMARFC);
+	__raw_writel(MAX_PACKET_SIZE_W_CRC, REG_DMARFC);
+#endif
+	__raw_writel(val, REG_MCMDR);
 }
 
 static void npcm750_enable_cam(struct net_device *dev)
@@ -659,15 +674,6 @@ static void npcm750_enable_cam(struct net_device *dev)
 	val = __raw_readl(REG_CAMEN);
 	val |= CAM0EN;
 	__raw_writel(val, REG_CAMEN);
-}
-
-static void npcm750_enable_cam_command(struct net_device *dev)
-{
-	struct npcm750_ether *ether = netdev_priv(dev);
-	unsigned int val;
-
-	val = CAMCMR_ECMP | CAMCMR_ABP | CAMCMR_AMP;
-	__raw_writel(val, REG_CAMCMR);
 }
 
 
@@ -704,7 +710,7 @@ static void npcm750_reset_mac(struct net_device *dev, int need_free)
 
 	npcm750_set_curdest(dev);
 	npcm750_enable_cam(dev);
-	npcm750_enable_cam_command(dev);
+	npcm750_ether_set_multicast_list(dev);
 	npcm750_enable_mac_interrupt(dev);
 	npcm750_set_global_maccmd(dev);
 	ETH_ENABLE_TX;
@@ -795,17 +801,22 @@ static int npcm750_ether_close(struct net_device *dev)
 {
 	struct npcm750_ether *ether = netdev_priv(dev);
 
-	netif_stop_queue(dev);
-	napi_disable(&ether->napi);
-	free_irq(ether->txirq, dev);
-	free_irq(ether->rxirq, dev);
-
-	npcm750_free_desc(dev, true);
-
 	if (ether->phy_dev)
 	{
 		phy_stop(ether->phy_dev);
 	}
+
+    npcm750_return_default_idle(dev);
+
+    msleep(10);
+
+	free_irq(ether->txirq, dev);
+	free_irq(ether->rxirq, dev);
+
+	netif_stop_queue(dev);
+	napi_disable(&ether->napi);
+
+	npcm750_free_desc(dev, true);
 
 	if (ether->dump_buf)
 	{
@@ -834,7 +845,7 @@ static int npcm750_clean_tx(struct net_device *dev)
     unsigned int cur_entry, entry, sl;
 
     if (ether->pending_tx == 0) {
-        return(0);
+        return 0;
     }
     
 	cur_entry = __raw_readl(REG_CTXDSA);
@@ -845,6 +856,8 @@ static int npcm750_clean_tx(struct net_device *dev)
 	while (entry != cur_entry) {
 		txbd = (ether->tdesc + ether->finish_tx);
 		s = ether->tx_skb[ether->finish_tx];
+        if (s == NULL)
+            break;
 #ifdef CONFIG_NPCM750_EMC_ETH_DEBUG
         ether->count_finish++;
 #endif
@@ -910,11 +923,11 @@ static int npcm750_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 					skb->len, DMA_TO_DEVICE);
 
 	ether->tx_skb[ether->cur_tx]  = skb;
-    if (skb->len > MAX_VLAN_SIZE)
+    if (skb->len > MAX_PACKET_SIZE)
     {
-        dev_err(&ether->pdev->dev, "skb->len (= %d) > MAX_VLAN_SIZE (= %d)\n", skb->len, MAX_VLAN_SIZE);
+        dev_err(&ether->pdev->dev, "skb->len (= %d) > MAX_PACKET_SIZE (= %d)\n", skb->len, MAX_PACKET_SIZE);
     }
-	txbd->sl = skb->len > MAX_VLAN_SIZE ? MAX_VLAN_SIZE : skb->len;
+	txbd->sl = skb->len > MAX_PACKET_SIZE ? MAX_PACKET_SIZE : skb->len;
     wmb();
 
 	txbd->mode = TX_OWEN_DMA | PADDINGMODE | CRCMODE;
@@ -1075,7 +1088,7 @@ static int npcm750_poll(struct napi_struct *napi, int budget)
 
 		if (likely(status & RXDS_RXGD)) {
 
-			skb = dev_alloc_skb(roundup(MAX_VLAN_SIZE_W_CRC, 4));
+			skb = dev_alloc_skb(roundup(MAX_PACKET_SIZE_W_CRC, 4));
 
 			if (!skb) {
 				struct platform_device *pdev = ether->pdev;
@@ -1083,7 +1096,7 @@ static int npcm750_poll(struct napi_struct *napi, int budget)
 				ether->stats.rx_dropped++;
 				goto rx_out;
 			}
-			dma_unmap_single(&dev->dev, (dma_addr_t)rxbd->buffer, roundup(MAX_VLAN_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
+			dma_unmap_single(&dev->dev, (dma_addr_t)rxbd->buffer, roundup(MAX_PACKET_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
 
 			skb_put(s, length);
 			s->protocol = eth_type_trans(s, dev);
@@ -1099,7 +1112,7 @@ static int npcm750_poll(struct napi_struct *napi, int budget)
 			skb->dev = dev;
 
 			rxbd->buffer = dma_map_single(&dev->dev, skb->data,
-							roundup(MAX_VLAN_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
+							roundup(MAX_PACKET_SIZE_W_CRC, 4), DMA_FROM_DEVICE);
 			ether->rx_skb[ether->cur_rx] = skb;
 			rx_cnt++;
 #ifdef CONFIG_NPCM750_EMC_ETH_DEBUG
@@ -1116,7 +1129,12 @@ static int npcm750_poll(struct napi_struct *napi, int budget)
 #endif
 
 		}
-        if (unlikely(status & (RXDS_CRCE|RXDS_PTLE|RXDS_ALIE|RXDS_RP))) {
+#ifdef VLAN_SUPPORT	
+        if (unlikely(status & (RXDS_CRCE|RXDS_ALIE|RXDS_RP)))
+#else
+        if (unlikely(status & (RXDS_CRCE|RXDS_ALIE|RXDS_RP|RXDS_PTLE)))
+#endif
+		{
 			ether->stats.rx_errors++;
             EMC_DEBUG("rx_errors = %lu status = 0x%08X\n", ether->stats.rx_errors, status);
 
@@ -1129,10 +1147,13 @@ static int npcm750_poll(struct napi_struct *napi, int budget)
 			} else if (status & RXDS_ALIE) {
 				ether->stats.rx_frame_errors++;
                 EMC_DEBUG("rx_frame_errors = %lu\n", ether->stats.rx_frame_errors);
-			} else if (status & RXDS_PTLE) {
-				ether->stats.rx_over_errors++;
-                EMC_DEBUG("rx_over_errors = %lu\n", ether->stats.rx_over_errors);
 			}
+#ifndef VLAN_SUPPORT			
+			else if (status & RXDS_PTLE) {
+				ether->stats.rx_length_errors++;
+                EMC_DEBUG("rx_length_errors = %lu\n", ether->stats.rx_length_errors);
+			}
+#endif			
 		}
 
 		wmb();
@@ -1239,7 +1260,9 @@ static irqreturn_t npcm750_rx_interrupt(int irq, void *dev_id)
                  // MISTA_RXINTR | // Receive - all RX interrupt set this
                     MISTA_CRCE   | // CRC Error
                  // MISTA_RXOV   | // Receive FIFO Overflow - we alread handled it
-                 // MISTA_PTLE   | // Packet Too Long is ignored since VLAN is supported
+#ifndef VLAN_SUPPORT                 
+                    MISTA_PTLE   | // Packet Too Long is needed since VLAN is not supported
+#endif                 
                  // MISTA_RXGD   | // Receive Good - this is the common good case
                     MISTA_ALIE   | // Alignment Error
                     MISTA_RP     | // Runt Packet
@@ -1515,14 +1538,6 @@ static int npcm750_mii_setup(struct net_device *dev)
 	ether->mii_bus->priv = ether;
 	ether->mii_bus->parent = &ether->pdev->dev;
 
-	ether->mii_bus->irq[0] = kmalloc(sizeof(int) * PHY_MAX_ADDR, GFP_KERNEL);
-	if (!ether->mii_bus->irq) {
-		err = -ENOMEM;
-		dev_err(&pdev->dev, "kmalloc() failed\n");
-		goto out1;
-
-	}
-
 	for (i = 0; i < PHY_MAX_ADDR; i++)
 		ether->mii_bus->irq[i] = PHY_POLL;
 	//ether->mii_bus->irq[1] = ??   write me after the irq number is known
@@ -1567,8 +1582,7 @@ static int npcm750_mii_setup(struct net_device *dev)
 out3:
 	mdiobus_unregister(ether->mii_bus);
 out2:
-	kfree(ether->mii_bus->irq);
-out1:
+	kfree(ether->mii_bus->irq); 
 	mdiobus_free(ether->mii_bus);
 out0:
 
@@ -1599,7 +1613,7 @@ static int npcm750_info_dump(char* buf, int count, struct net_device *dev)
         spin_lock_irqsave(&ether->lock, flags);
 
 	/* ------basic driver information ---- */
-	PROC_PRINT("%s version: %s\n","NPCM750 EMC driver", DRV_MODULE_VERSION);
+	PROC_PRINT("NPCM750 EMC %s driver version: %s\n", dev->name, DRV_MODULE_VERSION);
 
     REG_PRINT(REG_CAMCMR);
     REG_PRINT(REG_CAMEN);
@@ -1785,11 +1799,12 @@ static int npcm750_proc_read(struct seq_file *sf, void *v)
         npcm750_info_dump(ether->dump_buf, print_size, dev);
     }
 
-    /*if (seq_printf(sf,"%s", ether->dump_buf) == 0)
-    {
-        kfree(ether->dump_buf);
-        ether->dump_buf = NULL;
-    }*/
+    seq_printf(sf,"%s", ether->dump_buf);
+
+	if (sf->count < sf->size) {
+	    kfree(ether->dump_buf);
+	    ether->dump_buf = NULL;
+	}
 
 	return 0;
 }
@@ -1817,6 +1832,7 @@ static int npcm750_ether_probe(struct platform_device *pdev)
 	struct npcm750_ether *ether;
 	struct net_device *dev;
 	int error;
+    char proc_filename[32];
 
 #ifdef CONFIG_OF
 	struct clk* emc_clk = NULL;
@@ -1968,9 +1984,8 @@ static int npcm750_ether_probe(struct platform_device *pdev)
 		error = -ENODEV;
 		goto failed_free_rxirq;
 	}
-    snprintf(ether->proc_filename, sizeof(ether->proc_filename), "%s.%d", PROC_FILENAME, pdev->id );
-    proc_create_data(ether->proc_filename, 0, NULL, &npcm750_ether_proc_fops, dev);
-    //create_proc_read_entry(ether->proc_filename, 0, NULL, npcm750_proc_read, dev);
+    snprintf(proc_filename, sizeof(proc_filename), "%s.%d", PROC_FILENAME, pdev->id );
+    proc_create_data(proc_filename, 0, NULL, &npcm750_ether_proc_fops, dev);
 
 	return 0;
 
@@ -1992,9 +2007,10 @@ static int npcm750_ether_remove(struct platform_device *pdev)
 {
 	struct net_device *dev = platform_get_drvdata(pdev);
 	struct npcm750_ether *ether = netdev_priv(dev);
+    char proc_filename[32];
 
-    snprintf(ether->proc_filename, sizeof(ether->proc_filename), "%s.%d", PROC_FILENAME, pdev->id );
-	remove_proc_entry(ether->proc_filename, NULL);
+    snprintf(proc_filename, sizeof(proc_filename), "%s.%d", PROC_FILENAME, pdev->id );
+	remove_proc_entry(proc_filename, NULL);
 
 	unregister_netdev(dev);
 
