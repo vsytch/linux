@@ -383,6 +383,7 @@ void SPI_Flash_Common_GetStatus(struct spi_nor *nor, u8* status)
 void SPI_Flash_Common_SectorErase(struct spi_nor *nor, u32 addr)
 {
     if ((addr >> 24)&&(nor->addr_width == 3)) 
+    {
         spi_flash_high_addr_wr(nor,addr >> 24);
      FIU_UMA_Write(
          nor,                           // only one flash device
@@ -399,15 +400,32 @@ void SPI_Flash_Common_SectorErase(struct spi_nor *nor, u32 addr)
      FIU_UMA_Write(
          nor,                           // only one flash device
          SPI_4K_SECTOR_ERASE_CMD,           // sector erase transaction code
-         addr,                              // address relevant
+             (addr & 0xFFFFFF),                 // address relevant
          TRUE,                              // address for transaction 
          NULL,                              // no write data
          0); 
                                     // no data
-     if ((addr >> 24)&&(nor->addr_width == 3)) 
          spi_flash_high_addr_wr(nor,0);
+    }
      else
+    {
+        FIU_UMA_Write(
+            nor,                           // only one flash device
+            SPI_WRITE_ENABLE_CMD,              // write enable transaction code
+            0,                                 // address irrelevant
+            FALSE,                             // no address for transaction 
+            NULL,                              // no write data
+            0);                                // no data
          SPI_Flash_Common_WaitTillReady(nor);   
+        FIU_UMA_Write(
+            nor,                           // only one flash device
+            SPI_4K_SECTOR_ERASE_CMD,           // sector erase transaction code
+            addr,                              // address relevant
+            TRUE,                              // address for transaction 
+            NULL,                              // no write data
+            0); 
+        SPI_Flash_Common_WaitTillReady(nor);   
+    }
 }
 
 void SPI_Flash_Common_Write(struct spi_nor *nor, u32 destAddr, u8* data, u32 size)
@@ -415,8 +433,7 @@ void SPI_Flash_Common_Write(struct spi_nor *nor, u32 destAddr, u8* data, u32 siz
     if ((destAddr >> 24)&&(nor->addr_width == 3)) 
     {
         spi_flash_high_addr_wr(nor,destAddr >> 24);
-        destAddr &= 0xffffff;
-    }
+
     /*-----------------------------------------------------------------------------------------------------*/
     /* Write Flash Using 256 Page EXTENDED MODE                                                            */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -425,12 +442,17 @@ void SPI_Flash_Common_Write(struct spi_nor *nor, u32 destAddr, u8* data, u32 siz
     SPI_Flash_Common_WaitTillReady(nor);
 
 
-    FIU_ManualWrite(nor, SPI_PAGE_PRGM_CMD, destAddr, data, size);
+        FIU_ManualWrite(nor, SPI_PAGE_PRGM_CMD, (destAddr & 0xFFFFFF), data, size);
 
-    if ((destAddr >> 24)&&(nor->addr_width == 3)) 
         spi_flash_high_addr_wr(nor,0);
+    }
     else
+    {
+        FIU_UMA_Write(nor, SPI_WRITE_ENABLE_CMD, 0, FALSE, NULL, 0);
     SPI_Flash_Common_WaitTillReady(nor);
+        FIU_ManualWrite(nor, SPI_PAGE_PRGM_CMD, destAddr, data, size);
+        SPI_Flash_Common_WaitTillReady(nor);   
+    }
 }
 
 
@@ -612,6 +634,7 @@ static int npcmx50_spinor_read(struct spi_nor *nor, loff_t from, size_t len, siz
         memcpy(buf, flash_region_mapped_ptr, len); 
         wmb();
 
+        spi_flash_high_addr_wr(nor,0);
         if(flash_region_mapped_ptr)
         {
            iounmap((void __iomem *)flash_region_mapped_ptr);
@@ -648,7 +671,7 @@ static int npcmx50_spinor_read(struct spi_nor *nor, loff_t from, size_t len, siz
 
             FIU_UMA_Read(nor,                   // only one flash device
                          SPI_READ_DATA_CMD,     // read transaction code
-                         addr,                  // address offset inside cs or device
+                         (addr&0xFFFFFF),                  // address offset inside cs or device
                          TRUE,                  // transaction has address 
                          buf_ptr,               // buffer to store read data
                          readlen);              // read data size
