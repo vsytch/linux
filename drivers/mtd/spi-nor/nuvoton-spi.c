@@ -330,10 +330,6 @@ int FIU_ManualWrite(struct spi_nor *nor, u8 transaction_code, u32 address, u8 * 
     /* Writing the transaction code and the address to the bus                                             */
     /*-----------------------------------------------------------------------------------------------------*/
     FIU_UMA_Write(nor, transaction_code, address, TRUE, NULL, 0);
-    if ((address >> 24)&&(nor->addr_width == 3)) 
-    {
-        spi_flash_high_addr_wr(nor,address >> 24);
-    }
     /*-----------------------------------------------------------------------------------------------------*/
     /* Starting the data writing loop in multiples of 8                                                    */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -360,10 +356,6 @@ int FIU_ManualWrite(struct spi_nor *nor, u8 transaction_code, u32 address, u8 * 
     /*-----------------------------------------------------------------------------------------------------*/
     SET_REG_FIELD(FIU_UMA_CTS(host->fiu_num), FIU_UMA_CTS_SW_CS, 1);
 
-    if ((address >> 24)&&(nor->addr_width == 3)) 
-    {
-        spi_flash_high_addr_wr(nor,0);
-    }
 
     return 0;
 }
@@ -390,6 +382,8 @@ void SPI_Flash_Common_GetStatus(struct spi_nor *nor, u8* status)
 
 void SPI_Flash_Common_SectorErase(struct spi_nor *nor, u32 addr)
 {
+    if ((addr >> 24)&&(nor->addr_width == 3)) 
+        spi_flash_high_addr_wr(nor,addr >> 24);
      FIU_UMA_Write(
          nor,                           // only one flash device
          SPI_WRITE_ENABLE_CMD,              // write enable transaction code
@@ -399,9 +393,6 @@ void SPI_Flash_Common_SectorErase(struct spi_nor *nor, u32 addr)
          0);                                // no data
     
 
-     if ((addr >> 24)&&(nor->addr_width == 3)) 
-         spi_flash_high_addr_wr(nor,addr >> 24);
-     else
          SPI_Flash_Common_WaitTillReady(nor);
 
 
@@ -414,13 +405,18 @@ void SPI_Flash_Common_SectorErase(struct spi_nor *nor, u32 addr)
          0); 
                                     // no data
      if ((addr >> 24)&&(nor->addr_width == 3)) 
-         spi_flash_high_addr_wr(nor,addr >> 0);
+         spi_flash_high_addr_wr(nor,0);
      else
          SPI_Flash_Common_WaitTillReady(nor);   
 }
 
 void SPI_Flash_Common_Write(struct spi_nor *nor, u32 destAddr, u8* data, u32 size)
 {
+    if ((destAddr >> 24)&&(nor->addr_width == 3)) 
+    {
+        spi_flash_high_addr_wr(nor,destAddr >> 24);
+        destAddr &= 0xffffff;
+    }
     /*-----------------------------------------------------------------------------------------------------*/
     /* Write Flash Using 256 Page EXTENDED MODE                                                            */
     /*-----------------------------------------------------------------------------------------------------*/
@@ -431,6 +427,9 @@ void SPI_Flash_Common_Write(struct spi_nor *nor, u32 destAddr, u8* data, u32 siz
 
     FIU_ManualWrite(nor, SPI_PAGE_PRGM_CMD, destAddr, data, size);
 
+    if ((destAddr >> 24)&&(nor->addr_width == 3)) 
+        spi_flash_high_addr_wr(nor,0);
+    else
     SPI_Flash_Common_WaitTillReady(nor);
 }
 
@@ -657,7 +656,7 @@ static int npcmx50_spinor_read(struct spi_nor *nor, loff_t from, size_t len, siz
             if ((addr >> 24)&&(nor->addr_width == 3))
             {           
                 SPI_Flash_Common_WaitTillReady(nor);   
-                spi_flash_high_addr_wr(nor,addr >> 0);
+                spi_flash_high_addr_wr(nor,0);
             }
 
             DEBUG_FLASH("mtd_spinor: buf_ptr=0x%x buf_val=0x%x i=%d readlen =%d \n",(UINT32)buf_ptr, *((UINT32 *)buf_ptr), i, readlen);

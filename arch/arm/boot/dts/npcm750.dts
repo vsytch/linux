@@ -74,7 +74,7 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&rg1_pins
 						 &rg1mdio_pins>;
-			phy-mode = "rgmii";
+			phy-mode = "rgmii-id";
 			status = "okay";
 		};
 
@@ -82,7 +82,7 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&rg2_pins
 						 &rg2mdio_pins>;
-			phy-mode = "rgmii";
+			phy-mode = "rgmii-id";
 			status = "okay";
 		};
 
@@ -160,6 +160,67 @@
 			status = "okay";
 		};
 		
+		spi0: spi@fb000000 {
+			spi-nor@0 {
+                partitions@80000000 {
+            		compatible = "fixed-partitions";
+                    #address-cells = <1>;
+    		        #size-cells = <1>;
+            		bbuboot1@0 {
+            			label = "bb-uboot-1";
+            			reg = <0x0000000 0x80000>;
+            			read-only;
+            		};
+            		bbuboot2@80000 {
+                        label = "bb-uboot-2";
+            			reg = <0x0080000 0x80000>;
+                        read-only;
+            		};
+            		envparam@100000 {
+                        label = "env-param";
+            			reg = <0x0100000 0x40000>;
+                        read-only;
+            		};
+            		spare@140000 {
+                        label = "spare";
+            			reg = <0x0140000 0xC0000>;
+            		};
+            		kernel@200000 {
+                        label = "kernel";
+            			reg = <0x0200000 0x200000>;
+            		};
+            		rootfs@400000 {
+                        label = "rootfs";
+            			reg = <0x0400000 0x700000>;
+            		};
+            		spare1@B00000 {
+                        label = "spare1";
+            			reg = <0x0B00000 0x500000>;
+            		};
+            		spare2@1000000 {
+                        label = "spare2";
+            			reg = <0x1000000 0xB00000>;
+            		};
+            		spare3@1B00000 {
+                        label = "spare3";
+            			reg = <0x1B00000 0x0>;
+            		};
+        	    };
+			};
+		};
+		spi3: spi@c0000000 {
+			spi-nor@0 {
+                partitions@A0000000 {
+            		compatible = "fixed-partitions";
+                    #address-cells = <1>;
+    		        #size-cells = <1>;
+            		spare@0 {
+            			label = "spare-1";
+            			reg = <0x0 0x0>;
+            		};
+        	    };
+			};
+		};	
 		sdhci1: sdhci@f0842000 {
 			pinctrl-names = "default";
 			pinctrl-0 = <&sd1_pins>;
@@ -213,26 +274,6 @@
 			status = "okay";
 		};
 		
-		mft: mft@0 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&fanin0_pins
-                         &fanin1_pins
-                         &fanin2_pins
-                         &fanin3_pins
-                         &fanin4_pins
-                         &fanin5_pins
-                         &fanin6_pins
-                         &fanin7_pins
-                         &fanin8_pins
-                         &fanin9_pins
-                         &fanin10_pins
-                         &fanin11_pins
-                         &fanin12_pins
-                         &fanin13_pins
-                         &fanin14_pins
-                         &fanin15_pins>;
-			status = "okay";
-		};
 		
 		/* lm75 on SVB */
 		i2c0: i2c-bus@f0080000 {
@@ -285,9 +326,28 @@
 				status = "okay";
 			};
 		};
+        	mft: mft@0 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&fanin0_pins
+                         &fanin1_pins
+                         &fanin2_pins
+                         &fanin3_pins
+                         &fanin4_pins
+                         &fanin5_pins
+                         &fanin6_pins
+                         &fanin7_pins
+                         &fanin8_pins
+                         &fanin9_pins
+                         &fanin10_pins
+                         &fanin11_pins
+                         &fanin12_pins
+                         &fanin13_pins
+                         &fanin14_pins
+                         &fanin15_pins>;
+			status = "okay";
 	};
 	
-		
+	};
 
 		planar@01 {
 		SVB {
