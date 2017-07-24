@@ -1858,6 +1858,7 @@ config SENSORS_NPCM750
 	  controllers.
 	  This driver can also be built as a module. If so, the module
 	  will be called aspeed_pwm_tacho.
+
 if ACPI
 
 comment "ACPI drivers"

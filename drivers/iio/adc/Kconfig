@@ -639,4 +639,5 @@ config NPCM750_ADC
 	  Say yes here to build support for NPCM750 ADC.
 	  This driver can also be built as a module. If so, the module will be
 	  called npcm750_adc.
+
 endmenu
