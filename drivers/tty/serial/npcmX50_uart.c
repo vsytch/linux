@@ -2244,7 +2244,7 @@ static struct uart_ops npcmX50_serial_ops =
 static struct uart_driver npcmX50_uart_drv =
 {
     .owner          = THIS_MODULE,
-    .dev_name       = "NPCMX50_SERIAL_NAME",
+    .dev_name       = NPCMX50_SERIAL_NAME,
     .nr             = NPCMX50_UART_NUM_OF_MODULES,
     .cons           = NPCMX50_SERIAL_CONSOLE,
     .driver_name    = NPCMX50_SERIAL_NAME,
