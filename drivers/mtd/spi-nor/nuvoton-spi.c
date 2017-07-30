@@ -366,13 +366,11 @@ int FIU_ManualWrite(struct spi_nor *nor, u8 transaction_code, u32 address, u8 * 
 
 void spi_flash_high_addr_wr(struct spi_nor *nor,u8 HighAddr)
 {
-    SPI_Flash_Common_WaitTillReady(nor);
     
     FIU_UMA_Write(nor, SPI_WRITE_ENABLE_CMD, 0, FALSE, NULL, 0);
     
     FIU_UMA_Write(nor, SPI_WRITE_EXTENDED_ADDR_REG_CMD, 0, FALSE, &HighAddr, sizeof(UINT8)); 
 
-    SPI_Flash_Common_WaitTillReady(nor);
 }
 
 void SPI_Flash_Common_GetStatus(struct spi_nor *nor, u8* status)
@@ -405,6 +403,7 @@ void SPI_Flash_Common_SectorErase(struct spi_nor *nor, u32 addr)
          NULL,                              // no write data
          0); 
                                     // no data
+         SPI_Flash_Common_WaitTillReady(nor);   
          spi_flash_high_addr_wr(nor,0);
     }
      else
@@ -444,6 +443,7 @@ void SPI_Flash_Common_Write(struct spi_nor *nor, u32 destAddr, u8* data, u32 siz
 
         FIU_ManualWrite(nor, SPI_PAGE_PRGM_CMD, (destAddr & 0xFFFFFF), data, size);
 
+        SPI_Flash_Common_WaitTillReady(nor); 
         spi_flash_high_addr_wr(nor,0);
     }
     else
@@ -476,7 +476,6 @@ static void spi_flash_unlock_protection(struct spi_nor *nor)
 {
     UINT8 status_reg_val=0;
 
-    SPI_Flash_Common_WaitTillReady(nor);
     
     FIU_UMA_Write(nor, SPI_WRITE_ENABLE_CMD, 0, FALSE, NULL, 0);
     
@@ -597,7 +596,6 @@ static int npcmx50_spinor_read(struct spi_nor *nor, loff_t from, size_t len, siz
     
     DEBUG_FLASH("mtd_spinor: %s , mtd->size 0x%08x %p %p\n", __FUNCTION__, (UINT32) mtd->size,host->iobase, buf);
 
-    SPI_Flash_Common_WaitTillReady(nor);
 
     if (host->Direct_Read) 
     {      
@@ -677,10 +675,7 @@ static int npcmx50_spinor_read(struct spi_nor *nor, loff_t from, size_t len, siz
                          readlen);              // read data size
 
             if ((addr >> 24)&&(nor->addr_width == 3))
-            {           
-                SPI_Flash_Common_WaitTillReady(nor);   
                 spi_flash_high_addr_wr(nor,0);
-            }
 
             DEBUG_FLASH("mtd_spinor: buf_ptr=0x%x buf_val=0x%x i=%d readlen =%d \n",(UINT32)buf_ptr, *((UINT32 *)buf_ptr), i, readlen);
             
