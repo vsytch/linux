@@ -20,7 +20,7 @@ obj-$(CONFIG_SERIAL_21285) += 21285.o
 
 # Now bring in any enabled 8250/16450/16550 type drivers.
 obj-$(CONFIG_SERIAL_8250) += 8250/
-
+obj-$(CONFIG_SERIAL_NPCMX50) += npcmX50_uart.o
 obj-$(CONFIG_SERIAL_AMBA_PL010) += amba-pl010.o
 obj-$(CONFIG_SERIAL_AMBA_PL011) += amba-pl011.o
 obj-$(CONFIG_SERIAL_CLPS711X) += clps711x.o
