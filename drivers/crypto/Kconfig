@@ -686,4 +686,13 @@ config CRYPTO_DEV_SAFEXCEL
 	  chain mode, AES cipher mode and SHA1/SHA224/SHA256/SHA512 hash
 	  algorithms.
 
+config CRYPTO_DEV_NPCMX50
+	bool "Support Nuvoton BMC npcmx50 HW crypto engines"
+	depends on ARCH_NPCM750
+	default n
+	help
+	  Support Nuvoton BMC npcmx50 HW crypto engines.
+	  
+source drivers/crypto/npcmX50/Kconfig
+ 
 endif # CRYPTO_HW
