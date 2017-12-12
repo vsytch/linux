@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2014 Nuvoton Technology corporation.
+ * Copyright (c) 2017 Nuvoton Technology corporation.
  * Copyright 2017 Google, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation;version 2 of the License.
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
 
 #include <linux/kernel.h>
@@ -19,8 +19,7 @@ static const char *const npcm7xx_dt_match[] = {
 	NULL
 };
 
-DT_MACHINE_START(NPCM7XX_DT, "NPCMX50 Chip family")
-//	.map_io         = npcmX50_map_io,
+DT_MACHINE_START(NPCM7XX_DT, "NPCM7XX Chip family")
 	.atag_offset	= 0x100,
 	.dt_compat	= npcm7xx_dt_match,
 	.l2c_aux_val	= 0x0,

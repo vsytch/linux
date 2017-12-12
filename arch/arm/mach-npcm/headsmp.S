@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2017 Nuvoton Technology corporation.
  * Copyright 2017 Google, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -8,23 +9,14 @@
 
 #include <linux/linkage.h>
 #include <linux/init.h>
-
-
-
-
-
-
-
-
 #include <asm/assembler.h>
 
+/*
+ * The boot ROM does not start secondary CPUs in SVC mode, so we need to do that
+ * here.
+ */
 ENTRY(npcm7xx_secondary_startup)
 	safe_svcmode_maskall r0
 
-
-
-
-
 	b	secondary_startup
 ENDPROC(npcm7xx_secondary_startup)
-

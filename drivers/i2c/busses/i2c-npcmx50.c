@@ -45,6 +45,14 @@
 
 #include <asm/io.h>
 
+#include <linux/regmap.h>
+#include <linux/mfd/syscon.h>
+
+static struct regmap *gcr_regmap;
+
+#define  I2CSEGCTL_OFFSET 0xE4
+#define  I2CSEGCTL_VAL	  0x0333F000
+
 //#include <mach/map.h>
 //#include <mach/hal.h>
 //#include <defs.h>
@@ -4866,6 +4874,7 @@ static int nuvoton_i2c_probe_bus(struct platform_device *pdev)
 	struct resource *res;
     struct clk* i2c_clk;
 	int ret;
+	static u32 first_boot = 1;
 
     int module__num;
     
@@ -4890,6 +4899,20 @@ static int nuvoton_i2c_probe_bus(struct platform_device *pdev)
     bus->apb_clk = clk_get_rate(i2c_clk);
     I2C_DEBUG("I2C APB clock is %d\n" , bus->apb_clk);
 #endif //  CONFIG_OF
+
+    if (first_boot) {
+	    if (gcr_regmap == NULL) {
+		    gcr_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
+		    if (IS_ERR(gcr_regmap)) {
+			pr_err("%s: failed to find nuvoton,npcm750-gcr\n", __func__);
+			return IS_ERR(gcr_regmap);
+		    }
+		}
+
+		regmap_write(gcr_regmap, I2CSEGCTL_OFFSET, I2CSEGCTL_VAL);
+		first_boot = 0;
+    }
+
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	bus->base = devm_ioremap_resource(&pdev->dev, res);

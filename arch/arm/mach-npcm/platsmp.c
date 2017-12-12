@@ -1,4 +1,5 @@
-/*
+/* 
+ * Copyright (c) 2017 Nuvoton Technology corporation.
  * Copyright 2017 Google, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -6,7 +7,7 @@
  * published by the Free Software Foundation.
  */
 
-#define pr_fmt(fmt) "PLATSMP: " fmt
+#define pr_fmt(fmt) "nuvoton,npcm7xx-smp: " fmt
 
 #include <linux/delay.h>
 #include <linux/device.h>
@@ -35,24 +36,21 @@ static int npcm7xx_smp_boot_secondary(unsigned int cpu,
 	gcr_np = of_find_compatible_node(NULL, NULL, "nuvoton,npcm750-gcr");
 	if (!gcr_np) {
 		pr_err("no gcr device node\n");
-		ret = -EFAULT;
+		ret = -ENODEV;
 		goto out;
 	}
 	gcr_base = of_iomap(gcr_np, 0);
 	if (!gcr_base) {
-		pr_err("could not iomap gcr at: 0x%p\n", gcr_base);
-		ret = -EFAULT;
+		pr_err("could not iomap gcr");
+		ret = -ENOMEM;
 		goto out;
 	}
 
 	/* give boot ROM kernel start address. */
 	iowrite32(__pa_symbol(npcm7xx_secondary_startup), gcr_base +
 		  NPCM7XX_SCRPAD_REG);
-	/* make sure npcm7xx_secondary_startup is seen by all observers. */
-	smp_wmb();
+	/* make sure the previous write is seen by all observers. */
 	dsb_sev();
-	/* make sure write buffer is drained */
-	mb();
 
 	iounmap(gcr_base);
 out:
@@ -71,7 +69,7 @@ static void __init npcm7xx_smp_prepare_cpus(unsigned int max_cpus)
 	}
 	scu_base = of_iomap(scu_np, 0);
 	if (!scu_base) {
-		pr_err("could not iomap scu at: 0x%p\n", scu_base);
+		pr_err("could not iomap scu");
 		return;
 	}
 
