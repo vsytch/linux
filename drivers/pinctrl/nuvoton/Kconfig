@@ -1,0 +1,8 @@
+config PINCTRL_NPCM7XX
+	bool "Pinctrl driver for Nuvoton NPCM7XX"
+	select GPIOLIB
+	select GPIOLIB_IRQCHIP
+	select PINMUX
+	select PINCONF
+	select GENERIC_PINCONF
+	default ARCH_NPCM7XX
