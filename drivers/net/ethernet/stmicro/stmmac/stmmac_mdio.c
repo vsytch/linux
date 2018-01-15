@@ -299,11 +299,15 @@ int stmmac_mdio_register(struct net_device *ndev)
 
 bus_register_done:
 	priv->mii = new_bus;
-	#if !defined (POLEG_DRB_HW)
-	    stmmac_mdio_write(new_bus, priv->plat->phy_addr, 0x17, 0xD34);    // In Phy Reg 17h -> Enable Top Level Expantion Register 34H
-	    stmmac_mdio_write(new_bus, priv->plat->phy_addr, 0x15, 0x3);      // In Phy Reg 15h (34h) -> Enable 125MHZ clock output 
-	    stmmac_mdio_write(new_bus, priv->plat->phy_addr, 0x17, 0x0);      // In Phy Reg 17h -> Disable Top Level Expantion Register 34H  
-	#endif
+
+#if !defined(POLEG_DRB_HW)
+	/* In Phy Reg 17h -> Enable Top Level Expantion Register 34H */
+	priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0xD34);
+	/* In Phy Reg 15h (34h) -> Enable 125MHZ clock output */
+	priv->mii->write(priv->mii, priv->plat->phy_addr, 0x15, 0x3);
+	/* In Phy Reg 17h -> Disable Top Level Expantion Register 34H */
+	priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0x0);
+#endif
 
 	return 0;
 

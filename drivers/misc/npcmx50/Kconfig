@@ -1,0 +1,57 @@
+#
+# NPCMX50 MISC drivers
+#
+menu "Nuvoton Miscellaneous optional drivers"
+
+config NPCMX50_GPIO
+	tristate "support npcmx50 gpio"
+	depends on ARCH_NPCM7XX
+	default y
+	help
+	  Say Y here if you want ioctl npcmx50 GPIO access.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called aess_gpiodrv.
+
+config NPCMX50_KCS
+	tristate "support npcmx50 KCS on LPC"
+	depends on ARCH_NPCM7XX
+	default y
+	help
+	  Say Y here if you want ioctl npcmx50 KCS on LPC.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called aess_kcsdrv.
+
+config NPCMX50_BIOS_POST_CODE
+	tristate "support npcmx50 BIOS POST CODE monitoring on LPC"
+	depends on ARCH_NPCM7XX
+	default y
+	help
+	  Say Y here if you want ioctl npcmx50 BIOS POST CODE monitoring on LPC.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called aess_biospostdrv.
+
+config NPCMX50_PSPI
+	tristate "support npcmx50 Peripheral SPI bus connection"
+	depends on ARCH_NPCM7XX
+	select NPCMX50_GPIO
+	default y
+	help
+	  Say Y here if you want ioctl npcmx50 Peripheral SPI bus connection.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called aess_sspidrv.
+
+config NPCMX50_VDM
+	tristate "support npcmx50 VDM on PCIe"
+	depends on ARCH_NPCM7XX
+	default y
+	help
+	  Say Y here if you want ioctl npcmx50 VDM on PCIe.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called npcmx50_vdm.
+
+endmenu

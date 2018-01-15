@@ -334,6 +334,7 @@ static void stmmac_enable_eee_mode(struct stmmac_priv *priv)
 void stmmac_disable_eee_mode(struct stmmac_priv *priv)
 {
 	unsigned long flags;
+
 	priv->hw->mac->reset_eee_mode(priv->hw);
 	del_timer_sync(&priv->eee_ctrl_timer);
 	spin_lock_irqsave(&priv->lpi_lock, flags);
@@ -1886,14 +1887,16 @@ static void stmmac_tx_clean(struct stmmac_priv *priv, u32 queue)
 		netif_tx_wake_queue(netdev_get_tx_queue(priv->dev, queue));
 	}
 
-    if (priv->eee_enabled) {
-        unsigned long flags;
-        spin_lock_irqsave(&priv->lpi_lock, flags);
-        if (!priv->tx_path_in_lpi_mode) {
-		mod_timer(&priv->eee_ctrl_timer, STMMAC_LPI_T(eee_timer));
+	if (priv->eee_enabled) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&priv->lpi_lock, flags);
+		if (!priv->tx_path_in_lpi_mode)
+			mod_timer(&priv->eee_ctrl_timer,
+				  STMMAC_LPI_T(eee_timer));
+
+		spin_unlock_irqrestore(&priv->lpi_lock, flags);
 	}
-        spin_unlock_irqrestore(&priv->lpi_lock, flags);
-    }
 }
 
 static inline void stmmac_enable_dma_irq(struct stmmac_priv *priv, u32 chan)
@@ -2564,12 +2567,15 @@ static int stmmac_open(struct net_device *dev)
 			return ret;
 		}
 	}
+	
 	#if !defined (POLEG_DRB_HW)
-	if (priv->mii)
-	{
-		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0xD34);	  // In Phy Reg 17h -> Enable Top Level Expantion Register 34H
-		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x15, 0x3);	  // In Phy Reg 15h (34h) -> Enable 125MHZ clock output 
-		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0x0);	  // In Phy Reg 17h -> Disable Top Level Expantion Register 34H  
+	if (priv->mii) {
+		/* In Phy Reg 17h -> Enable Top Level Expantion Register 34H */
+		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0xD34);
+		/* In Phy Reg 15h (34h) -> Enable 125MHZ clock output */
+		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x15, 0x3);
+		/* In Phy Reg 17h -> Disable Top Level Expantion Register 34H */
+		priv->mii->write(priv->mii, priv->plat->phy_addr, 0x17, 0x0);
 	}
 	#endif
 
@@ -2982,6 +2988,7 @@ static netdev_tx_t stmmac_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct stmmac_tx_queue *tx_q;
 	unsigned int enh_desc;
 	unsigned int des;
+
 	if (priv->tx_path_in_lpi_mode)
 		stmmac_disable_eee_mode(priv);
 
@@ -3616,16 +3623,6 @@ static int stmmac_set_features(struct net_device *netdev,
 	return 0;
 }
 
-static void stmmac_lpi_mode(struct stmmac_priv *priv, int status)
-{
-	spin_lock(&priv->lpi_lock);
-			if (status & CORE_IRQ_TX_PATH_IN_LPI_MODE)
-				priv->tx_path_in_lpi_mode = true;
-			if (status & CORE_IRQ_TX_PATH_EXIT_LPI_MODE)
-				priv->tx_path_in_lpi_mode = false;
-	spin_unlock(&priv->lpi_lock);
-}
-
 /**
  *  stmmac_interrupt - main ISR
  *  @irq: interrupt number.
@@ -3662,8 +3659,13 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
 							    &priv->xstats);
 
 		if (unlikely(status)) {
+			spin_lock(&priv->lpi_lock);
 			/* For LPI we need to save the tx status */
-			stmmac_lpi_mode(priv, status);
+			if (status & CORE_IRQ_TX_PATH_IN_LPI_MODE)
+				priv->tx_path_in_lpi_mode = true;
+			if (status & CORE_IRQ_TX_PATH_EXIT_LPI_MODE)
+				priv->tx_path_in_lpi_mode = false;
+			spin_unlock(&priv->lpi_lock);
 		}
 
 		if (priv->synopsys_id >= DWMAC_CORE_4_00) {

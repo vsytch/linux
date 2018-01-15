@@ -857,12 +857,12 @@ config XILINX_XADC
 	  The driver can also be build as a module. If so, the module will be called
 	  xilinx-xadc.
 
-config NPCM750_ADC
-	tristate "NPCM750 ADC driver"
-    depends on ARCH_NPCM7XX || COMPILE_TEST
+config NPCM7XX_ADC
+	tristate "NPCM7XX ADC driver"
+	depends on ARCH_NPCM7XX || COMPILE_TEST
 	depends on HAS_IOMEM
 	help
-	  Say yes here to build support for NPCM750 ADC.
+	  Say yes here to build support for NPCM7XX ADC.
 	  This driver can also be built as a module. If so, the module will be
 	  called npcm750_adc.
 

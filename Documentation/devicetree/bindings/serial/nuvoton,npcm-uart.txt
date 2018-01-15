@@ -1,0 +1,24 @@
+Nuvoton NPCM Universal Asynchronous Receiver/Transmitter (UART)
+
+Required properties:
+- compatible      : "nuvoton,npcm750-uart" for Poleg NPCM750.
+- reg             : Offset and length of the register set for the device.
+- interrupts      : Contain the UART interrupt with flags for falling edge.
+- clocks          : phandle of UART reference clock.
+
+Note: Each uart controller should have an alias correctly numbered
+in "aliases" node.
+
+Example:
+
+aliases {
+	serial0 = &serial0;
+};
+
+serial0: serial0@f0001000 {
+	compatible = "nuvoton,npcm750-uart";
+	reg = <0xf0001000 0x1000>;
+	clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+	interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
+	status = "disabled";
+};

@@ -1,11 +1,10 @@
 /*
  * DTSi file for the NPCM750 SoC
  *
- * Copyright (c) 2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2017 Nuvoton Technology corporation.
  *
- * The code contained herein is licensed under the GNU General Public
- * License. You may obtain a copy of the GNU General Public License
- * Version 2 or later at the following locations:
+ * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  *
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
@@ -13,7 +12,7 @@
 
 #include "skeleton.dtsi"
 #include <dt-bindings/interrupt-controller/arm-gic.h>
-#include <dt-bindings/clock/nuvoton,npcm7xx-clks.h>
+#include <dt-bindings/clock/nuvoton,npcm7xx-clock.h>
 
 / {
 	#address-cells = <1>;
@@ -82,9 +81,41 @@
 		reg = <0xf03fe600 0x20>;
 		interrupts = <1 13 0x304>;
 		clocks = <&clk NPCM7XX_CLK_AHB>;
-		clock-names = "clk_ahb";	
+		clock-names = "clk_ahb";
 	};
-	
+
+
+	clk: clock-controller@f0801000 {
+		compatible = "nuvoton,npcm750-clk";
+		#clock-cells = <1>;
+		clock-controller;
+		reg = <0xf0801000 0x1000>;
+	};
+
+	 /* external clock signal rg1refck, supplied by the phy */
+	clk_rg1refck: clk_rg1refck {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <125000000>;
+		clock-output-names = "clk_rg1refck";
+	};
+
+	 /* external clock signal rg2refck, supplied by the phy */
+	clk_rg2refck: clk_rg2refck {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <125000000>;
+		clock-output-names = "clk_rg2refck";
+	};
+
+	clk_xin: clk_xin {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <50000000>;
+		clock-output-names = "clk_xin";
+	};
+
+
 	ahb {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -109,58 +140,28 @@
 			  0xf0800000 0xf0800000 0x000fc000
 			  0xf8000000 0xf8000000 0x02000000
 			  0xfb000000 0xfb000000 0x00002000
-              0xfffd0000 0xfffd0000 0x00005000>;
-			  
-		clk: clock-controller@f0801000 {
-			compatible = "nuvoton,npcm750-clk";
-			#clock-cells = <1>;
-			reg = <0xf0801000 0x1000>;
-				status = "okay";
-		};
-
-		clk_rg1refck: clk_rg1refck {      /* external clock signal rg1refck, supplied by the phy */
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <125000000>;
-			clock-output-names = "clk_rg1refck";
-		};
-
-		clk_rg2refck: clk_rg2refck {      /* external clock signal rg2refck, supplied by the phy */
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <125000000>;
-			clock-output-names = "clk_rg2refck";
-		};
-
-		clk_xin: clk_xin {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <50000000>;
-			clock-output-names = "clk_xin";
-		};
+			  0xfffd0000 0xfffd0000 0x00005000>;
 
 		gmac0: eth@f0802000 {
 			device_type = "network";
-			compatible = "nuvoton,npcm750-gmac";
+			compatible = "snps,dwmac";
 			reg = <0xf0802000 0x2000>;
 			interrupts = <0 14 4>;
-			/*snps,phy-addr = <25>;*/  /* set this if phy scan is not enabled */
 			interrupt-names = "macirq";
 			ethernet = <0>;
-			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_GMAC>;
+			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
 			status = "disabled";
 		};
 
 		gmac1: eth@f0804000 {
 			device_type = "network";
-			compatible = "nuvoton,npcm750-gmac";
+			compatible = "snps,dwmac";
 			reg = <0xf0804000 0x2000>;
 			interrupts = <0 17 4>;
-			/*snps,phy-addr = <25>;*/  /* set this if phy scan is not enabled */
 			interrupt-names = "macirq";
 			ethernet = <1>;
-			clocks	= <&clk_rg2refck>, <&clk NPCM7XX_CLK_GMAC>;
+			clocks	= <&clk_rg2refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
 			status = "disabled";
 		};
@@ -170,16 +171,16 @@
 			compatible = "nuvoton,npcm750-emc";
 			reg = <0xf0825000 0x1000>;
 			interrupts = <0 16 4>, <0 15 4>;
-			clocks = <&clk NPCM7XX_CLK_EMC>;
-			clock-names = "clk_emc";	
+			clocks = <&clk NPCM7XX_CLK_AHB>;
+			clock-names = "clk_emc";
 		};
-		
+
 		emc1: eth@f0826000 {
 			device_type = "network";
 			compatible = "nuvoton,npcm750-emc";
 			reg = <0xf0826000 0x1000>;
 			interrupts = <0 115 4>, <0 114 4>;
-			clocks = <&clk NPCM7XX_CLK_EMC>;
+			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
 		};
 
@@ -188,7 +189,7 @@
 			status = "disabled";
 			reg = <0xf0840000 0x200>;
 			interrupts = <0 27 4>;
-		    clocks =  <&clk NPCM7XX_CLK_SDHC>;       /*, <&clk_xin>;*/
+			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
 			clock-names = "clk_sdhc";                  /* ,"clk_xin"; */
 		};
 
@@ -197,125 +198,125 @@
 			status = "disabled";
 			reg = <0xf0842000 0x200>;
 			interrupts = <0 26 4>;
-		    clocks =  <&clk NPCM7XX_CLK_MMC>;       /*, <&clk_xin>;*/
+			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
 			clock-names = "clk_mmc";                  /* ,"clk_xin"; */
 		};
 
-		ehci1:ehci@f0806000 {				
+		ehci1:ehci@f0806000 {
 			compatible = "nuvoton,npcm750-ehci";
 			reg = <0xf0806000 0x1000>;
 			interrupts = <0 61 4>;
 			status = "disabled";
 		};
 
-		ohci1: ohci@f0807000 {				
+		ohci1: ohci@f0807000 {
 			compatible = "nuvoton,npcm750-ohci";
 			reg = <0xf0807000 0x1000>;
 			interrupts = <0 62 4>;
 			status = "disabled";
 		};
 
-		udc0:udc@f0830000 {				
+		udc0:udc@f0830000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0830000 0x1000
-                   0xfffd0000 0x800>;
+			       0xfffd0000 0x800>;
 			interrupts = <0 51 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
-		
-		udc1:udc@f0831000 {				
+
+		udc1:udc@f0831000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0831000 0x1000
-                   0xfffd0800 0x800>;
+			       0xfffd0800 0x800>;
 			interrupts = <0 52 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		udc2:udc@f0832000 {				
+		udc2:udc@f0832000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0832000 0x1000
-                   0xfffd1000 0x800>;
+			       0xfffd1000 0x800>;
 			interrupts = <0 53 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		udc3:udc@f0833000 {				
+		udc3:udc@f0833000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0833000 0x1000
-                   0xfffd1800 0x800>;
+			       0xfffd1800 0x800>;
 			interrupts = <0 54 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		udc4:udc@f0834000 {				
+		udc4:udc@f0834000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0834000 0x1000
-                   0xfffd2000 0x800>;
+			       0xfffd2000 0x800>;
 			interrupts = <0 55 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		udc5:udc@f0835000 {				
+		udc5:udc@f0835000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0835000 0x1000
-                   0xfffd2800 0x800>;
+			       0xfffd2800 0x800>;
 			interrupts = <0 56 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
-		
-		udc6:udc@f0836000 {				
+
+		udc6:udc@f0836000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0836000 0x1000
-                   0xfffd3000 0x800>;
+			       0xfffd3000 0x800>;
 			interrupts = <0 57 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		udc7:udc@f0837000 {				
+		udc7:udc@f0837000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0837000 0x1000
-                   0xfffd3800 0x800>;
+			       0xfffd3800 0x800>;
 			interrupts = <0 58 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
-		
-		udc8:udc@f0838000 {				
+
+		udc8:udc@f0838000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0838000 0x1000
-                   0xfffd4000 0x800>;
+			       0xfffd4000 0x800>;
 			interrupts = <0 59 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		udc9:udc@f0839000 {				
+		udc9:udc@f0839000 {
 			compatible = "nuvoton,npcm750-udc";
 			reg = <0xf0839000 0x1000
-                   0xfffd4800 0x800>;
+			       0xfffd4800 0x800>;
 			interrupts = <0 60 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
-		aes:aes@f0858000 {				
+		aes:aes@f0858000 {
 			compatible = "nuvoton,npcm750-aes";
 			reg = <0xf0858000 0x1000>;
 			status = "disabled";
@@ -323,14 +324,14 @@
 			clock-names = "clk_ahb";
 		};
 
-		sha:sha@f085a000 {				
+		sha:sha@f085a000 {
 			compatible = "nuvoton,npcm750-sha";
 			reg = <0xf085a000 0x1000>;
 			status = "disabled";
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 		};
-		
+
 		copr: copr@0 {
 			compatible = "nuvoton,npcm750-copr";
 			interrupts = <0 1 4>;
@@ -344,20 +345,20 @@
 				   0xf0822000 0x1000>;
 			interrupts = <0 29 4>;
 		};
-	
+
 		spi0: spi@fb000000 {
 			compatible = "nuvoton,npcm750-spi";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0xfb000000 0x1000>, <0x80000000 0x10000000>;
- 			reg-names = "control", "memory";
-            chip-max-address-map = <0x8000000>;
+			reg-names = "control", "memory";
+			chip-max-address-map = <0x8000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 			spi-nor@0 {
 					compatible = "jedec,spi-nor";
-                	#address-cells = <1>;
-		        	#size-cells = <1>;
+					#address-cells = <1>;
+					#size-cells = <1>;
 					reg = <0>;
 			};
 		};
@@ -366,44 +367,45 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0xc0000000 0x1000>, <0xA0000000 0x20000000>;
- 			reg-names = "control", "memory";
-            chip-max-address-map = <0x8000000>;
+			reg-names = "control", "memory";
+			chip-max-address-map = <0x8000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 			spi-nor@0 {
 					compatible = "jedec,spi-nor";
-                	#address-cells = <1>;
-		       		#size-cells = <1>;
+					#address-cells = <1>;
+					#size-cells = <1>;
 					reg = <0>;
 			};
-		};	
-		
+		};
+
 		pci_rc: axi-pcie@E1000000 {
-	                #address-cells = <3>;
-	                #size-cells = <2>;
-	                #interrupt-cells = <1>;
-	                compatible = "nuvoton,npcm750-pcirc";
-	                reg = < 0xE1000000 0x1000 >;
-	                device_type = "pci";
-	                interrupts = < 0 127 4 >;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			#interrupt-cells = <1>;
+			compatible = "nuvoton,npcm750-pcirc";
+			reg = < 0xE1000000 0x1000 >;
+			device_type = "pci";
+			interrupts = < 0 127 4 >;
 			bus-range = <0x00 0xff>;
-			ranges = <0x02000000 0 0xEA000000 0xEA000000 0 0x02000000>; 
+			ranges = <0x02000000 0 0xEA000000
+				0xEA000000 0 0x02000000>;
 			status = "disabled";
-        	};
+		};
 
 		dvc: dvc@f0808000 {
 			compatible = "nuvoton,npcm750-dvc";
 			reg = <0xf0808000 0x1000>;
 			interrupts = <0 23 4>;
 		};
-		
-		vcd: vcd@0 {				
+
+		vcd: vcd@0 {
 			compatible = "nuvoton,npcm750-vcd";
-			reg = <0xf0810000 0x10000		
-				   0xf0820000 0x2000>;
+			reg = <0xf0810000 0x10000
+			       0xf0820000 0x2000>;
 			interrupts = <0 22 4>, <0 24 4>;
 		};
-		
+
 		pcimbx: pcimbx@f0848000 {
 			compatible = "nuvoton,npcm750-pcimbx";
 			reg = <0xf0848000 0x10000>;
@@ -430,7 +432,7 @@
 			reg = <0xf0007000 0x1000>;
 			interrupts = <0 9 4>;
 		};
-		
+
 		pspi: pspi@0 {
 			compatible = "nuvoton,npcm750-pspi";
 			reg = <0xf0200000 0x2000>;
@@ -439,13 +441,13 @@
 			clock-names = "clk_apb5";
 		};
 
-		mft: mft@0 {
+		fan: fan@0 {
 			compatible = "nuvoton,npcm750-fan";
 			reg = <0xf0180000 0x8000>;
 			interrupts = <0 96 4>, <0 97 4>, <0 98 4>, <0 99 4>,
 				<0 100 4>, <0 101 4>, <0 102 4>, <0 103 4>;
 			clocks = <&clk NPCM7XX_CLK_APB4>;
-			clock-names = "clk_apb4";	
+			clock-names = "clk_apb4";
 		};
 
 		gpio: gpio@f0010000 {
@@ -454,7 +456,7 @@
 			interrupts = <0 116 4>, <0 117 4>, <0 118 4>, <0 119 4>,
 				<0 120 4>, <0 121 4>, <0 122 4>, <0 123 4>;
 			clocks = <&clk NPCM7XX_CLK_APB1>;
-			clock-names = "clk_apb1";	
+			clock-names = "clk_apb1";
 		};
 
 		timer0: timer@f0008000 {
@@ -491,7 +493,7 @@
 		serial0: serial0@f0001000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0001000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 2 4>;
 			status = "disabled";
 		};
@@ -499,7 +501,7 @@
 		serial1: serial1@f0002000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0002000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 3 4>;
 			status = "disabled";
 		};
@@ -507,7 +509,7 @@
 		serial2: serial2@f0003000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0003000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 4 4>;
 			status = "disabled";
 		};
@@ -515,7 +517,7 @@
 		serial3: serial3@f0004000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0004000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 5 4>;
 			status = "disabled";
 		};
@@ -526,17 +528,17 @@
 			clocks = <&clk NPCM7XX_CLK_APB1>;
 			clock-names = "clk_apb1";
 			status = "disabled";
-		};  
+		};
 
 		adc: adc@f000c000 {
 			compatible = "nuvoton,npcm750-adc";
 			reg = <0xf000c000 0x1000>;
 			clocks = <&clk NPCM7XX_CLK_ADC>;
 			clock-names = "clk_adc";
-            		vref = <2048>;
+			vref = <2048>;
 		};
 
-		otp:otp@f0189000 {				
+		otp:otp@f0189000 {
 			compatible = "nuvoton,npcm750-otp";
 			reg = <0xf0189000 0x1000
 				   0xf018a000 0x1000>;
@@ -545,7 +547,7 @@
 			clock-names = "clk_apb4";
 		};
 
-		pwm:pwm@f0103000 {				
+		pwm:pwm@f0103000 {
 			compatible = "nuvoton,npcm750-pwm";
 			reg = <0xf0103000 0x1000
 				   0xf0104000 0x1000>;

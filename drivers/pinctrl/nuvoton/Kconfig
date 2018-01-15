@@ -1,5 +1,5 @@
-config PINCTRL_NPCMX50
-	bool "Pinctrl driver for Nuvoton NPCMX50"
+config PINCTRL_NPCM7XX
+	bool "Pinctrl driver for Nuvoton NPCM7XX"
 	select GPIOLIB
 	select GPIOLIB_IRQCHIP
 	select PINMUX

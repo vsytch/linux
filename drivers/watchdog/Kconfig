@@ -504,7 +504,7 @@ config COH901327_WATCHDOG
 	  This watchdog is used to reset the system and thus cannot be
 	  compiled as a module.
 
-config NPCM750_WATCHDOG
+config NPCM7XX_WATCHDOG
 	bool "NPCM750 watchdog"
 	depends on ARCH_NPCM7XX || COMPILE_TEST
 	default y if ARCH_NPCM7XX

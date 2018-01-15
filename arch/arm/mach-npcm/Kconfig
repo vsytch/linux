@@ -39,6 +39,7 @@ prompt "NPCM7xx BMC type"
 
 config ARCH_NPCM750
 	depends on ARCH_NPCM7XX
+	default y if ARCH_NPCM7XX
 	bool "Support for NPCM750 BMC"
 	select SMP
 	select SMP_ON_UP
@@ -50,9 +51,8 @@ config ARCH_NPCM750
 	select USB_ARCH_HAS_OHCI
 	select USB_OHCI_HCD
 	select USB
-    default y 
 	help
-	  Support for NPCM750 BMC.
+	  General support for NPCM750 BMC (Poleg).
 
 config ARCH_NPCM730
 	depends on ARCH_NPCM7XX
@@ -61,7 +61,7 @@ config ARCH_NPCM730
 	select SMP_ON_UP
 	select HAVE_ARM_TWD if SMP
 	help
-	  Support for NPCM750 BMC.
+	  General support for NPCM730 BMC (Poleg).
 
 endchoice
 

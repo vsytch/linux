@@ -1,11 +1,10 @@
 
 /*
- * Copyright (c) 2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2017 Nuvoton Technology corporation.
  * Copyright 2017 Google, Inc.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation;version 2 of the License.
+ * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  */
 
 #include <linux/kernel.h>
@@ -137,7 +136,7 @@ static irqreturn_t npcm7xx_timer0_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static struct timer_of to_npcm7xx = {
+static struct timer_of npcm7xx_to = {
 	.flags = TIMER_OF_IRQ | TIMER_OF_BASE,
 
 	.clkevt = {
@@ -161,13 +160,13 @@ static struct timer_of to_npcm7xx = {
 static void __init npcm7xx_clockevents_init(u32 rate)
 {
 	writel(NPCM7XX_DEFAULT_CSR,
-		timer_of_base(&to_npcm7xx) + NPCM7XX_REG_TCSR0);
+		timer_of_base(&npcm7xx_to) + NPCM7XX_REG_TCSR0);
 
 	writel(NPCM7XX_Tx_RESETINT,
-		timer_of_base(&to_npcm7xx) + NPCM7XX_REG_TISR);
+		timer_of_base(&npcm7xx_to) + NPCM7XX_REG_TISR);
 
-	to_npcm7xx.clkevt.cpumask = cpumask_of(0);
-	clockevents_config_and_register(&to_npcm7xx.clkevt, rate,
+	npcm7xx_to.clkevt.cpumask = cpumask_of(0);
+	clockevents_config_and_register(&npcm7xx_to.clkevt, rate,
 					0x1, NPCM7XX_Tx_MAX_CNT);
 }
 
@@ -176,15 +175,15 @@ static void __init npcm7xx_clocksource_init(u32 rate)
 	u32 val;
 
 	writel(NPCM7XX_DEFAULT_CSR,
-		timer_of_base(&to_npcm7xx) + NPCM7XX_REG_TCSR1);
+		timer_of_base(&npcm7xx_to) + NPCM7XX_REG_TCSR1);
 	writel(NPCM7XX_Tx_MAX_CNT,
-		timer_of_base(&to_npcm7xx) + NPCM7XX_REG_TICR1);
+		timer_of_base(&npcm7xx_to) + NPCM7XX_REG_TICR1);
 
-	val = readl(timer_of_base(&to_npcm7xx) + NPCM7XX_REG_TCSR1);
+	val = readl(timer_of_base(&npcm7xx_to) + NPCM7XX_REG_TCSR1);
 	val |= NPCM7XX_START_Tx;
-	writel(val, timer_of_base(&to_npcm7xx) + NPCM7XX_REG_TCSR1);
+	writel(val, timer_of_base(&npcm7xx_to) + NPCM7XX_REG_TCSR1);
 
-	clocksource_mmio_init(timer_of_base(&to_npcm7xx) +
+	clocksource_mmio_init(timer_of_base(&npcm7xx_to) +
 				NPCM7XX_REG_TDR1,
 				"npcm7xx-timer1", rate,
 				200, (unsigned int)NPCM7XX_Tx_TDR_MASK_BITS,
@@ -206,23 +205,23 @@ static int __init npcm7xx_timer_init(struct device_node *np)
 	} else {
 		clk_prepare_enable(clk);
 		rate = clk_get_rate(clk);
-		to_npcm7xx.of_clk.clk = clk;
+		npcm7xx_to.of_clk.clk = clk;
 	}
 
-	ret = timer_of_init(np, &to_npcm7xx);
+	ret = timer_of_init(np, &npcm7xx_to);
 	if (ret)
 		goto err_timer_of_init;
 
 	/* Clock input is divided by PRESCALE + 1 before it is fed */
 	/* to the counter */
 	rate = rate / (NPCM7XX_Tx_MIN_PRESCALE + 1);
-	to_npcm7xx.of_clk.rate = rate;
+	npcm7xx_to.of_clk.rate = rate;
 
 	npcm7xx_clocksource_init(rate);
 	npcm7xx_clockevents_init(rate);
 
 	pr_info("Enabling NPCM7xx clocksource timer base: %p, IRQ: %d\n",
-		 timer_of_base(&to_npcm7xx), timer_of_irq(&to_npcm7xx));
+		 timer_of_base(&npcm7xx_to), timer_of_irq(&npcm7xx_to));
 
 	return 0;
 

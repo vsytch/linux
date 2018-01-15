@@ -1,11 +1,10 @@
 /*
  * DTS file for all NPCM750 SoCs
  *
- * Copyright (c) 2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2017 Nuvoton Technology corporation.
  *
- * The code contained herein is licensed under the GNU General Public
- * License. You may obtain a copy of the GNU General Public License
- * Version 2 or later at the following locations:
+ * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  *
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
@@ -66,7 +65,7 @@
 		reg = <0 0x40000000>;
 	};
 
-	ahb {	
+	ahb {
 	gmac0: eth@f0802000 {
 			pinctrl-names = "default";
 			pinctrl-0 = <&rg1_pins
@@ -101,175 +100,175 @@
 			status = "okay";
 		};
 
-		ehci1: ehci@f0806000 {				
+		ehci1: ehci@f0806000 {
 			status = "okay";
 		};
 
-		ohci1: ohci@f0807000 {				
-			status = "okay";
-		};
-		
-		udc0:udc@f0830000 {				
-			status = "okay";
-		};
-		
-		udc1:udc@f0831000 {				
+		ohci1: ohci@f0807000 {
 			status = "okay";
 		};
 
-		udc2:udc@f0832000 {				
+		udc0:udc@f0830000 {
 			status = "okay";
 		};
 
-		udc3:udc@f0833000 {				
+		udc1:udc@f0831000 {
 			status = "okay";
 		};
 
-		udc4:udc@f0834000 {				
+		udc2:udc@f0832000 {
 			status = "okay";
 		};
 
-		udc5:udc@f0835000 {				
-			status = "okay";
-		};
-		
-		udc6:udc@f0836000 {				
+		udc3:udc@f0833000 {
 			status = "okay";
 		};
 
-		udc7:udc@f0837000 {				
-			status = "okay";
-		};
-		
-		udc8:udc@f0838000 {				
+		udc4:udc@f0834000 {
 			status = "okay";
 		};
 
-		udc9:udc@f0839000 {				
+		udc5:udc@f0835000 {
 			status = "okay";
 		};
 
-		aes:aes@f0858000 {				
+		udc6:udc@f0836000 {
 			status = "okay";
 		};
 
-		sha:sha@f085a000 {				
+		udc7:udc@f0837000 {
 			status = "okay";
 		};
-		
+
+		udc8:udc@f0838000 {
+			status = "okay";
+		};
+
+		udc9:udc@f0839000 {
+			status = "okay";
+		};
+
+		aes:aes@f0858000 {
+			status = "okay";
+		};
+
+		sha:sha@f085a000 {
+			status = "okay";
+		};
+
 		spi0: spi@fb000000 {
 			spi-nor@0 {
-                partitions@80000000 {
-            		compatible = "fixed-partitions";
-                    #address-cells = <1>;
-    		        #size-cells = <1>;
-            		bbuboot1@0 {
-            			label = "bb-uboot-1";
-            			reg = <0x0000000 0x80000>;
-            			read-only;
-            		};
-            		bbuboot2@80000 {
-                        label = "bb-uboot-2";
-            			reg = <0x0080000 0x80000>;
-                        read-only;
-            		};
-            		envparam@100000 {
-                        label = "env-param";
-            			reg = <0x0100000 0x40000>;
-                        read-only;
-            		};
-            		spare@140000 {
-                        label = "spare";
-            			reg = <0x0140000 0xC0000>;
-            		};
-            		kernel@200000 {
-                        label = "kernel";
-            			reg = <0x0200000 0x400000>;
-            		};
-            		rootfs@600000 {
-                        label = "rootfs";
-            			reg = <0x0600000 0x700000>;
-            		};
-            		spare1@D00000 {
-                        label = "spare1";
-            			reg = <0x0D00000 0x200000>;
-            		};
-            		spare2@0F00000 {
-                        label = "spare2";
-            			reg = <0x0F00000 0x200000>;
-            		};
-            		spare3@1100000 {
-                        label = "spare3";
-            			reg = <0x1100000 0x200000>;
-            		};
-            		spare4@1300000 {
-                        label = "spare4";
-            			reg = <0x1300000 0x0>;
-            		};
-        	    };
+				partitions@80000000 {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+					bbuboot1@0 {
+						label = "bb-uboot-1";
+						reg = <0x0000000 0x80000>;
+						read-only;
+						};
+					bbuboot2@80000 {
+						label = "bb-uboot-2";
+						reg = <0x0080000 0x80000>;
+						read-only;
+						};
+					envparam@100000 {
+						label = "env-param";
+						reg = <0x0100000 0x40000>;
+						read-only;
+						};
+					spare@140000 {
+						label = "spare";
+						reg = <0x0140000 0xC0000>;
+						};
+					kernel@200000 {
+						label = "kernel";
+						reg = <0x0200000 0x400000>;
+						};
+					rootfs@600000 {
+						label = "rootfs";
+						reg = <0x0600000 0x700000>;
+						};
+					spare1@D00000 {
+						label = "spare1";
+						reg = <0x0D00000 0x200000>;
+						};
+					spare2@0F00000 {
+						label = "spare2";
+						reg = <0x0F00000 0x200000>;
+						};
+					spare3@1100000 {
+						label = "spare3";
+						reg = <0x1100000 0x200000>;
+						};
+					spare4@1300000 {
+						label = "spare4";
+						reg = <0x1300000 0x0>;
+					};
+				};
 			};
 		};
-		
+
 		spi3: spi@c0000000 {
-			spi-nor@0 {
-                partitions@A0000000 {
-            		compatible = "fixed-partitions";
-                    #address-cells = <1>;
-    		        #size-cells = <1>;
-            		spare@0 {
-            			label = "spare-1";
-            			reg = <0x0 0x0>;
-            		};
-        	    };
+				spi-nor@0 {
+				partitions@A0000000 {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+					spare@0 {
+						label = "spare-1";
+						reg = <0x0 0x0>;
+					};
+				};
 			};
 		};
-        	
+
 		sdhci0: sdhci@f0840000 {
 			pinctrl-names = "default";
 			pinctrl-0 = <&sd1_pins>;
-		 	/*no-1-8-v;
-		 	sdhci,auto-cmd12;*/
 			status = "okay";
 		};
 
 		sdhci1: sdhci@f0842000 {
 			pinctrl-names = "default";
-            pinctrl-0 = <&mmc8_pins
-						 &mmc_pins>;
-			/*bus-width = <8>;
-			keep-power-in-suspend;	
-			enable-sdio-wakeup;
-			non-removable;*/
+			pinctrl-0 = <&mmc8_pins
+				     &mmc_pins>;
 			status = "okay";
 		};
 
 	};
 	apb {
-		
+
 		watchdog1: watchdog@f0009000 {
 			status = "okay";
 		};
+
 		rng: rng@f000b000 {
 			status = "okay";
 		};
-		serial0: serial0@f0001000 {				
+
+		serial0: serial0@f0001000 {
 			status = "okay";
 		};
-		serial1: serial1@f0002000 {				
+
+		serial1: serial1@f0002000 {
 			status = "okay";
 		};
-		serial2: serial2@f0003000 {				
+
+		serial2: serial2@f0003000 {
 			status = "okay";
 		};
+
 		serial3: serial3@f0004000 {
 			pinctrl-names = "default";
 			pinctrl-0 = <&uart2_pins>;
 			status = "okay";
 		};
-		otp:otp@f0189000 {				
+
+		otp:otp@f0189000 {
 			status = "okay";
 		};
-		
+
 		/* lm75 on SVB */
 		i2c0: i2c-bus@f0080000 {
 			#address-cells = <1>;
@@ -282,7 +281,7 @@
 				status = "okay";
 			};
 		};
-		
+
 		/* lm75 on EB */
 		i2c1: i2c-bus@f0081000 {
 			#address-cells = <1>;
@@ -295,7 +294,7 @@
 				status = "okay";
 			};
 		};
-		
+
 		/* tmp100 on EB */
 		i2c2: i2c-bus@f0082000 {
 			#address-cells = <1>;
@@ -308,7 +307,7 @@
 				status = "okay";
 			};
 		};
-		
+
 		/* tmp100 on SVB */
 		i2c6: i2c-bus@f0086000 {
 			#address-cells = <1>;
@@ -321,93 +320,92 @@
 				status = "okay";
 			};
 		};
-		/* TEB bus3 */
+
 		i2c3: i2c-bus@f0083000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus4 */
+
 		i2c4: i2c-bus@f0084000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus5 */
+
 		i2c5: i2c-bus@f0085000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus7 */
+
 		i2c7: i2c-bus@f0087000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus8 */
+
 		i2c8: i2c-bus@f0088000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus9 */
+
 		i2c9: i2c-bus@f0089000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus10 */
+
 		i2c10: i2c-bus@f008a000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus11 */
+
 		i2c11: i2c-bus@f008b000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus14 */
+
 		i2c14: i2c-bus@f008e000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
-		/* TEB bus15 */
+
 		i2c15: i2c-bus@f008f000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
 
-        mft: mft@0 {
-		pinctrl-names = "default";
-		pinctrl-0 = <&fanin0_pins
-                     &fanin1_pins
-                     &fanin2_pins
-                     &fanin3_pins
-                     &fanin4_pins
-                     &fanin5_pins
-                     &fanin6_pins
-                     &fanin7_pins
-                     &fanin8_pins
-                     &fanin9_pins
-                     &fanin10_pins
-                     &fanin11_pins
-                     &fanin12_pins
-                     &fanin13_pins
-                     &fanin14_pins
-                     &fanin15_pins>;
-		status = "okay";
-	    };
-	};
+		fan: fan@0 {
+			pinctrl-names = "default";
+			pinctrl-0 = <	&fanin0_pins
+					&fanin1_pins
+					&fanin2_pins
+					&fanin3_pins
+					&fanin4_pins
+					&fanin5_pins
+					&fanin6_pins
+					&fanin7_pins
+					&fanin8_pins
+					&fanin9_pins
+					&fanin10_pins
+					&fanin11_pins
+					&fanin12_pins
+					&fanin13_pins
+					&fanin14_pins
+					&fanin15_pins>;
+			status = "okay";
+			};
+		};
 
-    pinctrl: pinctrl@0 {
-				pinctrl-names = "default";
-				pinctrl-0 = <
-					&gpio0o_pins
+		pinctrl: pinctrl@0 {
+			pinctrl-names = "default";
+			pinctrl-0 = <	&gpio0o_pins
 					&gpio1_pins
 					&gpio2o_pins
 					&gpio3_pins
@@ -464,8 +462,6 @@
 					&spix_pins
 					&gpio228ol_pins
 					&gpio231o_pins
-					&gpio255_pins
-				>;
-	    };
-
+					&gpio255_pins>;
+		};
 };

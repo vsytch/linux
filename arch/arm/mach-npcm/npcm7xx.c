@@ -1,10 +1,9 @@
 /*
- * Copyright (c) 2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2017 Nuvoton Technology corporation.
  * Copyright 2017 Google, Inc.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  */
 
 #include <linux/kernel.h>

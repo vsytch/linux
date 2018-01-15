@@ -1,18 +1,16 @@
 /*
- * DTSi file for the NPCM750 pin controller 
+ * DTSi file for the NPCM750 pin controller
  *
- * Copyright (c) 2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2017 Nuvoton Technology corporation.
  *
- * The code contained herein is licensed under the GNU General Public
- * License. You may obtain a copy of the GNU General Public License
- * Version 2 or later at the following locations:
+ * Released under the GPLv2 only.
+ * SPDX-License-Identifier: GPL-2.0
  *
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-
-/ {     
+/ {
 	pinctrl: pinctrl@0 {
 		gpio0o_pins: gpio0o_pins {
 			pins = "GPIO0/IOX1DI";

@@ -1,1 +1,1 @@
-obj-$(CONFIG_PINCTRL_NPCMX50)	+= pinctrl-npcmx50.o
+obj-$(CONFIG_PINCTRL_NPCM7XX)	+= pinctrl-npcm7xx.o
