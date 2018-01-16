@@ -1707,19 +1707,19 @@ config SERIAL_OWL_CONSOLE
 	  Say 'Y' here if you wish to use Actions Semiconductor S500/S900 UART
 	  as the system console. Only earlycon is implemented currently.
 
-config SERIAL_NPCMX50
-	tristate "Nuvoton NPCMX50 Serial port support"
+config SERIAL_NPCM
+	tristate "Nuvoton NPCM Serial port support"
 	depends on ARCH_NPCM
 	select SERIAL_CORE
 	help
-	  Support for the on-chip UARTs on the Nuvoton NPCMX50 CPU,
+	  Support for the on-chip UARTs on the Nuvoton NPCM CPU,
 	  providing /dev/ttyS0, 1 and 2 (note, some machines may not
 	  provide all of these ports, depending on how the serial port
 	  pins are configured.
 
-config SERIAL_NPCMX50_CONSOLE
-	bool "Support for console on NPCMX50 serial port"
-	depends on SERIAL_NPCMX50=y
+config SERIAL_NPCM_CONSOLE
+	bool "Support for console on NPCM serial port"
+	depends on SERIAL_NPCM=y
 	select SERIAL_CORE_CONSOLE
 
 endmenu
