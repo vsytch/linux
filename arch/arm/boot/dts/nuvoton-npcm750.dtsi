@@ -494,6 +494,8 @@
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0001000 0x1000>;
 			clocks = <&clk NPCM7XX_CLK_UART>;
+			reg-shift = <2>;
+			fifo-size = <14>;
 			interrupts = <0 2 4>;
 			status = "disabled";
 		};
@@ -502,6 +504,8 @@
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0002000 0x1000>;
 			clocks = <&clk NPCM7XX_CLK_UART>;
+			reg-shift = <2>;
+			fifo-size = <14>;
 			interrupts = <0 3 4>;
 			status = "disabled";
 		};
@@ -510,6 +514,8 @@
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0003000 0x1000>;
 			clocks = <&clk NPCM7XX_CLK_UART>;
+			reg-shift = <2>;
+			fifo-size = <16>;
 			interrupts = <0 4 4>;
 			status = "disabled";
 		};
@@ -518,6 +524,8 @@
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0004000 0x1000>;
 			clocks = <&clk NPCM7XX_CLK_UART>;
+			reg-shift = <2>;
+			fifo-size = <16>;
 			interrupts = <0 5 4>;
 			status = "disabled";
 		};
