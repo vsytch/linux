@@ -573,7 +573,7 @@ static const struct of_device_id npcm7xx_clk_match_table[] = {
 MODULE_DEVICE_TABLE(of, npcm7xx_clk_match_table);
 
 
-static void __init npcm750clk_init(struct device_node *clk_np)
+static void __init npcm7xx_clk_init(struct device_node *clk_np)
 {
 
 	struct resource res;
@@ -596,7 +596,7 @@ static void __init npcm750clk_init(struct device_node *clk_np)
 
 	clk_base = ioremap(res.start, resource_size(&res));
 	if (IS_ERR(clk_base)) {
-		pr_err("\tnpcm750clk_init: resource error\n");
+		pr_err("\tnpcm7xx_clk_init: resource error\n");
 		goto npcm7xx_init_error;
 	}
 
@@ -622,19 +622,27 @@ static void __init npcm750clk_init(struct device_node *clk_np)
 	for (i = 0; i < NPCM7XX_NUM_CLOCKS; i++)
 		npcm7xx_clk_data->hws[i] = ERR_PTR(-EPROBE_DEFER);
 
-	/* Define fixed clocks.
-	 * Notice: the following clocks are fixed value on NPCM7XX and should
-	 * not be changed.
-	 * therefor they are not exposed to the dev tree .
-	 */
-	pr_debug("\tclk register fixed clocks\n");
-	hw = clk_hw_register_fixed_rate(NULL, NPCM7XX_CLK_S_REFCLK,
-		NULL, 0, 25000000);
-	hw = clk_hw_register_fixed_rate(NULL, NPCM7XX_CLK_S_SYSBYPCK,
-		NULL, 0, 800000000); // rarely used. mostly testing. TBD: remove
-	hw = clk_hw_register_fixed_rate(NULL, NPCM7XX_CLK_S_MCBYPCK,
-		NULL, 0, 800000000); // rarely used.  mostly testing. TBD:remove
+	/* Read fixed clocks. These 3 clocks must be defined in DT */
+	clk = of_clk_get_by_name(clk_np, NPCM7XX_CLK_S_REFCLK);
+	if (!IS_ERR(clk)) {
+		pr_err("failed to find external REFCLK: %ld\n",
+			PTR_ERR(clk));
+		clk_put(clk);
+	}
 
+	clk = of_clk_get_by_name(clk_np, NPCM7XX_CLK_S_SYSBYPCK);
+	if (!IS_ERR(clk)) {
+		pr_err("failed to find external SYSBYPCK: %ld\n",
+			PTR_ERR(clk));
+		clk_put(clk);
+	}
+
+	clk = of_clk_get_by_name(clk_np, NPCM7XX_CLK_S_MCBYPCK);
+	if (!IS_ERR(clk)) {
+		pr_err("failed to find external MCBYPCK: %ld\n",
+			PTR_ERR(clk));
+		clk_put(clk);
+	}
 
 	/* Register plls */
 	pr_debug("\tclk register pll\n");
@@ -746,6 +754,6 @@ npcm7xx_init_error:
 	of_node_put(clk_np);
 }
 
-CLK_OF_DECLARE(npcm750clk_init, "nuvoton,npcm750-clk", npcm750clk_init);
+CLK_OF_DECLARE(npcm7xx_clk_init, "nuvoton,npcm750-clk", npcm7xx_clk_init);
 
 
