@@ -485,7 +485,7 @@ static irqreturn_t npcm750_mft0_isr(int irq, void *dev_id)
 
 static int npcm750_fan_probe(struct platform_device *pdev)
 {
-	u32 reg_value, apb_clk_src;
+	u32 apb_clk_src;
 	int ret = 0;
 	struct device *dev = &pdev->dev;
 	struct device_node *np;
@@ -577,18 +577,6 @@ static int npcm750_fan_probe(struct platform_device *pdev)
 			DEFAULT_PULSE_PER_REVOLUTION;
 		S_npcm750_fantach[i].u16FanTachCnt = 0;
 	}
-
-	/** request IRQ */
-	/*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
-	/*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
-	/*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
-	/* need to check why we enable this irq??!!??! */
-	/* need to check why we enable this irq??!!??! */
-	/* need to check why we enable this irq??!!??! */
-	/* need to check why we enable this irq??!!??! */
-	/*reg_value = ioread32((void *)AIC_REG_GEN_ADDR);
-	reg_value |= 0xff;
-	iowrite32(reg_value, (void *)AIC_REG_GEN_ADDR);*/
 
 	for (i = 0; i < 8; i++) {
 		mft_irq[i] = platform_get_irq(pdev, i);

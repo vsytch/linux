@@ -2672,7 +2672,7 @@ static int npcmX50_udc_probe(struct platform_device *pdev)
 	void __iomem *addr = NULL;
 	struct device_node *np = pdev->dev.of_node;
 	int ret = -ENODEV;
-	unsigned int i,val;
+	unsigned int i;
 	u32 dccparams;
     struct npcmX50_udc *udc_controller;
     struct usb_dr_device *dr_regs;
@@ -2721,8 +2721,6 @@ static int npcmX50_udc_probe(struct platform_device *pdev)
 	    }
 	}
 
-	/*regmap_read(rst_regmap, IPSRST3_OFFSET, &val);
-	if(0 != val)*/
 	if (first_init == 1)
 	{
 	     printk(KERN_INFO "usb phy init\n");
