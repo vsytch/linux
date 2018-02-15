@@ -32,6 +32,9 @@
 
 #include <linux/if_ether.h>
 
+#include <net/ip.h>
+#include <net/ncsi.h>
+
 static struct regmap *gcr_regmap;
 
 #define  MFSEL1_OFFSET 0x00C
@@ -43,7 +46,7 @@ static struct regmap *rst_regmap;
 #define  IPSRST1_OFFSET 0x020
 
 #define DRV_MODULE_NAME		"npcm7xx-emc"
-#define DRV_MODULE_VERSION	"3.87"
+#define DRV_MODULE_VERSION	"3.90"
 
 //#define CONFIG_NPCM7XX_EMC_ETH_DEBUG
 #ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG
@@ -278,6 +281,8 @@ struct  npcm7xx_ether {
 	struct mii_bus *mii_bus;
 	struct phy_device *phy_dev;
 	struct napi_struct napi;
+	struct ncsi_dev *ncsidev;
+	bool use_ncsi;
 	void __iomem *reg;
 	int rxirq;
 	int txirq;
@@ -321,11 +326,32 @@ static void npcm7xx_info_print(struct net_device *dev);
 void npcm7xx_clk_GetTimeStamp(u32 time_quad[2]);
 #endif
 
+static void npcm7xx_opmode(struct net_device *dev, int speed, int duplex)
+{
+	unsigned int val;
+	struct npcm7xx_ether *ether = netdev_priv(dev);
+
+	val = __raw_readl(REG_MCMDR);
+
+	if (speed == 100) {
+		val |= MCMDR_OPMOD;
+	} else {
+		val &= ~MCMDR_OPMOD;
+	}
+
+	if(duplex == DUPLEX_FULL) {
+		val |= MCMDR_FDUP;
+	} else {
+		val &= ~MCMDR_FDUP;
+	}
+
+	__raw_writel(val, REG_MCMDR);
+}
+
 static void adjust_link(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	struct phy_device *phydev = ether->phy_dev;
-	unsigned int val;
 	bool status_change = false;
 	unsigned long flags;
 
@@ -355,20 +381,7 @@ static void adjust_link(struct net_device *dev)
 	spin_unlock_irqrestore(&ether->lock, flags);
 
 	if (status_change) {
-
-		val = __raw_readl(REG_MCMDR);
-
-		if (ether->speed == 100)
-			val |= MCMDR_OPMOD;
-		else
-			val &= ~MCMDR_OPMOD;
-
-		if (ether->duplex == DUPLEX_FULL)
-			val |= MCMDR_FDUP;
-		else
-			val &= ~MCMDR_FDUP;
-
-		__raw_writel(val, REG_MCMDR);
+		npcm7xx_opmode(dev, ether->speed, ether->duplex);
 	}
 }
 
@@ -821,10 +834,12 @@ static int npcm7xx_ether_close(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 
+	npcm7xx_return_default_idle(dev);
+
 	if (ether->phy_dev)
 		phy_stop(ether->phy_dev);
-
-	npcm7xx_return_default_idle(dev);
+	else if (ether->use_ncsi)
+		ncsi_stop_dev(ether->ncsidev);
 
 	msleep(10);
 
@@ -1376,29 +1391,47 @@ static int npcm7xx_ether_open(struct net_device *dev)
 	ether = netdev_priv(dev);
 	pdev = ether->pdev;
 
-	ether->need_reset = 1;
+	if (ether->use_ncsi)
+	{
+		ether->speed = 100;
+		ether->duplex = DUPLEX_FULL;
+		npcm7xx_opmode(dev, 100, DUPLEX_FULL);
+	}
 	npcm7xx_reset_mac(dev, 0);
 
 	if (request_irq(ether->txirq, npcm7xx_tx_interrupt,
 						0x0, pdev->name, dev)) {
 		dev_err(&pdev->dev, "register irq tx failed\n");
+		npcm7xx_ether_close(dev);
 		return -EAGAIN;
 	}
 
 	if (request_irq(ether->rxirq, npcm7xx_rx_interrupt,
 						0x0, pdev->name, dev)) {
 		dev_err(&pdev->dev, "register irq rx failed\n");
-		free_irq(ether->txirq, dev);
+		npcm7xx_ether_close(dev);
 		return -EAGAIN;
 	}
 
 	if (ether->phy_dev)
 		phy_start(ether->phy_dev);
+	else if (ether->use_ncsi)
+		netif_carrier_on(dev);
 
 	netif_start_queue(dev);
 	napi_enable(&ether->napi);
 
 	ETH_TRIGGER_RX;
+
+	/* Start the NCSI device */
+	if (ether->use_ncsi) {
+		int err = ncsi_start_dev(ether->ncsidev);
+		if (err)
+		{
+			npcm7xx_ether_close(dev);
+			return err;
+		}
+	}
 
 	dev_info(&pdev->dev, "%s is OPENED\n", dev->name);
 
@@ -1965,6 +1998,16 @@ static const struct of_device_id emc_dt_id[] = {
 };
 MODULE_DEVICE_TABLE(of, emc_dt_id);
 
+
+static void npcm7xx_ncsi_handler(struct ncsi_dev *nd)
+{
+	if (unlikely(nd->state != ncsi_dev_state_functional))
+		return;
+
+	netdev_info(nd->dev, "NCSI interface %s\n",
+		    nd->link_up ? "up" : "down");
+}
+
 static int npcm7xx_ether_probe(struct platform_device *pdev)
 {
 	struct npcm7xx_ether *ether;
@@ -2096,7 +2139,7 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	if (ether->rxirq < 0) {
 		dev_err(&pdev->dev, "failed to get ether rx irq\n");
 		error = -ENXIO;
-		goto failed_free_txirq;
+		goto failed_free_io;
 	}
 
 	SET_NETDEV_DEV(dev, &pdev->dev);
@@ -2146,18 +2189,35 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	netif_napi_add(dev, &ether->napi, npcm7xx_poll, RX_POLL_SIZE);
 
 	ether_setup(dev);
+	if (pdev->dev.of_node &&
+	    of_get_property(pdev->dev.of_node, "use-ncsi", NULL)) {
+		if (!IS_ENABLED(CONFIG_NET_NCSI)) {
+			dev_err(&pdev->dev, "CONFIG_NET_NCSI not enabled\n");
+                       error = -ENODEV;
+			goto failed_free_napi;
+		}
 
+		dev_info(&pdev->dev, "Using NCSI interface\n");
+		ether->use_ncsi = true;
+		ether->ncsidev= ncsi_register_dev(dev, npcm7xx_ncsi_handler);
+		if (!ether->ncsidev){
+                       error = -ENODEV;
+			goto failed_free_napi;
+		}
+	} else {
+		ether->use_ncsi = false;
 	error = npcm7xx_mii_setup(dev);
 	if (error < 0) {
 		dev_err(&pdev->dev, "npcm7xx_mii_setup err\n");
-		goto failed_free_rxirq;
+               goto failed_free_napi;
+       }
 	}
 
 	error = register_netdev(dev);
 	if (error != 0) {
 		dev_err(&pdev->dev, "register_netdev() failed\n");
 		error = -ENODEV;
-		goto failed_free_rxirq;
+		goto failed_free_napi;
 	}
 	snprintf(proc_filename, sizeof(proc_filename), "%s.%d", PROC_FILENAME,
 		 pdev->id);
@@ -2171,11 +2231,9 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 
 	return 0;
 
-failed_free_rxirq:
-	free_irq(ether->rxirq, pdev);
+failed_free_napi:
+       netif_napi_del(&ether->napi);
 	platform_set_drvdata(pdev, NULL);
-failed_free_txirq:
-	free_irq(ether->txirq, pdev);
 failed_free_io:
 	iounmap(ether->reg);
 failed_free_mem:
@@ -2246,3 +2304,8 @@ module_init(npcm7xx_ether_init);
 module_exit(npcm7xx_ether_exit);
 #endif
 
+MODULE_AUTHOR("Nuvoton Technology Corp.");
+MODULE_DESCRIPTION("NPCM750 EMC driver");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:npcm750-emc");
+MODULE_VERSION(DRV_MODULE_VERSION);
