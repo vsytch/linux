@@ -88,6 +88,7 @@
 						 &r1err_pins
 						 &r1md_pins>;
 			phy-mode = "rmii";
+			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
 		};
 
@@ -97,6 +98,7 @@
 						 &r2err_pins
 						 &r2md_pins>;
 			phy-mode = "rmii";
+			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
 		};
 
@@ -271,6 +273,10 @@
 
 		lpc_kcs: lpc_kcs@f0007000 {
 			kcs1: kcs1@0 {
+				status = "okay";
+			};
+
+			kcs2: kcs2@0 {
 				status = "okay";
 			};
 

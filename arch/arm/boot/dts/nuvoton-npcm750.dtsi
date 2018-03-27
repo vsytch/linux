@@ -1,13 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * DTSi file for the NPCM750 SoC
  *
- * Copyright (c) 2014-2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2018 Nuvoton Technology corporation.
  *
- * Released under the GPLv2 only.
- * SPDX-License-Identifier: GPL-2.0
- *
- * http://www.opensource.org/licenses/gpl-license.html
- * http://www.gnu.org/copyleft/gpl.html
  */
 
 #include "skeleton.dtsi"
@@ -86,10 +82,12 @@
 
 
 	clk: clock-controller@f0801000 {
-		compatible = "nuvoton,npcm750-clk";
+		compatible = "nuvoton,npcm750-clk", "syscon";
 		#clock-cells = <1>;
 		clock-controller;
 		reg = <0xf0801000 0x1000>;
+		clock-names = "refclk", "sysbypck", "mcbypck";
+		clocks = <&clk_refclk>, <&clk_sysbypck>, <&clk_mcbypck>;
 	};
 
 	/* external reference clock */
