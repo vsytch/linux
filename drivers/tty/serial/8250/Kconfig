@@ -468,16 +468,6 @@ config SERIAL_8250_PXA
 	  applicable to both devicetree and legacy boards, and early console is
 	  part of its support.
 
-config SERIAL_8250_NPCM
-	tristate "NPCM tty serial support"
-	depends on SERIAL_8250
-	help
-	  Say Y here if you have a NPCM tty serial support.
-	  If unsure, say N.
-
-	  This driver can also be built as a module. The module will be called
-	  8250_nuvoton. If you want to do that, say M here.
-
 config SERIAL_OF_PLATFORM
 	tristate "Devicetree based probing for 8250 ports"
 	depends on SERIAL_8250 && OF
