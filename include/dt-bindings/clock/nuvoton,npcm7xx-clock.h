@@ -1,14 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Nuvoton NPCM7xx Clock Generator
- * All the clocks are initialized by the bootloader, so this driver allow only
- * reading of current settings directly from the hardware.
+ * Nuvoton NPCM7xx Clock Generator binding
+ * clock binding number for all clocks supportted by nuvoton,npcm7xx-clk
  *
  * Copyright (C) 2018 Nuvoton Technologies tali.perry@nuvoton.com
  *
- * Released under the GPLv2 only.
- * SPDX-License-Identifier: GPL-2.0
- * http://www.opensource.org/licenses/gpl-license.html
- * http://www.gnu.org/copyleft/gpl.html
  */
 
 #ifndef __DT_BINDINGS_CLOCK_NPCM7XX_H
@@ -43,9 +39,6 @@
 #define NPCM7XX_CLK_SYSBYPCK 24
 #define NPCM7XX_CLK_MCBYPCK 25
 
-
 #define NPCM7XX_NUM_CLOCKS	 (NPCM7XX_CLK_MCBYPCK+1)
-
-
 
 #endif
