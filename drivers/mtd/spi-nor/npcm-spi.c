@@ -975,7 +975,6 @@ static int npcm7xx_spi_nor_register(struct device_node *np,
 	struct mtd_info *mtd;
 	u32 chipselect;
 	int ret;
-	u8 status_reg_val;
 	const struct spi_nor_hwcaps hwcaps = {
 		.mask = SNOR_HWCAPS_READ |
 			SNOR_HWCAPS_READ_FAST |
@@ -1046,21 +1045,20 @@ static int npcm7xx_spi_nor_register(struct device_node *np,
 		return ret;
 
 	if (mtd->size > SIZE_16MB) {
-		npcm7xx_fiu_uma_read(nor, NPCM_SPI_RD_STATUS_3_REG_CMD, 0,
-				     false, &status_reg_val, sizeof(u8));
-		if (status_reg_val & 0x1) {
-			npcm7xx_spi_flash_common_waittillready(nor);
-			npcm7xx_fiu_uma_write(nor, NPCM_SPI_EN_RST_CMD, 0,
-					      false, NULL, 0);
-			npcm7xx_fiu_uma_write(nor, NPCM_SPI_RST_DEVICE_CMD, 0,
-					      false, NULL, 0);
-			npcm7xx_spi_flash_common_waittillready(nor);
-		}
-
-		npcm7xx_fiu_uma_read(nor, NPCM_SPI_RD_STATUS_3_REG_CMD, 0,
-				     false, &status_reg_val, sizeof(u8));
-		if ((status_reg_val & 0x1) == 0x0)
-			nor->addr_width = 3;
+		/* If Flash size is over 16MB the spi_nor_scan sets
+		   automatically the FLASH to work with 4 byte addressing.
+		   Our driver handle Flash size over 16MB with 3 byte address.
+		   Revert back to 3 byte address size cause issues so the
+		   sequence below resets WINBOND and MACRONIX FLASH to work
+		   again with 3 byte address (From Kernel 4.14 and above
+		   the address width statically configured by the driver)*/
+		   npcm7xx_spi_flash_common_waittillready(nor);
+		   npcm7xx_fiu_uma_write(nor, NPCM_SPI_EN_RST_CMD, 0,
+		   		      false, NULL, 0);
+		   npcm7xx_fiu_uma_write(nor, NPCM_SPI_RST_DEVICE_CMD, 0,
+		   		      false, NULL, 0);
+		   npcm7xx_spi_flash_common_waittillready(nor);
+		   nor->addr_width = 3;
 	}
 
 	npcm7xx_spi_flash_unlock_protection(nor);

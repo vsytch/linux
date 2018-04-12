@@ -1,12 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Nuvoton NPCM7xx Clock Generator
  * All the clocks are initialized by the bootloader, so this driver allow only
  * reading of current settings directly from the hardware.
  *
  * Copyright (C) 2018 Nuvoton Technologies tali.perry@nuvoton.com
- *
- * SPDX-License-Identifier: GPL-2.0
- * Released under the GPLv2 only.
  */
 
 #include <linux/module.h>
