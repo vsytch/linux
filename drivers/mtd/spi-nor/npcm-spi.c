@@ -882,20 +882,31 @@ static ssize_t npcm7xx_spi_read(struct spi_nor *nor, loff_t from,
 static int npcm7xx_spi_erase(struct spi_nor *nor, loff_t offs)
 {
 	u32 addr = (u32)offs;
+	struct mtd_info *mtd;
+	mtd = &nor->mtd;
 
 	if ((addr >> 24) && (nor->addr_width == 3)) {
 		npcm7xx_spi_flash_high_addr_wr(nor, addr >> 24);
 
 		npcm7xx_fiu_uma_write(nor, SPINOR_OP_WREN, 0, false, NULL,
 				      0);
-		npcm7xx_fiu_uma_write(nor, SPINOR_OP_BE_4K,
-				      (addr & 0xFFFFFF), true, NULL, 0);
+		if (mtd->erasesize == 4096)
+			npcm7xx_fiu_uma_write(nor, SPINOR_OP_BE_4K,
+					      (addr & 0xFFFFFF), true, NULL, 0);
+		else
+			npcm7xx_fiu_uma_write(nor, SPINOR_OP_SE,
+					      (addr & 0xFFFFFF), true, NULL, 0);
 		npcm7xx_spi_flash_common_waittillready(nor);
 		npcm7xx_spi_flash_high_addr_wr(nor, 0);
 	} else {
 		npcm7xx_fiu_uma_write(nor, SPINOR_OP_WREN, 0, false, NULL,
 				      0);
-		npcm7xx_fiu_uma_write(nor, SPINOR_OP_BE_4K, addr, true, NULL, 0);
+		if (mtd->erasesize == 4096)
+			npcm7xx_fiu_uma_write(nor, SPINOR_OP_BE_4K, addr,
+					      true, NULL, 0);
+		else
+			npcm7xx_fiu_uma_write(nor, SPINOR_OP_SE, addr,
+					      true, NULL, 0);
 		npcm7xx_spi_flash_common_waittillready(nor);
 	}
 
