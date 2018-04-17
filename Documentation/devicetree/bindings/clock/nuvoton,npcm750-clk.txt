@@ -19,7 +19,6 @@ and can be reused as DT sources.
 
 Required Properties of clock controller:
 
-Clock controller node requirements:
 	- compatible: "nuvoton,npcm750-clk" : for clock controller of Nuvoton
 		  Poleg BMC NPCM750
 
@@ -33,8 +32,9 @@ Example: Clock controller node:
 	clk: clock-controller@f0801000 {
 		compatible = "nuvoton,npcm750-clk";
 		#clock-cells = <1>;
-		clock-controller;
 		reg = <0xf0801000 0x1000>;
+		clock-names = "refclk", "sysbypck", "mcbypck";
+		clocks = <&clk_refclk>, <&clk_sysbypck>, <&clk_mcbypck>;
 	};
 
 Example: Required external clocks for network:
@@ -90,14 +90,11 @@ Example: Required external clocks for network:
 Example: GMAC controller node that consumes two clocks: a generated clk by the
 clock controller and a fixed clock from DT (clk_rg1refck).
 
-	gmac0: eth@f0802000 {
-		device_type = "network";
+	ethernet0: ethernet@f0802000 {
 		compatible = "snps,dwmac";
 		reg = <0xf0802000 0x2000>;
 		interrupts = <0 14 4>;
 		interrupt-names = "macirq";
-		ethernet = <0>;
 		clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_AHB>;
 		clock-names = "stmmaceth", "clk_gmac";
-		status = "disabled";
 	};
