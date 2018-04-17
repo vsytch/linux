@@ -15,30 +15,16 @@
 #include "nuvoton-npcm750-gpio.dtsi"
 
 / {
-	model = "Nuvoton npcm750 Development Board (Device Tree)";
+	model = "Rockaway npcm730 Development Board (Device Tree)";
 	compatible = "nuvoton,npcm750";
 
 	aliases {
 		ethernet0 = &emc0;
-		ethernet1 = &emc1;
-		ethernet2 = &gmac0;
-		ethernet3 = &gmac1;
+		ethernet1 = &gmac0;
 		serial0 = &serial0;
 		serial1 = &serial1;
 		serial2 = &serial2;
 		serial3 = &serial3;
-		udc0 = &udc0;
-		udc1 = &udc1;
-		udc2 = &udc2;
-		udc3 = &udc3;
-		udc4 = &udc4;
-		udc5 = &udc5;
-		udc6 = &udc6;
-		udc7 = &udc7;
-		udc8 = &udc8;
-		udc9 = &udc9;
-		emmc0 = &sdhci0;
-		emmc1 = &sdhci1;
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
 		i2c2 = &i2c2;
@@ -67,20 +53,19 @@
 
 	ahb {
 	        gmac0: eth@f0802000 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&rg1_pins
+			             &rg1mdio_pins>;
+			phy-mode = "rgmii-id";
 			status = "okay";
 		};
 
-		gmac1: eth@f0804000 {
-			status = "okay";
-		};
 
 		emc0: eth@f0825000 {
-			phy-mode = "rmii";
-			#use-ncsi; /* add this to support ncsi */
-			status = "okay";
-		};
-
-		emc1: eth@f0826000 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&r1_pins
+			             &r1err_pins
+				     &r1md_pins>;
 			phy-mode = "rmii";
 			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
@@ -91,46 +76,6 @@
 		};
 
 		ohci1: ohci@f0807000 {
-			status = "okay";
-		};
-
-		udc0:udc@f0830000 {
-			status = "okay";
-		};
-
-		udc1:udc@f0831000 {
-			status = "okay";
-		};
-
-		udc2:udc@f0832000 {
-			status = "okay";
-		};
-
-		udc3:udc@f0833000 {
-			status = "okay";
-		};
-
-		udc4:udc@f0834000 {
-			status = "okay";
-		};
-
-		udc5:udc@f0835000 {
-			status = "okay";
-		};
-
-		udc6:udc@f0836000 {
-			status = "okay";
-		};
-
-		udc7:udc@f0837000 {
-			status = "okay";
-		};
-
-		udc8:udc@f0838000 {
-			status = "okay";
-		};
-
-		udc9:udc@f0839000 {
 			status = "okay";
 		};
 
@@ -196,6 +141,8 @@
 		};
 
 		spi3: spi@c0000000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&spi3_pins &spi3quad_pins>;
 				spi-nor@0 {
 				partitions@A0000000 {
 					compatible = "fixed-partitions";
@@ -213,14 +160,6 @@
 			};
 		};
 
-		sdhci0: sdhci@f0840000 {
-			status = "okay";
-		};
-
-		sdhci1: sdhci@f0842000 {
-			status = "okay";
-		};
-
 	};
 
 	apb {
@@ -234,6 +173,8 @@
 		};
 
 		serial0: serial0@f0001000 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&bmcuart0a_pins>;
 			status = "okay";
 		};
 
@@ -269,57 +210,24 @@
 			};
 		};
 
-		/* lm75 on SVB */
 		i2c0: i2c-bus@f0080000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
-
-			lm75@48 {
-				compatible = "lm75";
-				reg = <0x48>;
-				status = "okay";
-			};
 		};
 
-		/* lm75 on EB */
 		i2c1: i2c-bus@f0081000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
-
-			lm75@48 {
-				compatible = "lm75";
-				reg = <0x48>;
-				status = "okay";
-			};
 		};
 
-		/* tmp100 on EB */
 		i2c2: i2c-bus@f0082000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
-
-			tmp100@48 {
-				compatible = "tmp100";
-				reg = <0x48>;
-				status = "okay";
-			};
 		};
 
-		/* tmp100 on SVB */
-		i2c6: i2c-bus@f0086000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "okay";
-
-			tmp100@48 {
-				compatible = "tmp100";
-				reg = <0x48>;
-				status = "okay";
-			};
-		};
 		i2c3: i2c-bus@f0083000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -332,13 +240,7 @@
 			status = "okay";
 		};
 
-		i2c5: i2c-bus@f0085000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "okay";
-		};
-
-		i2c7: i2c-bus@f0087000 {
+		i2c6: i2c-bus@f0086000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
@@ -368,36 +270,34 @@
 			status = "okay";
 		};
 
+		i2c12: i2c-bus@f008c000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+		};
+
+		i2c13: i2c-bus@f008d000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+		};
+
 		i2c14: i2c-bus@f008e000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "okay";
 		};
 
-		i2c15: i2c-bus@f008f000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";               /* SVB conflict with pspi2 cs gpio20o_pins */
-		};
-
 		fan: fan@0 {
 			pinctrl-names = "default";
-			pinctrl-0 = </*&fanin0_pins*/     /* SVB conflict with pspi1 enable gpio64o_pins */
+			pinctrl-0 = <	&fanin0_pins
 					&fanin1_pins
 					&fanin2_pins
 					&fanin3_pins
 					&fanin4_pins
 					&fanin5_pins
 					&fanin6_pins
-					&fanin7_pins
-					&fanin8_pins
-					&fanin9_pins
-					&fanin10_pins
-					&fanin11_pins
-					&fanin12_pins
-					&fanin13_pins
-					&fanin14_pins
-					&fanin15_pins>;
+					&fanin7_pins>;
 			status = "okay";
 		};
 
@@ -431,52 +331,140 @@
 	pinctrl: pinctrl@0 {
 		pinctrl-names = "default";
 		pinctrl-0 = <	&iox1_pins
+				&gpio4_pins
+				&gpio5_pins
+				&gpio6o_pins
+				&gpio7o_pins
 				&gpio8_pins
-				&gpio9o_pins
+				&gpio9_pins
 				&gpio10_pins
-				&gpio11o_pins
-				&gpio16_pins
-				&gpio24o_pins
-				&gpio25ol_pins
-				&gpio32o_pins
+				&gpio11_pins
+				&gpio12o_pins
+				&gpio13_pins
+				&gpio14_pins
+				&gpio15o_pins
+				&gpio16o_pins
+				&gpio17o_pins
+				&gpio18ol_pins
+				&gpio19ol_pins
+				&gpio20_pins
+				&gpio21_pins
+				&gpio24_pins
+				&gpio25_pins
+				&gpio26_pins
+				&gpio27_pins
+				&gpio32_pins
+				&gpio37ol_pins
+				&gpio38ol_pins
+				&gpio39ol_pins
+				&gpio40ol_pins
 				&jtag2_pins
-				&gpio61o_pins
-				&gpio62o_pins
-				&gpio63o_pins
-				&gpio64o_pins      /* SVB pspi1 enable */
-				&gpio80_pins
-				&gpio81_pins
-				&gpio82_pins
-				&gpio83_pins
+				&gpio59_pins
+				&gpio60_pins
+				&gpio61_pins
+				&gpio62_pins
+				&gpio63_pins
+				&gpio72_pins
+				&gpio73_pins
+				&gpio74_pins
+				&gpio75_pins
+				&gpio76_pins
+				&gpio77_pins
+				&gpio78_pins
+				&gpio79_pins
+				&gpio84o_pins
+				&gpio85o_pins
+				&gpio86o_pins
+				&gpio87o_pins
+				&gpio88_pins
+				&gpio89_pins
+				&gpio90_pins
+				&gpio91_pins
+				&gpio92_pins
+				&gpio93_pins
+				&gpio94o_pins
+				&gpio110ol_pins
+				&gpio111ol_pins
+				&gpio112ol_pins
+				&gpio113ol_pins
+				&gpio120_pins
+				&gpio121_pins
+				&gpio122_pins
+				&gpio123_pins
+				&gpio124_pins
+				&gpio125_pins
+				&gpio126_pins
+				&gpio127_pins
+				&gpio136_pins
+				&gpio137_pins
+				&gpio138_pins
+				&gpio139_pins
+				&gpio140_pins
+				&gpio141_pins
+				&gpio142_pins
+				&gpio143_pins
+				&gpio148ol_pins
+				&gpio149ol_pins
+				&gpio150ol_pins
+				&gpio151ol_pins
+				&gpio152ol_pins
+				&gpio153_pins
+				&gpio154ol_pins
+				&gpio155_pins
+				&gpio156_pins
+				&gpio157ol_pins
+				&gpio158ol_pins
+				&gpio159ol_pins
+				&gpio160ol_pins
+				&serirq_pins
 				&lpc_pins
-				&gpio132o_pins
-				&gpio133_pins
-				&gpio134_pins
-				&gpio135_pins
-				&gpio144_pins
-				&gpio145_pins
-				&gpio146_pins
-				&gpio147_pins
-				&gpio160_pins
-				&gpio162_pins
-				&gpio168_pins
-				&gpio169_pins
+				&gpio168ol_pins
+				&gpio169o_pins
 				&gpio170_pins
+				&gpio173o_pins
+				&gpio174_pins
+				&gpio175o_pins
+				&gpio176o_pins
+				&gpio177ol_pins
 				&gpio187o_pins
+				&gpio188o_pins
+				&gpio189o_pins
 				&gpio190_pins
 				&gpio191o_pins
-				&gpio192o_pins
-				&gpio197ol_pins
+				&gpio192ol_pins
+				&gpio194_pins
+				&gpio195_pins
+				&gpio196_pins
+				&gpio197o_pins
+				&gpio198o_pins
+				&gpio199_pins
+				&gpio200_pins
+				&gpio202_pins
+				&gpio203ol_pins
+				&gpio204o_pins
+				&gpio205o_pins
+				&gpio206o_pins
+				&gpio207o_pins
 				&ddc_pins
+				&gpio208ol_pins
+				&gpio209_pins
+				&gpio210ol_pins
+				&gpio211ol_pins
+				&gpio212o_pins
+				&gpio213o_pins
+				&gpio214ol_pins
+				&gpio215ol_pins
+				&gpio216ol_pins
+				&gpio217ol_pins
 				&gpio218_pins
-				&gpio219ol_pins
-				&gpio220ol_pins
-				&gpio221o_pins
-				&gpio222_pins
-				&gpio223ol_pins
-				&spix_pins
-				&gpio228ol_pins
-				&gpio231o_pins
-				&gpio255_pins>;
+				&gpio219_pins
+				&gpio224ol_pins
+				&gpio225_pins
+				&gpio226_pins
+				&gpio227ol_pins
+				&gpio228_pins
+				&gpio229_pins
+				&gpio230ol_pins
+				&clkreq_pins>;
 	};
 };

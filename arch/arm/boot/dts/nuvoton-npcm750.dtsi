@@ -173,6 +173,10 @@
 			ethernet = <0>;
 			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
+			pinctrl-names = "default";
+			pinctrl-0 = <&rg1_pins
+			             &rg1mdio_pins>;
+			phy-mode = "rgmii-id";
 			status = "disabled";
 		};
 
@@ -185,6 +189,10 @@
 			ethernet = <1>;
 			clocks	= <&clk_rg2refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
+			pinctrl-names = "default";
+			pinctrl-0 = <&rg2_pins
+			             &rg2mdio_pins>;
+			phy-mode = "rgmii-id";
 			status = "disabled";
 		};
 
@@ -195,6 +203,10 @@
 			interrupts = <0 16 4>, <0 15 4>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
+			pinctrl-names = "default";
+			pinctrl-0 = <&r1_pins
+			             &r1err_pins
+				     &r1md_pins>;
 		};
 
 		emc1: eth@f0826000 {
@@ -204,6 +216,10 @@
 			interrupts = <0 115 4>, <0 114 4>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
+			pinctrl-names = "default";
+			pinctrl-0 = <&r2_pins
+			             &r2err_pins
+				     &r2md_pins>;
 		};
 
 		sdhci0: sdhci@f0840000 {
@@ -213,6 +229,8 @@
 			interrupts = <0 27 4>;
 			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
 			clock-names = "clk_sdhc";                  /* ,"clk_xin"; */
+			pinctrl-names = "default";
+			pinctrl-0 = <&sd1_pins>;
 		};
 
 		sdhci1: sdhci@f0842000 {
@@ -222,6 +240,9 @@
 			interrupts = <0 26 4>;
 			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
 			clock-names = "clk_mmc";                  /* ,"clk_xin"; */
+			pinctrl-names = "default";
+			pinctrl-0 = <&mmc8_pins
+				     &mmc_pins>;
 		};
 
 		ehci1:ehci@f0806000 {
@@ -393,6 +414,8 @@
 			chip-max-address-map = <0x8000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi3_pins &spi3quad_pins>;
 			spi-nor@0 {
 					compatible = "jedec,spi-nor";
 					#address-cells = <1>;
@@ -1140,6 +1163,10 @@
 		serirq_pins: serirq_pins {
 			groups = "serirq";
 			function = "serirq";
+		};
+		lpcclk_pins: lpcclk_pins {
+			groups = "lpcclk";
+			function = "lpcclk";
 		};
 		scipme_pins: scipme_pins {
 			groups = "scipme";
