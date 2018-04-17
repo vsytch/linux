@@ -401,7 +401,7 @@ static int npcmgpio_set_irq_type(struct irq_data *d, unsigned int type)
 	if (type & (IRQ_TYPE_LEVEL_HIGH | IRQ_TYPE_LEVEL_LOW)) {
 		gpio_bitop(opCLRBIT, gpio, GPnEVTYP);
 		irq_set_handler_locked(d, handle_level_irq);
-	} else if (type & (IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING)) {
+	} else if (type & (IRQ_TYPE_EDGE_BOTH | IRQ_TYPE_EDGE_RISING | IRQ_TYPE_EDGE_FALLING)) {
 		gpio_bitop(opSETBIT, gpio, GPnEVTYP);
 		irq_set_handler_locked(d, handle_edge_irq);
 	}
@@ -611,10 +611,7 @@ static const int spixcs1_pins[] = { 228 };
 static const int pspi1_pins[] = { 175, 176, 177 };
 static const int pspi2_pins[] = { 17, 18, 19 };
 
-static const int spi0quad_pins[] = { 33, 34 };
 static const int spi0cs1_pins[] = { 32 };
-static const int spi0cs2_pins[] = { 33 };
-static const int spi0cs3_pins[] = { 34 };
 
 static const int spi3_pins[] = { 183, 184, 185, 186 };
 static const int spi3cs1_pins[] = { 187 };
@@ -625,6 +622,7 @@ static const int spi3cs3_pins[] = { 189 };
 static const int ddc_pins[] = { 204, 205, 206, 207 };
 
 static const int lpc_pins[] = { 95, 161, 163, 164, 165, 166, 167 };
+static const int lpcclk_pins[] = { 168 };
 static const int espi_pins[] = { 95, 161, 163, 164, 165, 166, 167, 168 };
 
 static const int lkgpo0_pins[] = { 16 };
@@ -753,10 +751,8 @@ struct npcm_group {
 	GRP(spi3cs2), \
 	GRP(spi3cs3), \
 	GRP(spi0cs1), \
-	GRP(spi0cs2), \
-	GRP(spi0cs3), \
-	GRP(spi0quad), \
 	GRP(lpc), \
+	GRP(lpcclk), \
 	GRP(espi), \
 	GRP(lkgpo0), \
 	GRP(lkgpo1), \
@@ -898,10 +894,8 @@ NPCM_SFUNC(spi3quad);
 NPCM_SFUNC(spi3cs2);
 NPCM_SFUNC(spi3cs3);
 NPCM_SFUNC(spi0cs1);
-NPCM_SFUNC(spi0cs2);
-NPCM_SFUNC(spi0cs3);
-NPCM_SFUNC(spi0quad);
 NPCM_SFUNC(lpc);
+NPCM_SFUNC(lpcclk);
 NPCM_SFUNC(espi);
 NPCM_SFUNC(lkgpo0);
 NPCM_SFUNC(lkgpo1);
@@ -1018,10 +1012,8 @@ static struct npcm_func npcm_funcs[] = {
 	NPCM_MKFUNC(spi3cs2),
 	NPCM_MKFUNC(spi3cs3),
 	NPCM_MKFUNC(spi0cs1),
-	NPCM_MKFUNC(spi0cs2),
-	NPCM_MKFUNC(spi0cs3),
-	NPCM_MKFUNC(spi0quad),
 	NPCM_MKFUNC(lpc),
+	NPCM_MKFUNC(lpcclk),
 	NPCM_MKFUNC(espi),
 	NPCM_MKFUNC(lkgpo0),
 	NPCM_MKFUNC(lkgpo1),
@@ -1095,8 +1087,8 @@ static const struct npcm_pincfg pincfg[] = {
 	PINCFG(31,	 smb3, MFSEL1, 0,	  none, NONE, 0,	none, NONE, 0,	     0),
 
 	PINCFG(32,    spi0cs1, MFSEL1, 3,	  none, NONE, 0,	none, NONE, 0,	     0),
-	PINCFG(33,   spi0quad, MFSEL4, 15,     spi0cs2, MFSEL1, 4,	none, NONE, 0,	     SLEW),  /* cs2=Z1 */
-	PINCFG(34,   spi0quad, MFSEL4, 15,     spi0cs3, MFSEL1, 5,	none, NONE, 0,	     SLEW),  /* cs3=Z1 */
+	PINCFG(33,   none, NONE, 0,     none, NONE, 0,	none, NONE, 0,	     SLEW),
+	PINCFG(34,   none, NONE, 0,     none, NONE, 0,	none, NONE, 0,	     SLEW),
 	PINCFG(37,	smb3c, I2CSEGSEL, 12,	  none, NONE, 0,	none, NONE, 0,	     SLEW),
 	PINCFG(38,	smb3c, I2CSEGSEL, 12,	  none, NONE, 0,	none, NONE, 0,	     SLEW),
 	PINCFG(39,	smb3b, I2CSEGSEL, 11,	  none, NONE, 0,	none, NONE, 0,	     SLEW),
@@ -1232,7 +1224,7 @@ static const struct npcm_pincfg pincfg[] = {
 	PINCFG(165,	  lpc, NONE, 0,		  espi, MFSEL4, 8,      gpio, MFSEL1, 26,    SLEWLPC),
 	PINCFG(166,	  lpc, NONE, 0,		  espi, MFSEL4, 8,      gpio, MFSEL1, 26,    SLEWLPC),
 	PINCFG(167,	  lpc, NONE, 0,		  espi, MFSEL4, 8,      gpio, MFSEL1, 26,    SLEWLPC),
-	PINCFG(168,	  lpc, NONE, 0,           espi, MFSEL4, 8,      gpio, MFSEL3, 16,    0),
+	PINCFG(168,    lpcclk, NONE, 0,           espi, MFSEL4, 8,      gpio, MFSEL3, 16,    0),
 	PINCFG(169,    scipme, MFSEL3, 0,         none, NONE, 0,	none, NONE, 0,	     0),
 	PINCFG(170,	  sci, MFSEL1, 22,        none, NONE, 0,        none, NONE, 0,	     0),
 	PINCFG(171,	 smb6, MFSEL3, 1,	  none, NONE, 0,	none, NONE, 0,	     0),
@@ -1339,8 +1331,8 @@ static const struct pinctrl_pin_desc npcm_pins[] = {
 	PINCTRL_PIN(31, "GPIO31/SMB3SCL"),
 
 	PINCTRL_PIN(32, "GPIO32/nSPI0CS1"),
-	PINCTRL_PIN(33, "GPIO33/SPI0D2/nSPI0CS2"),
-	PINCTRL_PIN(34, "GPIO34/SPI0D3/nSPI0CS3"),
+	PINCTRL_PIN(33, "SPI0D2"),
+	PINCTRL_PIN(34, "SPI0D3"),
 	PINCTRL_PIN(37, "GPIO37/SMB3CSDA"),
 	PINCTRL_PIN(38, "GPIO38/SMB3CSCL"),
 	PINCTRL_PIN(39, "GPIO39/SMB3BSDA"),
@@ -1501,7 +1493,7 @@ static const struct pinctrl_pin_desc npcm_pins[] = {
 	PINCTRL_PIN(190, "GPIO190/nPRD_SMI"),
 	PINCTRL_PIN(191, "GPIO191"),
 
-	PINCTRL_PIN(192, "GPIO192/PSPI1CS2"),
+	PINCTRL_PIN(192, "GPIO192"),
 	PINCTRL_PIN(193, "GPIO193/R1CRSDV"),
 	PINCTRL_PIN(194, "GPIO194/SMB0BSCL"),
 	PINCTRL_PIN(195, "GPIO195/SMB0BSDA"),
@@ -1811,11 +1803,11 @@ static int npcm_gpio_set_direction(struct pinctrl_dev *pctldev,
 {
 	DRV_MSG2("GPIO Set Direction: %d = %d\n", offset, input);
 	if (input) {
-		gpio_bitop(opCLRBIT, offset, GPnOE);
+		gpio_bitop(opSET, offset, GPnOEC);
 		gpio_bitop(opSETBIT, offset, GPnIEM);
 	} else {
 		gpio_bitop(opCLRBIT, offset, GPnIEM);
-		gpio_bitop(opSETBIT, offset, GPnOE);
+		gpio_bitop(opSET, offset, GPnOES);
 	}
 	return 0;
 }
@@ -1926,15 +1918,15 @@ static int npcm_config_set_one(struct npcm_dev *npcm, unsigned int pin,
 	case PIN_CONFIG_INPUT_ENABLE:
 		/* arg: 0=disable, 1=enable */
 		npcm_setfunc(pin, 1, fn_gpio);
-		gpio_bitop(opCLRBIT, pin, GPnOE);
+		gpio_bitop(opSET, pin, GPnOEC);
 		gpio_bitop(opSETBIT, pin, GPnIEM);
 		break;
 	case PIN_CONFIG_OUTPUT:
 		/* arg: 0=low, 1=high */
 		npcm_setfunc(pin, 1, fn_gpio);
 		gpio_bitop(opCLRBIT, pin, GPnIEM);
-		gpio_bitop(opSETBIT, pin, GPnOE);
 		gpio_bitop(opSET, pin, arg ? GPnDOS : GPnDOC);
+		gpio_bitop(opSET, pin, GPnOES);
 		break;
 	case PIN_CONFIG_DRIVE_PUSH_PULL:
 		npcm_setfunc(pin, 1, fn_gpio);
