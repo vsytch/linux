@@ -379,7 +379,7 @@
 			status = "okay";
 		};
 
-		mft: mft@0 {
+		fan: fan@0 {
 			pinctrl-names = "default";
 			pinctrl-0 = <	&fanin0_pins
 					&fanin1_pins
