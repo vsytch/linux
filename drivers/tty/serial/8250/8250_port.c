@@ -51,6 +51,10 @@
 #define UART_EXAR_SLEEP		0x8b	/* Sleep mode */
 #define UART_EXAR_DVID		0x8d	/* Device identification */
 
+/* Nuvoton NPCM timeout register */
+#define UART_NPCM_TOR          7
+#define UART_NPCM_TOIE         BIT(7)  /* Timeout Interrupt Enable */
+
 /*
  * Debugging.
  */
@@ -290,15 +294,14 @@ static const struct serial8250_config uart_config[] = {
 		.flags		= UART_CAP_FIFO | UART_CAP_AFE,
 	},
 	[PORT_NPCM] = {
-		.name           = "Nuvoton 16550",
-		.fifo_size      = 16,
-		.tx_loadsz      = 16,
-		.fcr            = UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10 |
+		.name		= "Nuvoton 16550",
+		.fifo_size	= 16,
+		.tx_loadsz	= 16,
+		.fcr		= UART_FCR_ENABLE_FIFO | UART_FCR_R_TRIG_10 |
 				  UART_FCR_CLEAR_RCVR | UART_FCR_CLEAR_XMIT,
-		.rxtrig_bytes   = {1, 4, 8, 14},
-		.flags          = UART_CAP_FIFO,
+		.rxtrig_bytes	= {1, 4, 8, 14},
+		.flags		= UART_CAP_FIFO,
 	},
-
 };
 
 /* Uart divisor latch read */
@@ -2152,6 +2155,7 @@ int serial8250_do_startup(struct uart_port *port)
 				UART_DA830_PWREMU_MGMT_URRST |
 				UART_DA830_PWREMU_MGMT_FREE);
 	}
+
 	if (port->type == PORT_NPCM) {
 		/*
 		 * Nuvoton calls the scratch register 'UART_TOR' (timeout

@@ -76,6 +76,9 @@
 #define PORT_SUNZILOG	38
 #define PORT_SUNSAB	39
 
+/* Nuvoton UART */
+#define PORT_NPCM	40
+
 /* DEC */
 #define PORT_DZ		46
 #define PORT_ZS		47
@@ -270,8 +273,5 @@
 
 /* MPS2 UART */
 #define PORT_MPS2UART	116
-
-/* Nuvton UART */
-#define PORT_NPCM	117
 
 #endif /* _UAPILINUX_SERIAL_CORE_H */
