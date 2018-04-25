@@ -66,37 +66,23 @@
 	};
 
 	ahb {
-	gmac0: eth@f0802000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&rg1_pins
-						 &rg1mdio_pins>;
-			phy-mode = "rgmii-id";
+	        gmac0: eth@f0802000 {
 			status = "okay";
 		};
 
 		gmac1: eth@f0804000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&rg2_pins
-						 &rg2mdio_pins>;
-			phy-mode = "rgmii-id";
 			status = "okay";
 		};
 
 		emc0: eth@f0825000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&r1_pins
-						 &r1err_pins
-						 &r1md_pins>;
 			phy-mode = "rmii";
+			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
 		};
 
 		emc1: eth@f0826000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&r2_pins
-						 &r2err_pins
-						 &r2md_pins>;
 			phy-mode = "rmii";
+			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
 		};
 
@@ -215,28 +201,28 @@
 					compatible = "fixed-partitions";
 					#address-cells = <1>;
 					#size-cells = <1>;
-					spare@0 {
-						label = "spare-1";
-						reg = <0x0 0x0>;
+					system1@0 {
+						label = "spi3-system1";
+						reg = <0x0 0x800000>;
+					};
+					system2@800000 {
+						label = "spi3-system2";
+						reg = <0x800000 0x0>;
 					};
 				};
 			};
 		};
 
 		sdhci0: sdhci@f0840000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&sd1_pins>;
 			status = "okay";
 		};
 
 		sdhci1: sdhci@f0842000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&mmc8_pins
-				     &mmc_pins>;
 			status = "okay";
 		};
 
 	};
+
 	apb {
 
 		watchdog1: watchdog@f0009000 {
@@ -265,6 +251,20 @@
 
 		otp:otp@f0189000 {
 			status = "okay";
+		};
+
+		lpc_kcs: lpc_kcs@f0007000 {
+			kcs1: kcs1@0 {
+				status = "okay";
+			};
+
+			kcs2: kcs2@0 {
+				status = "okay";
+			};
+
+			kcs3: kcs3@0 {
+				status = "okay";
+			};
 		};
 
 		/* lm75 on SVB */
@@ -318,7 +318,6 @@
 				status = "okay";
 			};
 		};
-
 		i2c3: i2c-bus@f0083000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -376,12 +375,12 @@
 		i2c15: i2c-bus@f008f000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
-			status = "okay";
+			status = "disabled";               /* SVB conflict with pspi2 cs gpio20o_pins */
 		};
 
 		fan: fan@0 {
 			pinctrl-names = "default";
-			pinctrl-0 = <	&fanin0_pins
+			pinctrl-0 = </*&fanin0_pins*/     /* SVB conflict with pspi1 enable gpio64o_pins */
 					&fanin1_pins
 					&fanin2_pins
 					&fanin3_pins
@@ -398,68 +397,84 @@
 					&fanin14_pins
 					&fanin15_pins>;
 			status = "okay";
-			};
 		};
 
-		pinctrl: pinctrl@0 {
+		pwm: pwm@f0103000 {
 			pinctrl-names = "default";
-			pinctrl-0 = <	&gpio0o_pins
-					&gpio1_pins
-					&gpio2o_pins
-					&gpio3_pins
-					&gpio8_pins
-					&gpio9o_pins
-					&gpio10_pins
-					&gpio11o_pins
-					&gpio16_pins
-					&gpio17_pins
-					&gpio24o_pins
-					&gpio25ol_pins
-					&gpio32o_pins
-					&spi0quad_pins
-					&jtag2_pins
-					&gpio61o_pins
-					&gpio62o_pins
-					&gpio63o_pins
-					&gpio80_pins
-					&gpio81_pins
-					&gpio82_pins
-					&gpio83_pins
-					&lpc_pins
-					&gpio132o_pins
-					&gpio133_pins
-					&gpio134_pins
-					&gpio135_pins
-					&gpio144_pins
-					&gpio145_pins
-					&gpio146_pins
-					&gpio147_pins
-					&gpio160_pins
-					&gpio162_pins
-					&gpio168_pins
-					&gpio169_pins
-					&gpio170_pins
-					&gpio175_pins
-					&gpio176_pins
-					&gpio177o_pins
-					&spi3_pins
-					&gpio187o_pins
-					&spi3quad_pins
-					&gpio190_pins
-					&gpio191o_pins
-					&gpio192o_pins
-					&gpio197ol_pins
-					&gpio203o_pins
-					&ddc_pins
-					&gpio218_pins
-					&gpio219ol_pins
-					&gpio220ol_pins
-					&gpio221o_pins
-					&gpio222_pins
-					&gpio223ol_pins
-					&spix_pins
-					&gpio228ol_pins
-					&gpio231o_pins
-					&gpio255_pins>;
+			pinctrl-0 = <	&pwm0_pins
+					&pwm1_pins
+					&pwm2_pins
+					&pwm3_pins
+					&pwm4_pins
+					&pwm5_pins
+					&pwm6_pins
+					&pwm7_pins>;
+			status = "okay";
 		};
+
+/* Here is an example for future pspi binding */
+/*
+                pspi: pspi@0 {
+			pinctrl-names = "default";
+			pinctrl-0 = <&pspi1_pins &pspi2_pins &gpio20o_pins &gpio203o_pins> ;
+			cs-gpios = <&gpio 20 1>, <&gpio 203 1>;
+			status = "okay";
+		};
+*/
+
+	};
+
+
+
+	pinctrl: pinctrl@0 {
+		pinctrl-names = "default";
+		pinctrl-0 = <	&iox1_pins
+				&gpio8_pins
+				&gpio9o_pins
+				&gpio10_pins
+				&gpio11o_pins
+				&gpio16_pins
+				&gpio24o_pins
+				&gpio25ol_pins
+				&gpio32o_pins
+				&jtag2_pins
+				&gpio61o_pins
+				&gpio62o_pins
+				&gpio63o_pins
+				&gpio64o_pins      /* SVB pspi1 enable */
+				&gpio80_pins
+				&gpio81_pins
+				&gpio82_pins
+				&gpio83_pins
+				&lpc_pins
+				&gpio132o_pins
+				&gpio133_pins
+				&gpio134_pins
+				&gpio135_pins
+				&gpio144_pins
+				&gpio145_pins
+				&gpio146_pins
+				&gpio147_pins
+				&gpio160_pins
+				&gpio162_pins
+				&gpio168_pins
+				&gpio169_pins
+				&gpio170_pins
+				&gpio187o_pins
+				&gpio190_pins
+				&gpio191o_pins
+				&gpio192o_pins
+				&gpio197ol_pins
+				&ddc_pins
+				&gpio218_pins
+				&gpio219ol_pins
+				&gpio220ol_pins
+				&gpio221o_pins
+				&gpio222_pins
+				&gpio223ol_pins
+				&spix_pins
+				&gpio228ol_pins
+				&gpio231o_pins
+				&gpio255_pins>;
+	};
 };

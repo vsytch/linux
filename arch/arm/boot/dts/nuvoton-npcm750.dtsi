@@ -1,13 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * DTSi file for the NPCM750 SoC
  *
- * Copyright (c) 2014-2017 Nuvoton Technology corporation.
+ * Copyright (c) 2014-2018 Nuvoton Technology corporation.
  *
- * Released under the GPLv2 only.
- * SPDX-License-Identifier: GPL-2.0
- *
- * http://www.opensource.org/licenses/gpl-license.html
- * http://www.gnu.org/copyleft/gpl.html
  */
 
 #include "skeleton.dtsi"
@@ -177,6 +173,10 @@
 			ethernet = <0>;
 			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
+			pinctrl-names = "default";
+			pinctrl-0 = <&rg1_pins
+			             &rg1mdio_pins>;
+			phy-mode = "rgmii-id";
 			status = "disabled";
 		};
 
@@ -189,6 +189,10 @@
 			ethernet = <1>;
 			clocks	= <&clk_rg2refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
+			pinctrl-names = "default";
+			pinctrl-0 = <&rg2_pins
+			             &rg2mdio_pins>;
+			phy-mode = "rgmii-id";
 			status = "disabled";
 		};
 
@@ -199,6 +203,10 @@
 			interrupts = <0 16 4>, <0 15 4>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
+			pinctrl-names = "default";
+			pinctrl-0 = <&r1_pins
+			             &r1err_pins
+				     &r1md_pins>;
 		};
 
 		emc1: eth@f0826000 {
@@ -208,6 +216,10 @@
 			interrupts = <0 115 4>, <0 114 4>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
+			pinctrl-names = "default";
+			pinctrl-0 = <&r2_pins
+			             &r2err_pins
+				     &r2md_pins>;
 		};
 
 		sdhci0: sdhci@f0840000 {
@@ -217,6 +229,8 @@
 			interrupts = <0 27 4>;
 			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
 			clock-names = "clk_sdhc";                  /* ,"clk_xin"; */
+			pinctrl-names = "default";
+			pinctrl-0 = <&sd1_pins>;
 		};
 
 		sdhci1: sdhci@f0842000 {
@@ -226,6 +240,9 @@
 			interrupts = <0 26 4>;
 			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
 			clock-names = "clk_mmc";                  /* ,"clk_xin"; */
+			pinctrl-names = "default";
+			pinctrl-0 = <&mmc8_pins
+				     &mmc_pins>;
 		};
 
 		ehci1:ehci@f0806000 {
@@ -397,6 +414,8 @@
 			chip-max-address-map = <0x8000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi3_pins &spi3quad_pins>;
 			spi-nor@0 {
 					compatible = "jedec,spi-nor";
 					#address-cells = <1>;
@@ -453,10 +472,38 @@
 				  0xf0180000 0xf0180000 0x0000b000
 				  0xf0200000 0xf0200000 0x00002000>;
 
-		kcs: kcs@f0007000 {
-			compatible = "nuvoton,npcm750-kcs";
-			reg = <0xf0007000 0x1000>;
-			interrupts = <0 9 4>;
+		lpc_kcs: lpc_kcs@f0007000 {
+			compatible = "nuvoton,npcm750-lpc-kcs", "simple-mfd", "syscon";
+			reg = <0xf0007000 0x40>;
+			reg-io-width = <1>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0x0 0xf0007000 0x40>;
+
+			kcs1: kcs1@0 {
+				compatible = "nuvoton,npcm750-kcs-bmc";
+				reg = <0x0 0x40>;
+				interrupts = <0 9 4>;
+				kcs_chan = <1>;
+				status = "disabled";
+			};
+
+			kcs2: kcs2@0 {
+				compatible = "nuvoton,npcm750-kcs-bmc";
+				reg = <0x0 0x40>;
+				interrupts = <0 9 4>;
+				kcs_chan = <2>;
+				status = "disabled";
+			};
+
+			kcs3: kcs3@0 {
+				compatible = "nuvoton,npcm750-kcs-bmc";
+				reg = <0x0 0x40>;
+				interrupts = <0 9 4>;
+				kcs_chan = <3>;
+				status = "disabled";
+			};
 		};
 
 		pspi: pspi@0 {
@@ -1112,6 +1159,10 @@
 		serirq_pins: serirq_pins {
 			groups = "serirq";
 			function = "serirq";
+		};
+		lpcclk_pins: lpcclk_pins {
+			groups = "lpcclk";
+			function = "lpcclk";
 		};
 		scipme_pins: scipme_pins {
 			groups = "scipme";
