@@ -12,7 +12,7 @@
 
 #include "skeleton.dtsi"
 #include <dt-bindings/interrupt-controller/arm-gic.h>
-#include <dt-bindings/clock/nuvoton,npcm7xx-clks.h>
+#include <dt-bindings/clock/nuvoton,npcm7xx-clock.h>
 
 / {
 	#address-cells = <1>;
@@ -84,6 +84,64 @@
 		clock-names = "clk_ahb";
 	};
 
+
+	clk: clock-controller@f0801000 {
+		compatible = "nuvoton,npcm750-clk", "syscon";
+		#clock-cells = <1>;
+		clock-controller;
+		reg = <0xf0801000 0x1000>;
+		clock-names = "refclk", "sysbypck", "mcbypck";
+		clocks = <&clk_refclk>, <&clk_sysbypck>, <&clk_mcbypck>;
+	};
+
+	/* external reference clock */
+	clk_refclk: clk-refclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <25000000>;
+		clock-output-names = "refclk";
+	};
+
+	/* external reference clock for cpu. float in normal operation */
+	clk_sysbypck: clk-sysbypck {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <800000000>;
+		clock-output-names = "sysbypck";
+	};
+
+	/* external reference clock for MC. float in normal operation */
+	clk_mcbypck: clk-mcbypck {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <800000000>;
+		clock-output-names = "mcbypck";
+	};
+
+	 /* external clock signal rg1refck, supplied by the phy */
+	clk_rg1refck: clk-rg1refck {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <125000000>;
+		clock-output-names = "clk_rg1refck";
+	};
+
+	 /* external clock signal rg2refck, supplied by the phy */
+	clk_rg2refck: clk-rg2refck {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <125000000>;
+		clock-output-names = "clk_rg2refck";
+	};
+
+	clk_xin: clk-xin {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <50000000>;
+		clock-output-names = "clk_xin";
+	};
+
+
 	ahb {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -110,36 +168,6 @@
 			  0xfb000000 0xfb000000 0x00002000
 			  0xfffd0000 0xfffd0000 0x00005000>;
 
-		clk: clock-controller@f0801000 {
-			compatible = "nuvoton,npcm750-clk";
-			#clock-cells = <1>;
-			reg = <0xf0801000 0x1000>;
-				status = "okay";
-		};
-
-		/* external clock signal rg1refck, supplied by the phy */
-		clk_rg1refck: clk_rg1refck {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <125000000>;
-			clock-output-names = "clk_rg1refck";
-		};
-
-		/* external clock signal rg2refck, supplied by the phy */
-		clk_rg2refck: clk_rg2refck {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <125000000>;
-			clock-output-names = "clk_rg2refck";
-		};
-
-		clk_xin: clk_xin {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <50000000>;
-			clock-output-names = "clk_xin";
-		};
-
 		gmac0: eth@f0802000 {
 			device_type = "network";
 			compatible = "snps,dwmac";
@@ -147,7 +175,7 @@
 			interrupts = <0 14 4>;
 			interrupt-names = "macirq";
 			ethernet = <0>;
-			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_GMAC>;
+			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
 			status = "disabled";
 		};
@@ -159,7 +187,7 @@
 			interrupts = <0 17 4>;
 			interrupt-names = "macirq";
 			ethernet = <1>;
-			clocks	= <&clk_rg2refck>, <&clk NPCM7XX_CLK_GMAC>;
+			clocks	= <&clk_rg2refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
 			status = "disabled";
 		};
@@ -169,7 +197,7 @@
 			compatible = "nuvoton,npcm750-emc";
 			reg = <0xf0825000 0x1000>;
 			interrupts = <0 16 4>, <0 15 4>;
-			clocks = <&clk NPCM7XX_CLK_EMC>;
+			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
 		};
 
@@ -178,7 +206,7 @@
 			compatible = "nuvoton,npcm750-emc";
 			reg = <0xf0826000 0x1000>;
 			interrupts = <0 115 4>, <0 114 4>;
-			clocks = <&clk NPCM7XX_CLK_EMC>;
+			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
 		};
 
@@ -187,8 +215,8 @@
 			status = "disabled";
 			reg = <0xf0840000 0x200>;
 			interrupts = <0 27 4>;
-			clocks =  <&clk NPCM7XX_CLK_SDHC>;	/*<&clk_xin>*/
-			clock-names = "clk_sdhc";		/*"clk_xin"*/
+			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
+			clock-names = "clk_sdhc";                  /* ,"clk_xin"; */
 		};
 
 		sdhci1: sdhci@f0842000 {
@@ -196,8 +224,8 @@
 			status = "disabled";
 			reg = <0xf0842000 0x200>;
 			interrupts = <0 26 4>;
-			clocks =  <&clk NPCM7XX_CLK_MMC>;	/*<&clk_xin>*/
-			clock-names = "clk_mmc";		/*"clk_xin"*/
+			clocks =  <&clk NPCM7XX_CLK_AHB>;       /*, <&clk_xin>;*/
+			clock-names = "clk_mmc";                  /* ,"clk_xin"; */
 		};
 
 		ehci1:ehci@f0806000 {
@@ -220,7 +248,7 @@
 			       0xfffd0000 0x800>;
 			interrupts = <0 51 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -230,7 +258,7 @@
 			       0xfffd0800 0x800>;
 			interrupts = <0 52 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -240,7 +268,7 @@
 			       0xfffd1000 0x800>;
 			interrupts = <0 53 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -250,7 +278,7 @@
 			       0xfffd1800 0x800>;
 			interrupts = <0 54 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -260,7 +288,7 @@
 			       0xfffd2000 0x800>;
 			interrupts = <0 55 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -270,7 +298,7 @@
 			       0xfffd2800 0x800>;
 			interrupts = <0 56 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -280,7 +308,7 @@
 			       0xfffd3000 0x800>;
 			interrupts = <0 57 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -290,7 +318,7 @@
 			       0xfffd3800 0x800>;
 			interrupts = <0 58 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -300,7 +328,7 @@
 			       0xfffd4000 0x800>;
 			interrupts = <0 59 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -310,7 +338,7 @@
 			       0xfffd4800 0x800>;
 			interrupts = <0 60 4>;
 			status = "disabled";
-			clocks = <&clk NPCM7XX_CLK_USB_BRIDGE>;
+			clocks = <&clk NPCM7XX_CLK_SU>;
 			clock-names = "clk_usb_bridge";
 		};
 
@@ -491,7 +519,7 @@
 		serial0: serial0@f0001000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0001000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 2 4>;
 			reg-shift = <2>;
 			status = "disabled";
@@ -500,7 +528,7 @@
 		serial1: serial1@f0002000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0002000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 3 4>;
 			reg-shift = <2>;
 			status = "disabled";
@@ -509,7 +537,7 @@
 		serial2: serial2@f0003000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0003000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 4 4>;
 			reg-shift = <2>;
 			status = "disabled";
@@ -518,7 +546,7 @@
 		serial3: serial3@f0004000 {
 			compatible = "nuvoton,npcm750-uart";
 			reg = <0xf0004000 0x1000>;
-			clocks = <&clk NPCM7XX_CLK_UART_CORE>;
+			clocks = <&clk NPCM7XX_CLK_UART>;
 			interrupts = <0 5 4>;
 			reg-shift = <2>;
 			status = "disabled";
