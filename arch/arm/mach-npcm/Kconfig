@@ -29,6 +29,7 @@ config ARCH_NPCM7XX
 	select COMMON_CLK if OF
 	select NPCM7XX_TIMER
 	select MFD_SYSCON
+	select MULTIPLEXER
 	help
 	  General support for NPCM7xx BMC (Poleg).
 
