@@ -260,6 +260,12 @@
 			};
 		};
 
+		lpc_host: lpc_host@7000 {
+			lpc_bpc: lpc_bpc@40 {
+				snoop-ports = <0x80>;
+				status = "okay";
+			};
+		};
 		/* lm75 on SVB */
 		i2c0: i2c-bus@f0080000 {
 			#address-cells = <1>;

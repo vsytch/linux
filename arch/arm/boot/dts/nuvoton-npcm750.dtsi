@@ -506,6 +506,23 @@
 			};
 		};
 
+		lpc_host: lpc_host@7000 {
+			compatible = "nuvoton,npcm750-lpc-host",
+				"simple-mfd", "syscon";
+			reg = <0x7000 0x60>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0x0 0x7000 0x60>;
+
+			lpc_bpc: lpc_bpc@40 {
+				compatible = "nuvoton,npcm7xx-lpc-bpc";
+				reg = <0x40 0x20>;
+				interrupts = <GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>;
+				status = "disabled";
+			};
+		};
+
 		pspi: pspi@0 {
 			compatible = "nuvoton,npcm750-pspi";
 			reg = <0xf0200000 0x2000>;
