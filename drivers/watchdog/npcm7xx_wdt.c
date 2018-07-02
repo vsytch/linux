@@ -258,11 +258,11 @@ static int npcm7xx_wdt_probe(struct platform_device *pdev)
 		goto err_alloc;
 	}
 
-	if (!devm_request_mem_region(&pdev->dev, npcm7xx_wdt->res->start,
+	/*if (!devm_request_mem_region(&pdev->dev, npcm7xx_wdt->res->start,
 				resource_size(npcm7xx_wdt->res), pdev->name)) {
 		dev_err(&pdev->dev, "failed to get memory region\n");
 		return -ENOENT;
-	}
+	}*/
 
 	npcm7xx_wdt->wdt_base = ioremap(npcm7xx_wdt->res->start,
 					resource_size(npcm7xx_wdt->res));
