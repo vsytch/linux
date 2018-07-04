@@ -588,6 +588,8 @@ static	u8   NPCM7XX_smb_get_slave_addr_l(struct NPCM7XX_i2c *bus,
 						  SMB_ADDR_T addrEnum);
 #endif // CONFIG_I2C_SLAVE
 
+static inline 	void NPCM7XX_smb_eob_int(struct NPCM7XX_i2c *bus, bool enable);
+
 static		void NPCM7XX_smb_write_to_fifo(struct NPCM7XX_i2c *bus,
 					       u16 max_bytes_to_send);
 static inline 	bool NPCM7XX_smb_tx_fifo_full(struct NPCM7XX_i2c *bus);
@@ -768,10 +770,8 @@ static inline void NPCM7XX_smb_abort_data(struct NPCM7XX_i2c *bus)
 
 	if (timeout <= 1)
 		printk("NPCM7XX_smb_abort_data: abort timeout!\n");
-
-	// Clear BB (BUS BUSY) bit
-	//iowrite8(NPCM7XX_SMBCST_BB, NPCM7XX_SMBCST(bus));
 }
+
 
 static inline void NPCM7XX_smb_stall_after_start(struct NPCM7XX_i2c *bus,
 			bool stall)
@@ -1263,6 +1263,26 @@ static int  NPCM7XX_smb_get_current_slave_addr(struct NPCM7XX_i2c *bus,
 }
 #endif
 
+// enable\disable end of busy (EOB) interrupt
+static inline void NPCM7XX_smb_eob_int(struct NPCM7XX_i2c *bus, bool enable)
+{
+#ifdef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
+	if (enable == true)
+		iowrite8(ioread8(NPCM7XX_SMBCTL1(bus)) |
+			NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));
+	else {
+		iowrite8(ioread8(NPCM7XX_SMBCTL1(bus)) &
+			(~NPCM7XX_SMBCTL1_EOBINTE), NPCM7XX_SMBCTL1(bus));
+
+		// Clear EO_BUSY pending bit:
+		iowrite8(ioread8(NPCM7XX_SMBCST3(bus)) |
+			NPCM7XX_SMBCST3_EO_BUSY, NPCM7XX_SMBCST3(bus));
+	}
+
+#endif
+
+}
+
 
 static inline bool NPCM7XX_smb_tx_fifo_full(struct NPCM7XX_i2c *bus)
 {
@@ -1423,10 +1443,8 @@ static void NPCM7XX_smb_master_fifo_read(struct NPCM7XX_i2c *bus)
 	if (rcount - fifo_bytes == 0) {
 		// last byte is about to be read - end of transaction.
 		// Stop should be set before reading last byte.
-#ifdef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
-		// Enable "End of Busy" int.
-		iowrite8(ioread8(NPCM7XX_SMBCTL1(bus)) | NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));
-#endif
+		NPCM7XX_smb_eob_int(bus, true);
+
 		NPCM7XX_smb_master_stop(bus);
 
 		NPCM7XX_smb_read_from_fifo(bus, fifo_bytes);
@@ -1866,12 +1884,7 @@ static void NPCM7XX_smb_int_master_handler(struct NPCM7XX_i2c *bus)
 
 		NPCM7XX_I2C_EVENT_LOG(NPCM7XX_I2C_EVENT_EOB);
 
-		iowrite8(ioread8(NPCM7XX_SMBCTL1(bus)) &
-			 ~NPCM7XX_SMBCTL1_EOBINTE,
-			 NPCM7XX_SMBCTL1(bus));
-		// Disable "End of Busy" int
-		iowrite8(ioread8(NPCM7XX_SMBCST3(bus)) | NPCM7XX_SMBCST3_EO_BUSY,
-			 NPCM7XX_SMBCST3(bus));// Clear EO_BUSY pending bit
+		NPCM7XX_smb_eob_int(bus, false);
 
 		bus->state = SMB_IDLE;
 
@@ -1899,13 +1912,10 @@ static void NPCM7XX_smb_int_master_handler(struct NPCM7XX_i2c *bus)
 		    ||
 		    (bus->rd_size == SMB_QUICK_PROT)) {
 
-			// No need to write any data bytes - reached here only in Quick Command
-#ifdef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
+			// No need to write any data bytes -
+			//  reached here only in Quick Command
+			NPCM7XX_smb_eob_int(bus, true);
 
-			// Enable "End of Busy" int before issuing a STOP condition.
-			iowrite8(ioread8(NPCM7XX_SMBCTL1(bus))
-				 | NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));
-#endif
 			NPCM7XX_smb_master_stop(bus);
 
 
@@ -2048,11 +2058,8 @@ static void NPCM7XX_smb_int_master_handler_write(struct NPCM7XX_i2c *bus)
 
 		if (bus->rd_size == 0) {
 			// all bytes have been written, in a pure write operation
-#ifdef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
-			// Enable "End of Busy" int.
-			iowrite8(ioread8(NPCM7XX_SMBCTL1(bus))
-				 | NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));
-#endif
+			NPCM7XX_smb_eob_int(bus, true);
+
 			// Issue a STOP condition on the bus
 			NPCM7XX_smb_master_stop(bus);
 			// Clear SDA Status bit (by writing dummy byte)
@@ -2222,10 +2229,7 @@ static void NPCM7XX_smb_int_master_handler_read(struct NPCM7XX_i2c *bus)
 		else {
 			if (bus->fifo_use == true) {   // FIFO in used.
 				if ((bus->rd_size == block_zero_bytes) && (bus->read_block_use == true)) {
-#ifdef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
-					// Enable "End of Busy" int
-					iowrite8(ioread8(NPCM7XX_SMBCTL1(bus)) | NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));
-#endif
+					NPCM7XX_smb_eob_int(bus, true);
 					NPCM7XX_smb_master_stop(bus);
 					NPCM7XX_smb_read_from_fifo(bus, FIELD_GET(NPCM7XX_SMBRXF_CTL_RX_THR, ioread8(NPCM7XX_SMBRXF_CTL(bus))));
 
@@ -2259,11 +2263,8 @@ static void NPCM7XX_smb_int_master_handler_read(struct NPCM7XX_i2c *bus)
 
 		I2C_DEBUG2("\tSDA master bus%d addr=0x%x oper rd last\n",
 			   bus->num, bus->dest_addr);
-#ifdef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
-		// Enable "End of Busy" int.
-		iowrite8(ioread8(NPCM7XX_SMBCTL1(bus))
-			 | NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));
-#endif
+		NPCM7XX_smb_eob_int(bus, true);
+
 		NPCM7XX_smb_master_stop(bus);
 
 		(void)NPCM7XX_smb_read_byte(bus, &data);
@@ -2385,8 +2386,8 @@ static int NPCM7XX_smb_int_slave_handler(struct NPCM7XX_i2c *bus)
 	if ((FIELD_GET(NPCM7XX_SMBCTL1_EOBINTE, ioread8(NPCM7XX_SMBCTL1(bus)) ) == 1) &&  // End of Busy int is on
 	    (FIELD_GET(NPCM7XX_SMBCST3_EO_BUSY, ioread8(NPCM7XX_SMBCST3(bus)) ))) {        // and End of Busy is set
 		I2C_DEBUG("\tslave End of busy bus = %d\n", bus->num);
-		iowrite8(ioread8(NPCM7XX_SMBCTL1(bus)) & ~NPCM7XX_SMBCTL1_EOBINTE, NPCM7XX_SMBCTL1(bus));// Disable "End of Busy" int
-		iowrite8(ioread8(NPCM7XX_SMBCST3(bus)) | NPCM7XX_SMBCST3_EO_BUSY, NPCM7XX_SMBCST3(bus));// Clear EO_BUSY pending bit
+
+		NPCM7XX_smb_eob_int(bus, false);
 
 		bus->state = SMB_IDLE;
 
@@ -3173,10 +3174,8 @@ static void NPCM7XX_smb_callback(struct NPCM7XX_i2c *bus, SMB_STATE_IND_T op_sta
 			// MASTER transmit got a NAK before transmitting all bytes
 			// info: number of transmitted bytes
 			bus->cmd_err = -EAGAIN;
-			//udelay(1);
-			//#ifndef SMB_CAPABILITY_END_OF_BUSY_SUPPORT
 			complete(&bus->cmd_complete);
-			//#endif
+
 			break;
 		case SMB_BUS_ERR_IND:
 			// Bus error occured
