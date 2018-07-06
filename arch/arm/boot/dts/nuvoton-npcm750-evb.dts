@@ -214,6 +214,13 @@
 			status = "okay";
 		};
 
+		vcd: vcd@f0810000 {
+			status = "okay";
+		};
+
+		ece: ece@f0820000 {
+			status = "okay";
+		};
 	};
 
 	apb {
