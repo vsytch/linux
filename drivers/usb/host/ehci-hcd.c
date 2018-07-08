@@ -1308,11 +1308,6 @@ MODULE_LICENSE ("GPL");
 #define        PLATFORM_DRIVER         ehci_mv_driver
 #endif
 
-#ifdef CONFIG_ARCH_NPCM7XX
-#include "ehci-npcmx50.c"
-#define PLATFORM_DRIVER		ehci_npcmx50_driver
-#endif
-
 static int __init ehci_hcd_init(void)
 {
 	int retval = 0;
