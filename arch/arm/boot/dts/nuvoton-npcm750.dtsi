@@ -245,7 +245,7 @@
 				     &mmc_pins>;
 		};
 
-		ehci1:ehci@f0806000 {
+		ehci1:usb@f0806000 {
 			compatible = "nuvoton,npcm750-ehci";
 			reg = <0xf0806000 0x1000>;
 			interrupts = <0 61 4>;
