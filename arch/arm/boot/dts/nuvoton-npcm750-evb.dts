@@ -86,7 +86,7 @@
 			status = "okay";
 		};
 
-		ehci1: ehci@f0806000 {
+		ehci1: usb@f0806000 {
 			status = "okay";
 		};
 
