@@ -90,8 +90,8 @@ struct clk_hw *npcm7xx_clk_register_pll(void __iomem *pllcon, const char *name,
 	if (!pll)
 		return ERR_PTR(-ENOMEM);
 
-	pr_debug("\tnpcm7xx_clk_register_pll reg, reg=0x%x, name=%s, p=%s\n",
-		(unsigned int)pllcon, name, parent_name);
+	pr_debug("%s reg, reg=0x%x, name=%s, p=%s\n",
+		__func__, (unsigned int)pllcon, name, parent_name);
 
 	init.name = name;
 	init.ops = &npcm7xx_clk_pll_ops;
@@ -558,45 +558,33 @@ static const struct npcm7xx_clk_gate_data npcm7xx_gates[] __initconst = {
 };
 
 
-static struct clk_hw_onecell_data *npcm7xx_clk_data;
-static void __iomem *clk_base;
-static DEFINE_SPINLOCK(lock);
 
-
-static const struct of_device_id npcm7xx_clk_match_table[] = {
-				{ .compatible = "nuvoton,npcm750-clk"},
-				{},
-};
-
-MODULE_DEVICE_TABLE(of, npcm7xx_clk_match_table);
+static DEFINE_SPINLOCK(npcm7xx_clk_lock);
 
 
 static void __init npcm7xx_clk_init(struct device_node *clk_np)
 {
-
+	struct clk_hw_onecell_data *npcm7xx_clk_data;
+	void __iomem *clk_base;
 	struct resource res;
 	struct clk_hw *hw;
 	struct clk *clk;
 	int ret;
 	int i;
 
-	pr_debug("NPCM750: clock init: ");
-
 	clk_base = NULL;
 
 	ret = of_address_to_resource(clk_np, 0, &res);
 	if (ret) {
-		pr_err("\t%s: failed to get resource, ret %d\n", clk_np->name,
+		pr_err("%s: failed to get resource, ret %d\n", clk_np->name,
 			ret);
 		return;
 	}
 
 
 	clk_base = ioremap(res.start, resource_size(&res));
-	if (IS_ERR(clk_base)) {
-		pr_err("\tnpcm7xx_clk_init: resource error\n");
+	if (!clk_base)
 		goto npcm7xx_init_error;
-	}
 
 
 	npcm7xx_clk_data = kzalloc(sizeof(*npcm7xx_clk_data->hws) *
@@ -611,45 +599,37 @@ static void __init npcm7xx_clk_init(struct device_node *clk_np)
 
 	npcm7xx_clk_data->num = NPCM7XX_NUM_CLOCKS;
 
-
-	/*
-	 * This way all clock fetched before the platform device probes,
-	 * except those we assign here for early use, will be deferred.
-	 */
-	pr_debug("\tclk init hws\n");
 	for (i = 0; i < NPCM7XX_NUM_CLOCKS; i++)
 		npcm7xx_clk_data->hws[i] = ERR_PTR(-EPROBE_DEFER);
 
 	/* Read fixed clocks. These 3 clocks must be defined in DT */
 	clk = of_clk_get_by_name(clk_np, NPCM7XX_CLK_S_REFCLK);
-	if (!IS_ERR(clk)) {
-		pr_err("failed to find external REFCLK: %ld\n",
+	if (IS_ERR(clk)) {
+		pr_err("failed to find external REFCLK on device tree, err=%ld\n",
 			PTR_ERR(clk));
 		clk_put(clk);
+		goto npcm7xx_init_fail_no_clk_on_dt;
 	}
 
 	clk = of_clk_get_by_name(clk_np, NPCM7XX_CLK_S_SYSBYPCK);
-	if (!IS_ERR(clk)) {
-		pr_err("failed to find external SYSBYPCK: %ld\n",
+	if (IS_ERR(clk)) {
+		pr_err("failed to find external SYSBYPCK on device tree, err=%ld\n",
 			PTR_ERR(clk));
 		clk_put(clk);
+		goto npcm7xx_init_fail_no_clk_on_dt;
 	}
 
 	clk = of_clk_get_by_name(clk_np, NPCM7XX_CLK_S_MCBYPCK);
-	if (!IS_ERR(clk)) {
-		pr_err("failed to find external MCBYPCK: %ld\n",
+	if (IS_ERR(clk)) {
+		pr_err("failed to find external MCBYPCK on device tree, err=%ld\n",
 			PTR_ERR(clk));
 		clk_put(clk);
+		goto npcm7xx_init_fail_no_clk_on_dt;
 	}
 
 	/* Register plls */
-	pr_debug("\tclk register pll\n");
 	for (i = 0; i < ARRAY_SIZE(npcm7xx_plls); i++) {
 		const struct npcm7xx_clk_pll_data *pll_data = &npcm7xx_plls[i];
-
-		pr_debug("\tclk reg pll%d, reg=0x%x, name=%s, p=%s\n", i,
-		(unsigned int)pll_data->reg, pll_data->name,
-		pll_data->parent_name);
 
 		hw = npcm7xx_clk_register_pll(clk_base + pll_data->reg,
 			pll_data->name, pll_data->parent_name, pll_data->flags);
@@ -663,7 +643,6 @@ static void __init npcm7xx_clk_init(struct device_node *clk_np)
 	}
 
 	/* Register fixed dividers */
-	pr_debug("\tclk register fixed divs\n");
 	clk = clk_register_fixed_factor(NULL, NPCM7XX_CLK_S_PLL1_DIV2,
 			NPCM7XX_CLK_S_PLL1, 0, 1, 2);
 	if (IS_ERR(clk)) {
@@ -684,16 +663,12 @@ static void __init npcm7xx_clk_init(struct device_node *clk_np)
 	for (i = 0; i < ARRAY_SIZE(npcm7xx_muxes); i++) {
 		const struct npcm7xx_clk_mux_data *mux_data = &npcm7xx_muxes[i];
 
-		pr_debug("\tadd mux%d reg=0x%x name=%s p=%s num_p=%d\n",
-		    i, ((u32)clk_base + (u32)NPCM7XX_CLKSEL), mux_data->name,
-			mux_data->parent_names[0], mux_data->num_parents);
-
 		hw = clk_hw_register_mux_table(NULL,
 			mux_data->name,
 			mux_data->parent_names, mux_data->num_parents,
 			mux_data->flags, clk_base + NPCM7XX_CLKSEL,
 			mux_data->shift, mux_data->mask, 0,
-			mux_data->table, &lock);
+			mux_data->table, &npcm7xx_clk_lock);
 
 		if (IS_ERR(hw)) {
 			pr_err("npcm7xx_clk: Can't register mux\n");
@@ -705,20 +680,15 @@ static void __init npcm7xx_clk_init(struct device_node *clk_np)
 	}
 
 	/* Register clock dividers specified in npcm7xx_divs. */
-	pr_debug("\tclk register divs\n");
 	for (i = 0; i < ARRAY_SIZE(npcm7xx_divs); i++) {
 		const struct npcm7xx_clk_div_data *div_data = &npcm7xx_divs[i];
-
-		pr_debug("\tadd div%d reg=0x%x name=%s, parent=%s\n",
-				i, (unsigned int)div_data->reg,
-				div_data->name, div_data->parent_name);
 
 		hw = clk_hw_register_divider(NULL, div_data->name,
 				div_data->parent_name,
 				div_data->flags,
 				clk_base + div_data->reg,
 				div_data->shift, div_data->width,
-				div_data->clk_divider_flags, &lock);
+				div_data->clk_divider_flags, &npcm7xx_clk_lock);
 		if (IS_ERR(hw)) {
 			pr_err("npcm7xx_clk: Can't register div table\n");
 			goto npcm7xx_init_fail;
@@ -733,16 +703,15 @@ static void __init npcm7xx_clk_init(struct device_node *clk_np)
 	if (ret)
 		pr_err("failed to add DT provider: %d\n", ret);
 
-	pr_info("npcm7xx clk: %d dividers, %d muxes and %d plls registered.\n",
-		ARRAY_SIZE(npcm7xx_divs), ARRAY_SIZE(npcm7xx_muxes),
-		ARRAY_SIZE(npcm7xx_plls));
 
 	of_node_put(clk_np);
 
 	return;
 
+npcm7xx_init_fail_no_clk_on_dt:
+	pr_err("see Documentation/devicetree/bindings/clock/"
+					"nuvoton,npcm750-clk.txt  for details\n");
 npcm7xx_init_fail:
-	pr_debug("\tclk setup fail\n");
 	if (npcm7xx_clk_data->num)
 		kfree(npcm7xx_clk_data->hws);
 npcm7xx_init_np_err:
@@ -750,6 +719,7 @@ npcm7xx_init_np_err:
 		iounmap(clk_base);
 npcm7xx_init_error:
 	of_node_put(clk_np);
+	pr_err("clk setup fail\n");
 }
 
 CLK_OF_DECLARE(npcm7xx_clk_init, "nuvoton,npcm750-clk", npcm7xx_clk_init);
