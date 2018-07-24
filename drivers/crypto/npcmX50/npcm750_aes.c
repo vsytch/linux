@@ -319,7 +319,7 @@ static int AES_Config (
                 for (intwr=0;intwr<10;intwr++) 
                 {
 	                iowrite32(ctrl, AES_CONTROL); 
-	                iowrite32(ctrl, AES_CONTROL_WORD_HIGH); 
+	                iowrite16(ctrl, AES_CONTROL_WORD_HIGH); 
 	                wmb(); 
                 }
                 
