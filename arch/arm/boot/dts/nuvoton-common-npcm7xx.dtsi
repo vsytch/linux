@@ -507,7 +507,7 @@
 				status = "disabled";
 			};
 
-			i2c0: i2c-bus@80000 {
+			i2c0: i2c@80000 {
 				reg = <0x80000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -518,7 +518,7 @@
 				status = "disabled";
 			};
 
-			i2c1: i2c-bus@81000 {
+			i2c1: i2c@81000 {
 				reg = <0x81000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -529,7 +529,7 @@
 				status = "disabled";
 			};
 
-			i2c2: i2c-bus@82000 {
+			i2c2: i2c@82000 {
 				reg = <0x82000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -540,7 +540,7 @@
 				status = "disabled";
 			};
 
-			i2c3: i2c-bus@83000 {
+			i2c3: i2c@83000 {
 				reg = <0x83000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -551,7 +551,7 @@
 				status = "disabled";
 			};
 
-			i2c4: i2c-bus@84000 {
+			i2c4: i2c@84000 {
 				reg = <0x84000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -562,7 +562,7 @@
 				status = "disabled";
 			};
 
-			i2c5: i2c-bus@85000 {
+			i2c5: i2c@85000 {
 				reg = <0x85000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -573,7 +573,7 @@
 				status = "disabled";
 			};
 
-			i2c6: i2c-bus@86000 {
+			i2c6: i2c@86000 {
 				reg = <0x86000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -584,7 +584,7 @@
 				status = "disabled";
 			};
 
-			i2c7: i2c-bus@87000 {
+			i2c7: i2c@87000 {
 				reg = <0x87000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -595,7 +595,7 @@
 				status = "disabled";
 			};
 
-			i2c8: i2c-bus@88000 {
+			i2c8: i2c@88000 {
 				reg = <0x88000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -606,7 +606,7 @@
 				status = "disabled";
 			};
 
-			i2c9: i2c-bus@89000 {
+			i2c9: i2c@89000 {
 				reg = <0x89000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -617,7 +617,7 @@
 				status = "disabled";
 			};
 
-			i2c10: i2c-bus@8a000 {
+			i2c10: i2c@8a000 {
 				reg = <0x8a000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -628,7 +628,7 @@
 				status = "disabled";
 			};
 
-			i2c11: i2c-bus@8b000 {
+			i2c11: i2c@8b000 {
 				reg = <0x8b000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -639,7 +639,7 @@
 				status = "disabled";
 			};
 
-			i2c12: i2c-bus@8c000 {
+			i2c12: i2c@8c000 {
 				reg = <0x8c000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -650,7 +650,7 @@
 				status = "disabled";
 			};
 
-			i2c13: i2c-bus@8d000 {
+			i2c13: i2c@8d000 {
 				reg = <0x8d000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -661,7 +661,7 @@
 				status = "disabled";
 			};
 
-			i2c14: i2c-bus@8e000 {
+			i2c14: i2c@8e000 {
 				reg = <0x8e000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
@@ -672,7 +672,7 @@
 				status = "disabled";
 			};
 
-			i2c15: i2c-bus@8f000 {
+			i2c15: i2c@8f000 {
 				reg = <0x8f000 0x1000>;
 				compatible = "nuvoton,npcm750-i2c";
 				clocks = <&clk NPCM7XX_CLK_APB2>;
