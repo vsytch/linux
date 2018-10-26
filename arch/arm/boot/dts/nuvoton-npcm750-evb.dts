@@ -204,6 +204,7 @@
 		};
 
 		spi3: spi@c0000000 {
+			pinctrl-0 = <&spi3quad_pins>;
 			status = "okay";
 			spi-nor@0 {
 				partitions@A0000000 {

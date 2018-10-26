@@ -241,7 +241,7 @@
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 			pinctrl-names = "default";
-			pinctrl-0 = <&spi3_pins &spi3quad_pins>;
+			pinctrl-0 = <&spi3_pins>;
 			status = "disabled";
 			spi-nor@0 {
 					compatible = "jedec,spi-nor";
