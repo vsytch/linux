@@ -5,6 +5,7 @@
 #include "skeleton.dtsi"
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/nuvoton,npcm7xx-clock.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	#address-cells = <1>;
@@ -372,13 +373,30 @@
 				};
 			};
 
-			pspi: pspi@0 {
+			pspi0: pspi@200000 {
 				compatible = "nuvoton,npcm750-pspi";
-				reg = <0x200000 0x2000>;
-				interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>,
-						<GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
+				reg = <0x200000 0x1000>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pspi1_pins>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clk NPCM7XX_CLK_APB5>;
 				clock-names = "clk_apb5";
+				status = "disabled";
+			};
+
+			pspi1: pspi@201000 {
+				compatible = "nuvoton,npcm750-pspi";
+				reg = <0x201000 0x1000>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pspi2_pins>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clk NPCM7XX_CLK_APB5>;
+				clock-names = "clk_apb5";
+				status = "disabled";
 			};
 
 			timer0: timer@8000 {
