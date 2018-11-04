@@ -358,9 +358,14 @@ static int npcm7xx_bpc_probe(struct platform_device *pdev)
 static int npcm7xx_bpc_remove(struct platform_device *pdev)
 {
 	struct npcm7xx_bpc *lpc_bpc = dev_get_drvdata(&pdev->dev);
+	u8 reg_en;
 
-	npcm7xx_disable_bpc(lpc_bpc, 0);
-	npcm7xx_disable_bpc(lpc_bpc, 1);
+	reg_en = ioread8(lpc_bpc->base + NPCM7XX_BPCFEN_REG);
+
+	if (reg_en & FIFO_IOADDR1_ENABLE)
+		npcm7xx_disable_bpc(lpc_bpc, 0);
+	if (reg_en & FIFO_IOADDR2_ENABLE)
+		npcm7xx_disable_bpc(lpc_bpc, 1);
 
 	return 0;
 }
