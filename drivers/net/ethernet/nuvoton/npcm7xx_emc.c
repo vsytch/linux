@@ -23,7 +23,8 @@
 #include <linux/interrupt.h>
 #include <linux/spinlock.h>
 #include <linux/ctype.h>
-#include <linux/proc_fs.h>
+#include <linux/debugfs.h>
+
 #include <linux/clk.h>
 
 #include <linux/of.h>
@@ -40,6 +41,11 @@
 #include <net/ncsi.h>
 
 static struct regmap *gcr_regmap;
+
+#ifdef CONFIG_DEBUG_FS
+static struct dentry *npcm7xx_fs_dir = NULL;
+#endif
+
 
 #define  MFSEL1_OFFSET 0x00C
 #define  MFSEL3_OFFSET 0x064
@@ -296,6 +302,12 @@ struct  npcm7xx_ether {
 	unsigned int tx_tdu_i;
 	unsigned int tx_cp_i;
 	unsigned int count_finish;
+
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *dbgfs_dir;
+	struct dentry *dbgfs_status;
+	struct dentry *dbgfs_dma_cap;
+#endif
 };
 
 static void npcm7xx_ether_set_multicast_list(struct net_device *dev);
@@ -711,7 +723,7 @@ static void npcm7xx_reset_mac(struct net_device *dev, int need_free)
 	npcm7xx_ether_set_multicast_list(dev);
 	npcm7xx_enable_mac_interrupt(dev);
 	npcm7xx_set_global_maccmd(dev);
-	
+
 	/* enable RX and TX */
 	__raw_writel(__raw_readl((ether->reg + REG_MCMDR)) | MCMDR_TXON | MCMDR_RXON, (ether->reg + REG_MCMDR));
 
@@ -1619,14 +1631,10 @@ out0:
 	return err;
 }
 
-#include <linux/seq_file.h>
-#include <linux/proc_fs.h>
-
-#define PROC_FILENAME "driver/npcm7xx_emc"
-
+#if defined CONFIG_NPCM7XX_EMC_ETH_DEBUG || defined CONFIG_DEBUG_FS
 #define REG_PRINT(reg_name) {t = scnprintf(next, size, "%-10s = %08X\n", \
 	#reg_name, __raw_readl(ether->reg + reg_name)); size -= t;	next += t; }
-#define PROC_PRINT(f, x...) {t = scnprintf(next, size, f, ## x); size -= t; \
+#define DUMP_PRINT(f, x...) {t = scnprintf(next, size, f, ## x); size -= t; \
 	next += t; }
 
 static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
@@ -1645,7 +1653,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 		spin_lock_irqsave(&ether->lock, flags);
 
 	/* ------basic driver information ---- */
-	PROC_PRINT("NPCM7XX EMC %s driver version: %s\n", dev->name,
+	DUMP_PRINT("NPCM7XX EMC %s driver version: %s\n", dev->name,
 		   DRV_MODULE_VERSION);
 
 	REG_PRINT(REG_CAMCMR);
@@ -1681,126 +1689,126 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 	REG_PRINT(REG_DCR);
 	REG_PRINT(REG_DMMIR);
 	REG_PRINT(REG_BISTR);
-	PROC_PRINT("\n");
+	DUMP_PRINT("\n");
 
-	PROC_PRINT("netif_queue %s\n\n", netif_queue_stopped(dev) ?
+	DUMP_PRINT("netif_queue %s\n\n", netif_queue_stopped(dev) ?
 					"Stopped" : "Running");
 	if (ether->rdesc)
-		PROC_PRINT("napi is %s\n\n", test_bit(NAPI_STATE_SCHED,
+		DUMP_PRINT("napi is %s\n\n", test_bit(NAPI_STATE_SCHED,
 						      &ether->napi.state) ?
 							"scheduled" :
 							"not scheduled");
 
 	txd_offset = (__raw_readl((ether->reg + REG_CTXDSA)) -
 		      __raw_readl((ether->reg + REG_TXDLSA)))/sizeof(struct npcm7xx_txbd);
-	PROC_PRINT("TXD offset    %6d\n", txd_offset);
-	PROC_PRINT("cur_tx        %6d\n", ether->cur_tx);
-	PROC_PRINT("finish_tx     %6d\n", ether->finish_tx);
-	PROC_PRINT("pending_tx    %6d\n", ether->pending_tx);
+	DUMP_PRINT("TXD offset    %6d\n", txd_offset);
+	DUMP_PRINT("cur_tx        %6d\n", ether->cur_tx);
+	DUMP_PRINT("finish_tx     %6d\n", ether->finish_tx);
+	DUMP_PRINT("pending_tx    %6d\n", ether->pending_tx);
 	/* debug counters */
-	PROC_PRINT("tx_tdu        %6d\n", ether->tx_tdu);
+	DUMP_PRINT("tx_tdu        %6d\n", ether->tx_tdu);
 	ether->tx_tdu = 0;
-	PROC_PRINT("tx_tdu_i      %6d\n", ether->tx_tdu_i);
+	DUMP_PRINT("tx_tdu_i      %6d\n", ether->tx_tdu_i);
 	ether->tx_tdu_i = 0;
-	PROC_PRINT("tx_cp_i       %6d\n", ether->tx_cp_i);
+	DUMP_PRINT("tx_cp_i       %6d\n", ether->tx_cp_i);
 	 ether->tx_cp_i = 0;
-	PROC_PRINT("tx_int_count  %6d\n", ether->tx_int_count);
+	DUMP_PRINT("tx_int_count  %6d\n", ether->tx_int_count);
 	ether->tx_int_count = 0;
-	PROC_PRINT("count_xmit tx %6d\n", ether->count_xmit);
+	DUMP_PRINT("count_xmit tx %6d\n", ether->count_xmit);
 	ether->count_xmit = 0;
-	PROC_PRINT("count_finish  %6d\n", ether->count_finish);
+	DUMP_PRINT("count_finish  %6d\n", ether->count_finish);
 	ether->count_finish = 0;
-	PROC_PRINT("\n");
+	DUMP_PRINT("\n");
 
 	rxd_offset = (__raw_readl((ether->reg + REG_CRXDSA))-__raw_readl((ether->reg + REG_RXDLSA)))
 			/sizeof(struct npcm7xx_txbd);
-	PROC_PRINT("RXD offset    %6d\n", rxd_offset);
-	PROC_PRINT("cur_rx        %6d\n", ether->cur_rx);
-	PROC_PRINT("rx_err        %6d\n", ether->rx_err);
+	DUMP_PRINT("RXD offset    %6d\n", rxd_offset);
+	DUMP_PRINT("cur_rx        %6d\n", ether->cur_rx);
+	DUMP_PRINT("rx_err        %6d\n", ether->rx_err);
 	ether->rx_err = 0;
-	PROC_PRINT("rx_berr       %6d\n", ether->rx_berr);
+	DUMP_PRINT("rx_berr       %6d\n", ether->rx_berr);
 	ether->rx_berr = 0;
-	PROC_PRINT("rx_stuck      %6d\n", ether->rx_stuck);
+	DUMP_PRINT("rx_stuck      %6d\n", ether->rx_stuck);
 	ether->rx_stuck = 0;
-	PROC_PRINT("rdu           %6d\n", ether->rdu);
+	DUMP_PRINT("rdu           %6d\n", ether->rdu);
 	ether->rdu = 0;
-	PROC_PRINT("rxov rx       %6d\n", ether->rxov);
+	DUMP_PRINT("rxov rx       %6d\n", ether->rxov);
 	ether->rxov = 0;
 	/* debug counters */
-	PROC_PRINT("rx_int_count  %6d\n", ether->rx_int_count);
+	DUMP_PRINT("rx_int_count  %6d\n", ether->rx_int_count);
 	ether->rx_int_count = 0;
-	PROC_PRINT("rx_err_count  %6d\n", ether->rx_err_count);
+	DUMP_PRINT("rx_err_count  %6d\n", ether->rx_err_count);
 	ether->rx_err_count = 0;
-	PROC_PRINT("rx_count_pool %6d\n", ether->rx_count_pool);
+	DUMP_PRINT("rx_count_pool %6d\n", ether->rx_count_pool);
 	ether->rx_count_pool = 0;
-	PROC_PRINT("max_waiting_rx %5d\n", ether->max_waiting_rx);
+	DUMP_PRINT("max_waiting_rx %5d\n", ether->max_waiting_rx);
 	ether->max_waiting_rx = 0;
-	PROC_PRINT("\n");
-	PROC_PRINT("need_reset    %5d\n", ether->need_reset);
+	DUMP_PRINT("\n");
+	DUMP_PRINT("need_reset    %5d\n", ether->need_reset);
 
 	if (ether->tdesc && ether->rdesc) {
 		cur = ether->finish_tx - 2;
 		for (i = 0; i < 3; i++) {
 			cur = (cur + 1)%TX_DESC_SIZE;
 			txbd = (ether->tdesc + cur);
-			PROC_PRINT("finish %3d txbd mode %08X buffer %08X sl "
+			DUMP_PRINT("finish %3d txbd mode %08X buffer %08X sl "
 				   "%08X next %08X tx_skb %p\n", cur,
 				   txbd->mode, txbd->buffer, txbd->sl,
 				   txbd->next, ether->tx_skb[cur]);
 		}
-		PROC_PRINT("\n");
+		DUMP_PRINT("\n");
 
 		cur = txd_offset - 2;
 		for (i = 0; i < 3; i++) {
 			cur = (cur + 1)%TX_DESC_SIZE;
 			txbd = (ether->tdesc + cur);
-			PROC_PRINT("txd_of %3d txbd mode %08X buffer %08X sl "
+			DUMP_PRINT("txd_of %3d txbd mode %08X buffer %08X sl "
 				   "%08X next %08X\n", cur, txbd->mode,
 				   txbd->buffer, txbd->sl, txbd->next);
 		}
-		PROC_PRINT("\n");
+		DUMP_PRINT("\n");
 
 		cur = ether->cur_tx - 63;
 		for (i = 0; i < 64; i++) {
 			cur = (cur + 1)%TX_DESC_SIZE;
 			txbd = (ether->tdesc + cur);
-			PROC_PRINT("cur_tx %3d txbd mode %08X buffer %08X sl "
+			DUMP_PRINT("cur_tx %3d txbd mode %08X buffer %08X sl "
 				   "%08X next %08X ", cur, txbd->mode,
 				   txbd->buffer, txbd->sl, txbd->next);
 #ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-			PROC_PRINT("diff %08X ts %08X  MISTA %08X MIEN %08X\n",
+			DUMP_PRINT("diff %08X ts %08X  MISTA %08X MIEN %08X\n",
 				   txbd->diff, txbd->ts, txbd->t2, txbd->t3);
 #else
-			PROC_PRINT("\n");
+			DUMP_PRINT("\n");
 #endif
 		}
-		PROC_PRINT("\n");
+		DUMP_PRINT("\n");
 
 		cur = ether->cur_rx - 63;
 		for (i = 0; i < 64; i++) {
 			cur = (cur + 1)%RX_DESC_SIZE;
 			rxbd = (ether->rdesc + cur);
-			PROC_PRINT("cur_rx %3d rxbd sl   %08X buffer %08X sl "
+			DUMP_PRINT("cur_rx %3d rxbd sl   %08X buffer %08X sl "
 				   "%08X next %08X ", cur, rxbd->sl,
 				   rxbd->buffer, rxbd->reserved, rxbd->next);
 #ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-			PROC_PRINT("diff %08X ts %08X i_diff %08X i_ts %08X\n",
+			DUMP_PRINT("diff %08X ts %08X i_diff %08X i_ts %08X\n",
 				   rxbd->diff, rxbd->ts, rxbd->r2, rxbd->r3);
 #else
-			PROC_PRINT("\n");
+			DUMP_PRINT("\n");
 #endif
 		}
-		PROC_PRINT("\n");
+		DUMP_PRINT("\n");
 
 		cur = rxd_offset - 2;
 		for (i = 0; i < 3; i++) {
 			cur = (cur + 1)%RX_DESC_SIZE;
 			rxbd = (ether->rdesc + cur);
-			PROC_PRINT("rxd_of %3d rxbd sl %08X buffer %08X sl %08X"
+			DUMP_PRINT("rxd_of %3d rxbd sl %08X buffer %08X sl %08X"
 				   " next %08X\n", cur, rxbd->sl, rxbd->buffer,
 				   rxbd->reserved, rxbd->next);
 		}
-		PROC_PRINT("\n");
+		DUMP_PRINT("\n");
 	}
 
 	if (!is_locked)
@@ -1808,6 +1816,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 
 	return count - size;
 }
+#endif
 
 #ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG
 static void npcm7xx_info_print(struct net_device *dev)
@@ -1844,7 +1853,10 @@ static void npcm7xx_info_print(struct net_device *dev)
 }
 #endif
 
-static int npcm7xx_proc_read(struct seq_file *sf, void *v)
+#ifdef CONFIG_DEBUG_FS
+#include <linux/seq_file.h>
+
+static int npcm7xx_debug_show(struct seq_file *sf, void *v)
 {
 	struct net_device *dev = (struct net_device *)sf->private;
 	struct npcm7xx_ether *ether = netdev_priv(dev);
@@ -1867,19 +1879,19 @@ static int npcm7xx_proc_read(struct seq_file *sf, void *v)
 	return 0;
 }
 
-static int npcm7xx_ether_proc_open(struct inode *inode, struct file *file)
+static int npcm7xx_debug_show_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, npcm7xx_proc_read, PDE_DATA(inode));
+	return single_open(file, npcm7xx_debug_show, inode->i_private);
 }
 
-static const struct file_operations npcm7xx_ether_proc_fops = {
-	.open           = npcm7xx_ether_proc_open,
+static const struct file_operations npcm7xx_debug_show_fops = {
+	.open           = npcm7xx_debug_show_open,
 	.read           = seq_read,
 	.llseek         = seq_lseek,
 	.release        = single_release,
 };
 
-static int npcm7xx_proc_reset(struct seq_file *sf, void *v)
+static int npcm7xx_debug_reset(struct seq_file *sf, void *v)
 {
 	struct net_device *dev = (struct net_device *)sf->private;
 	struct npcm7xx_ether *ether = netdev_priv(dev);
@@ -1895,17 +1907,72 @@ static int npcm7xx_proc_reset(struct seq_file *sf, void *v)
 	return 0;
 }
 
-static int npcm7xx_ether_proc_reset(struct inode *inode, struct file *file)
+static int npcm7xx_debug_reset_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, npcm7xx_proc_reset, PDE_DATA(inode));
+	return single_open(file, npcm7xx_debug_reset, inode->i_private);
 }
 
-static const struct file_operations npcm7xx_ether_proc_fops_reset = {
-	.open           = npcm7xx_ether_proc_reset,
+static const struct file_operations npcm7xx_debug_reset_fops = {
+	.owner		= THIS_MODULE,
+	.open           = npcm7xx_debug_reset_open,
 	.read           = seq_read,
 	.llseek         = seq_lseek,
 	.release        = single_release,
 };
+
+static int npcm7xx_debug_fs(struct npcm7xx_ether *ether) {
+	/* Create debugfs main directory if it doesn't exist yet */
+	if (!npcm7xx_fs_dir) {
+		npcm7xx_fs_dir = debugfs_create_dir(DRV_MODULE_NAME, NULL);
+
+		if (!npcm7xx_fs_dir || IS_ERR(npcm7xx_fs_dir)) {
+			dev_err(&ether->pdev->dev, "ERROR %s, debugfs create directory failed\n",
+			       DRV_MODULE_NAME);
+
+			return -ENOMEM;
+		}
+	}
+
+	/* Create per netdev entries */
+	ether->dbgfs_dir = debugfs_create_dir(ether->ndev->name, npcm7xx_fs_dir);
+
+	if (!ether->dbgfs_dir || IS_ERR(ether->dbgfs_dir)) {
+		dev_err(&ether->pdev->dev, "ERROR failed to create %s directory\n", ether->ndev->name);
+
+		return -ENOMEM;
+	}
+
+	/* Entry to report DMA RX/TX rings */
+	ether->dbgfs_status =
+		debugfs_create_file("status", 0444,
+				    ether->dbgfs_dir, ether->ndev,
+				    &npcm7xx_debug_show_fops);
+
+	if (!ether->dbgfs_status || IS_ERR(ether->dbgfs_status)) {
+		dev_err(&ether->pdev->dev, "ERROR creating \'status\' debugfs file\n");
+		debugfs_remove_recursive(ether->dbgfs_dir);
+
+		return -ENOMEM;
+	}
+
+	/* Entry to report the DMA HW features */
+	ether->dbgfs_dma_cap = debugfs_create_file("do_reset", 0444,
+						  ether->dbgfs_dir,
+						  ether->ndev, &npcm7xx_debug_reset_fops);
+
+	if (!ether->dbgfs_dma_cap || IS_ERR(ether->dbgfs_dma_cap)) {
+		dev_err(&ether->pdev->dev, "ERROR creating stmmac \'do_reset\' debugfs file\n");
+		debugfs_remove_recursive(ether->dbgfs_dir);
+
+		return -ENOMEM;
+	}
+
+	return 0;
+
+}
+#endif
+
+
 
 static const struct of_device_id emc_dt_id[] = {
 	{ .compatible = "nuvoton,npcm750-emc",  },
@@ -1928,7 +1995,6 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	struct npcm7xx_ether *ether;
 	struct net_device *dev;
 	int error;
-	char proc_filename[32];
 
 	struct clk *emc_clk = NULL;
 	const struct of_device_id *of_id;
@@ -2128,15 +2194,10 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 		error = -ENODEV;
 		goto failed_free_napi;
 	}
-	snprintf(proc_filename, sizeof(proc_filename), "%s.%d", PROC_FILENAME,
-		 pdev->id);
-	proc_create_data(proc_filename, 0000, NULL, &npcm7xx_ether_proc_fops,
-			 dev);
 
-	snprintf(proc_filename, sizeof(proc_filename), "%s.%d.reset",
-		 PROC_FILENAME, pdev->id);
-	proc_create_data(proc_filename, 0000, NULL,
-			 &npcm7xx_ether_proc_fops_reset, dev);
+#ifdef CONFIG_DEBUG_FS
+	npcm7xx_debug_fs(ether);
+#endif
 
 	return 0;
 
@@ -2157,14 +2218,11 @@ static int npcm7xx_ether_remove(struct platform_device *pdev)
 {
 	struct net_device *dev = platform_get_drvdata(pdev);
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	char proc_filename[32];
 
-	snprintf(proc_filename, sizeof(proc_filename), "%s.%d", PROC_FILENAME,
-		 pdev->id);
-	remove_proc_entry(proc_filename, NULL);
-	snprintf(proc_filename, sizeof(proc_filename), "%s.%d.reset",
-		 PROC_FILENAME, pdev->id);
-	remove_proc_entry(proc_filename, NULL);
+#ifdef CONFIG_DEBUG_FS
+	if (ether->dbgfs_dir)
+		debugfs_remove_recursive(ether->dbgfs_dir);
+#endif
 
 	unregister_netdev(dev);
 
