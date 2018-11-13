@@ -214,8 +214,8 @@
 			interrupts = <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
-		spi0: spi@fb000000 {
-			compatible = "nuvoton,npcm750-spi";
+		fiu0: fiu@fb000000 {
+			compatible = "nuvoton,npcm750-fiu";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0xfb000000 0x1000>, <0x80000000 0x10000000>;
@@ -232,8 +232,8 @@
 			};
 		};
 
-		spi3: spi@c0000000 {
-			compatible = "nuvoton,npcm750-spi";
+		fiu3: fiu@c0000000 {
+			compatible = "nuvoton,npcm750-fiu";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0xc0000000 0x1000>, <0xA0000000 0x20000000>;
@@ -252,8 +252,8 @@
 			};
 		};
 
-		spix: spi@fb001000 {
-			compatible = "nuvoton,npcm750-spi";
+		fiux: fiu@fb001000 {
+			compatible = "nuvoton,npcm750-fiu";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0xfb001000 0x1000>, <0xf8000000 0x2000000>;
