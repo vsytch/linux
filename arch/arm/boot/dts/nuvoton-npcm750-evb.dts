@@ -48,6 +48,9 @@
 		i2c15 = &i2c15;
 		spi0 = &spi0;
 		spi1 = &spi1;
+		fiu0 = &fiu0;
+		fiu1 = &fiu3;
+		fiu2 = &fiux;
 	};
 
 	chosen {
@@ -154,6 +157,11 @@
 		fiu0: fiu@fb000000 {
 			status = "okay";
 			spi-nor@0 {
+				compatible = "jedec,spi-nor";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				spi-rx-bus-width = <2>;
+				reg = <0>;
 				partitions@80000000 {
 					compatible = "fixed-partitions";
 					#address-cells = <1>;
@@ -209,6 +217,11 @@
 			pinctrl-0 = <&spi3quad_pins>;
 			status = "okay";
 			spi-nor@0 {
+				compatible = "jedec,spi-nor";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				spi-rx-bus-width = <2>;
+				reg = <0>;
 				partitions@A0000000 {
 					compatible = "fixed-partitions";
 					#address-cells = <1>;
@@ -228,6 +241,12 @@
 		fiux: fiu@fb001000 {
 			status = "okay";
 			spix-mode;
+			spi-nor@0 {
+				compatible = "m25p80-nonjedec";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				reg = <0>;
+			};
 		};
 
 		sdhci0: sdhci@f0842000 {
