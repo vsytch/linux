@@ -313,7 +313,7 @@ void npcm7xx_clk_GetTimeStamp(u32 time_quad[2]);
 
 #if defined CONFIG_NPCM7XX_EMC_ETH_DEBUG || defined CONFIG_DEBUG_FS
 #define REG_PRINT(reg_name) {t = scnprintf(next, size, "%-10s = %08X\n", \
-	#reg_name, __raw_readl(ether->reg + reg_name)); size -= t;	next += t; }
+	#reg_name, readl(ether->reg + reg_name)); size -= t;	next += t; }
 #define DUMP_PRINT(f, x...) {t = scnprintf(next, size, f, ## x); size -= t; \
 	next += t; }
 
@@ -353,7 +353,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 	REG_PRINT(REG_MISTA);
 	REG_PRINT(REG_MGSTA);
 	REG_PRINT(REG_MPCNT);
-	__raw_writel(0x7FFF, (ether->reg + REG_MPCNT));
+	writel(0x7FFF, (ether->reg + REG_MPCNT));
 	REG_PRINT(REG_MRPC);
 	REG_PRINT(REG_MRPCC);
 	REG_PRINT(REG_MREPC);
@@ -379,8 +379,8 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 							"scheduled" :
 							"not scheduled");
 
-	txd_offset = (__raw_readl((ether->reg + REG_CTXDSA)) -
-		      __raw_readl((ether->reg + REG_TXDLSA)))/sizeof(struct npcm7xx_txbd);
+	txd_offset = (readl((ether->reg + REG_CTXDSA)) -
+		      readl((ether->reg + REG_TXDLSA)))/sizeof(struct npcm7xx_txbd);
 	DUMP_PRINT("TXD offset    %6d\n", txd_offset);
 	DUMP_PRINT("cur_tx        %6d\n", ether->cur_tx);
 	DUMP_PRINT("finish_tx     %6d\n", ether->finish_tx);
@@ -400,7 +400,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 	ether->count_finish = 0;
 	DUMP_PRINT("\n");
 
-	rxd_offset = (__raw_readl((ether->reg + REG_CRXDSA))-__raw_readl((ether->reg + REG_RXDLSA)))
+	rxd_offset = (readl((ether->reg + REG_CRXDSA))-readl((ether->reg + REG_RXDLSA)))
 			/sizeof(struct npcm7xx_txbd);
 	DUMP_PRINT("RXD offset    %6d\n", rxd_offset);
 	DUMP_PRINT("cur_rx        %6d\n", ether->cur_rx);
@@ -579,7 +579,7 @@ static int npcm7xx_debug_reset(struct seq_file *sf, void *v)
 
 	seq_printf(sf, "Ask to reset the module\n");
 	spin_lock_irqsave(&ether->lock, flags);
-	__raw_writel(0,  (ether->reg + REG_MIEN));
+	writel(0,  (ether->reg + REG_MIEN));
 	spin_unlock_irqrestore(&ether->lock, flags);
 	ether->need_reset = 1;
 	napi_schedule(&ether->napi);
@@ -657,7 +657,7 @@ static void npcm7xx_opmode(struct net_device *dev, int speed, int duplex)
 	unsigned int val;
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 
-	val = __raw_readl((ether->reg + REG_MCMDR));
+	val = readl((ether->reg + REG_MCMDR));
 
 	if (speed == 100) {
 		val |= MCMDR_OPMOD;
@@ -671,7 +671,7 @@ static void npcm7xx_opmode(struct net_device *dev, int speed, int duplex)
 		val &= ~MCMDR_FDUP;
 	}
 
-	__raw_writel(val, (ether->reg + REG_MCMDR));
+	writel(val, (ether->reg + REG_MCMDR));
 }
 
 static void adjust_link(struct net_device *dev)
@@ -721,8 +721,8 @@ static void npcm7xx_write_cam(struct net_device *dev,
 
 	lsw = (pval[4] << 24) | (pval[5] << 16);
 
-	__raw_writel(lsw, (ether->reg + REG_CAML_BASE) + x * CAM_ENTRY_SIZE);
-	__raw_writel(msw, (ether->reg + REG_CAMM_BASE) + x * CAM_ENTRY_SIZE);
+	writel(lsw, (ether->reg + REG_CAML_BASE) + x * CAM_ENTRY_SIZE);
+	writel(msw, (ether->reg + REG_CAMM_BASE) + x * CAM_ENTRY_SIZE);
 	dev_dbg(&ether->pdev->dev, "REG_CAML_BASE = 0x%08X REG_CAMM_BASE = 0x%08X", lsw, msw);
 }
 
@@ -915,7 +915,7 @@ static void npcm7xx_set_fifo_threshold(struct net_device *dev)
 	unsigned int val;
 
 	val = RXTHD | TXTHD | BLENGTH;
-	__raw_writel(val, (ether->reg + REG_FFTCR));
+	writel(val, (ether->reg + REG_FFTCR));
 }
 
 static void npcm7xx_return_default_idle(struct net_device *dev)
@@ -924,10 +924,10 @@ static void npcm7xx_return_default_idle(struct net_device *dev)
 	unsigned int val;
 	unsigned int saved_bits;
 
-	val = __raw_readl((ether->reg + REG_MCMDR));
+	val = readl((ether->reg + REG_MCMDR));
 	saved_bits = val & (MCMDR_FDUP | MCMDR_OPMOD);
 	val |= SWR;
-	__raw_writel(val, (ether->reg + REG_MCMDR));
+	writel(val, (ether->reg + REG_MCMDR));
 
 	/* During the EMC reset the AHB will read 0 from all registers,
 	 * so in order to see if the reset finished we can't count on
@@ -935,16 +935,16 @@ static void npcm7xx_return_default_idle(struct net_device *dev)
 	 * register that its reset value is not 0, we choos (ether->reg + REG_FFTCR).
 	 */
 	do {
-		val = __raw_readl((ether->reg + REG_FFTCR));
+		val = readl((ether->reg + REG_FFTCR));
 	} while (val == 0);
 
 	/* Now we can verify if (ether->reg + REG_MCMDR).SWR became 0 (probably it will be 0 on the first read). */
 	do {
-		val = __raw_readl((ether->reg + REG_MCMDR));
+		val = readl((ether->reg + REG_MCMDR));
 	} while (val & SWR);
 
 	/* restore values */
-	__raw_writel(saved_bits, (ether->reg + REG_MCMDR));
+	writel(saved_bits, (ether->reg + REG_MCMDR));
 }
 
 static void npcm7xx_enable_mac_interrupt(struct net_device *dev)
@@ -974,7 +974,7 @@ static void npcm7xx_enable_mac_interrupt(struct net_device *dev)
 		ENLC     |
 		/* ENTDU    |  */  /* We don't need interrupt on Transmit Descriptor Unavailable at start of operation */
 		ENTXBERR;
-	__raw_writel(val, (ether->reg + REG_MIEN));
+	writel(val, (ether->reg + REG_MIEN));
 }
 
 static void npcm7xx_get_and_clear_int(struct net_device *dev,
@@ -982,8 +982,8 @@ static void npcm7xx_get_and_clear_int(struct net_device *dev,
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 
-	*val = __raw_readl((ether->reg + REG_MISTA)) & mask;
-	__raw_writel(*val, (ether->reg + REG_MISTA));
+	*val = readl((ether->reg + REG_MISTA)) & mask;
+	writel(*val, (ether->reg + REG_MISTA));
 }
 
 static void npcm7xx_set_global_maccmd(struct net_device *dev)
@@ -991,16 +991,16 @@ static void npcm7xx_set_global_maccmd(struct net_device *dev)
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	unsigned int val;
 
-	val = __raw_readl((ether->reg + REG_MCMDR));
+	val = readl((ether->reg + REG_MCMDR));
 
 	val |= MCMDR_SPCRC | MCMDR_ENMDC | MCMDR_ACP | MCMDR_NDEF;
 	if (IS_VLAN) {
 		/* we set ALP accept long packets since VLAN packets are 4 bytes longer than 1518 */
 		val |= MCMDR_ALP;
 		/* limit receive length to 1522 bytes due to VLAN */
-		__raw_writel(MAX_PACKET_SIZE_W_CRC, (ether->reg + REG_DMARFC));
+		writel(MAX_PACKET_SIZE_W_CRC, (ether->reg + REG_DMARFC));
 	}
-	__raw_writel(val, (ether->reg + REG_MCMDR));
+	writel(val, (ether->reg + REG_MCMDR));
 }
 
 static void npcm7xx_enable_cam(struct net_device *dev)
@@ -1010,9 +1010,9 @@ static void npcm7xx_enable_cam(struct net_device *dev)
 
 	npcm7xx_write_cam(dev, CAM0, dev->dev_addr);
 
-	val = __raw_readl((ether->reg + REG_CAMEN));
+	val = readl((ether->reg + REG_CAMEN));
 	val |= CAM0EN;
-	__raw_writel(val, (ether->reg + REG_CAMEN));
+	writel(val, (ether->reg + REG_CAMEN));
 }
 
 
@@ -1020,8 +1020,8 @@ static void npcm7xx_set_curdest(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 
-	__raw_writel(ether->start_rx_ptr, (ether->reg + REG_RXDLSA));
-	__raw_writel(ether->start_tx_ptr, (ether->reg + REG_TXDLSA));
+	writel(ether->start_rx_ptr, (ether->reg + REG_RXDLSA));
+	writel(ether->start_tx_ptr, (ether->reg + REG_TXDLSA));
 }
 
 static void npcm7xx_ether_set_multicast_list(struct net_device *dev)
@@ -1039,7 +1039,7 @@ static void npcm7xx_ether_set_multicast_list(struct net_device *dev)
 		rx_mode = CAMCMR_AMP | CAMCMR_ABP | CAMCMR_ECMP;
 	else
 		rx_mode = CAMCMR_ECMP | CAMCMR_ABP;
-	__raw_writel(rx_mode, (ether->reg + REG_CAMCMR));
+	writel(rx_mode, (ether->reg + REG_CAMCMR));
 	ether->camcmr = rx_mode;
 }
 
@@ -1050,7 +1050,7 @@ static void npcm7xx_reset_mac(struct net_device *dev, int need_free)
 	netif_tx_lock(dev);
 
 	/* disable RX and TX */
-	__raw_writel(__raw_readl((ether->reg + REG_MCMDR)) & ~(MCMDR_TXON | MCMDR_RXON), (ether->reg + REG_MCMDR));
+	writel(readl((ether->reg + REG_MCMDR)) & ~(MCMDR_TXON | MCMDR_RXON), (ether->reg + REG_MCMDR));
 
 	npcm7xx_return_default_idle(dev);
 	npcm7xx_set_fifo_threshold(dev);
@@ -1075,10 +1075,10 @@ static void npcm7xx_reset_mac(struct net_device *dev, int need_free)
 	npcm7xx_set_global_maccmd(dev);
 
 	/* enable RX and TX */
-	__raw_writel(__raw_readl((ether->reg + REG_MCMDR)) | MCMDR_TXON | MCMDR_RXON, (ether->reg + REG_MCMDR));
+	writel(readl((ether->reg + REG_MCMDR)) | MCMDR_TXON | MCMDR_RXON, (ether->reg + REG_MCMDR));
 
 	/* trigger RX */
-	__raw_writel(ENSTART, (ether->reg + REG_RSDR));
+	writel(ENSTART, (ether->reg + REG_RSDR));
 
 	ether->need_reset = 0;
 
@@ -1092,18 +1092,18 @@ static int npcm7xx_mdio_write(struct mii_bus *bus, int phy_id, int regnum,
 	struct npcm7xx_ether *ether = bus->priv;
 	unsigned long timeout = jiffies + msecs_to_jiffies(MII_TIMEOUT * 100);
 
-	__raw_writel(value,  (ether->reg + REG_MIID));
-	__raw_writel((phy_id << 0x08) | regnum | PHYBUSY | PHYWR,  (ether->reg + REG_MIIDA));
+	writel(value,  (ether->reg + REG_MIID));
+	writel((phy_id << 0x08) | regnum | PHYBUSY | PHYWR,  (ether->reg + REG_MIIDA));
 
 
 	/* Wait for completion */
-	while (__raw_readl((ether->reg + REG_MIIDA)) & PHYBUSY) {
+	while (readl((ether->reg + REG_MIIDA)) & PHYBUSY) {
 		if (time_after(jiffies, timeout)) {
 			dev_dbg(&ether->pdev->dev, "mdio read timed out\n"
 					   "ether->reg = 0x%x phy_id=0x%x "
 					   "REG_MIIDA=0x%x\n",
 				  (unsigned int)ether->reg, phy_id
-				  , __raw_readl((ether->reg + REG_MIIDA)));
+				  , readl((ether->reg + REG_MIIDA)));
 			return -ETIMEDOUT;
 		}
 		cpu_relax();
@@ -1119,22 +1119,22 @@ static int npcm7xx_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	unsigned long timeout = jiffies + msecs_to_jiffies(MII_TIMEOUT * 100);
 
 
-	__raw_writel((phy_id << 0x08) | regnum | PHYBUSY,  (ether->reg + REG_MIIDA));
+	writel((phy_id << 0x08) | regnum | PHYBUSY,  (ether->reg + REG_MIIDA));
 
 	/* Wait for completion */
-	while (__raw_readl((ether->reg + REG_MIIDA)) & PHYBUSY) {
+	while (readl((ether->reg + REG_MIIDA)) & PHYBUSY) {
 		if (time_after(jiffies, timeout)) {
 			dev_dbg(&ether->pdev->dev, "mdio read timed out\n"
 					   "ether->reg = 0x%x phy_id=0x%x "
 					   "REG_MIIDA=0x%x\n",
 				  (unsigned int)ether->reg, phy_id
-				  , __raw_readl((ether->reg + REG_MIIDA)));
+				  , readl((ether->reg + REG_MIIDA)));
 			return -ETIMEDOUT;
 		}
 		cpu_relax();
 	}
 
-	return __raw_readl((ether->reg + REG_MIID));
+	return readl((ether->reg + REG_MIID));
 }
 
 static int npcm7xx_mdio_reset(struct mii_bus *bus)
@@ -1206,7 +1206,7 @@ static int npcm7xx_clean_tx(struct net_device *dev, bool from_xmit)
 	if (ether->pending_tx == 0)
 		return (0);
 
-	cur_entry = __raw_readl((ether->reg + REG_CTXDSA));
+	cur_entry = readl((ether->reg + REG_CTXDSA));
 
 	/* Release old used buffers */
 	entry = ether->tdesc_phys + sizeof(struct npcm7xx_txbd) *
@@ -1294,7 +1294,7 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	wmb();
 
 	/* trigger TX */
-	__raw_writel(ENSTART, (ether->reg + REG_TSDR));
+	writel(ENSTART, (ether->reg + REG_TSDR));
 
 	if (++ether->cur_tx >= TX_DESC_SIZE)
 		ether->cur_tx = 0;
@@ -1310,8 +1310,8 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		txbd->diff =  (MHZ * (iUsCnt2[1] - last_iUsCnt1[1])) +
 			iUsCnt2[0]/25 - last_iUsCnt1[0]/25;
 		txbd->ts =  (MHZ * iUsCnt2[1]) + iUsCnt2[0]/25;
-		txbd->t2 = __raw_readl((ether->reg + REG_MISTA));
-		txbd->t3 = __raw_readl((ether->reg + REG_MIEN));
+		txbd->t2 = readl((ether->reg + REG_MISTA));
+		txbd->t3 = readl((ether->reg + REG_MIEN));
 		last_iUsCnt1[0] = iUsCnt2[0];
 		last_iUsCnt1[1] = iUsCnt2[1];
 	}
@@ -1330,11 +1330,11 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 		txbd->mode = TX_OWEN_DMA | PADDINGMODE | CRCMODE | MACTXINTEN;
 		wmb();
 
-		__raw_writel(MISTA_TDU, (ether->reg + REG_MISTA)); /* Clear TDU interrupt */
-		reg_mien = __raw_readl((ether->reg + REG_MIEN));
+		writel(MISTA_TDU, (ether->reg + REG_MISTA)); /* Clear TDU interrupt */
+		reg_mien = readl((ether->reg + REG_MIEN));
 
 		if (reg_mien != 0)
-			__raw_writel(reg_mien | ENTDU, (ether->reg + REG_MIEN)); /* Enable TDU interrupt */
+			writel(reg_mien | ENTDU, (ether->reg + REG_MIEN)); /* Enable TDU interrupt */
 
 		ether->tx_tdu++;
 		netif_stop_queue(dev);
@@ -1373,7 +1373,7 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 		npcm7xx_info_print(dev);
 #endif
 		spin_lock_irqsave(&ether->lock, flags);
-		__raw_writel(0, (ether->reg + REG_MIEN)); /* disable any interrupt */
+		writel(0, (ether->reg + REG_MIEN)); /* disable any interrupt */
 		spin_unlock_irqrestore(&ether->lock, flags);
 		ether->need_reset = 1;
 	} else if (status & ~(MISTA_TXINTR | MISTA_TXCP | MISTA_TDU))
@@ -1381,13 +1381,13 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 			status);
 
     /* if we got MISTA_TXCP | MISTA_TDU remove those interrupt and call napi */
-	if (status & (MISTA_TXCP | MISTA_TDU) & __raw_readl((ether->reg + REG_MIEN))) {
+	if (status & (MISTA_TXCP | MISTA_TDU) & readl((ether->reg + REG_MIEN))) {
 		unsigned int reg_mien;
 
 		spin_lock_irqsave(&ether->lock, flags);
-		reg_mien = __raw_readl((ether->reg + REG_MIEN));
+		reg_mien = readl((ether->reg + REG_MIEN));
 		if (reg_mien & ENTDU)
-			__raw_writel(reg_mien & (~ENTDU), (ether->reg + REG_MIEN)); /* Disable TDU interrupt */
+			writel(reg_mien & (~ENTDU), (ether->reg + REG_MIEN)); /* Disable TDU interrupt */
 
 		spin_unlock_irqrestore(&ether->lock, flags);
 
@@ -1415,7 +1415,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 	unsigned long flags;
 	int rx_cnt = 0;
 	int complete = 0;
-	unsigned int rx_offset = (__raw_readl((ether->reg + REG_CRXDSA)) -
+	unsigned int rx_offset = (readl((ether->reg + REG_CRXDSA)) -
 				  ether->start_rx_ptr)/
 				sizeof(struct npcm7xx_txbd);
 	unsigned int local_count = (rx_offset >= ether->cur_rx) ?
@@ -1429,11 +1429,11 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		/* we are porbably in a storm of short packets and we don't want to get */
 		/* into RDU since short packets in RDU cause many RXOV which may cause */
 		/* EMC halt, so we filter out all comming packets */
-		__raw_writel(0, (ether->reg + REG_CAMCMR));
+		writel(0, (ether->reg + REG_CAMCMR));
 
 	if (local_count <= budget)
 		/* we can restore accepting of packets */
-		__raw_writel(ether->camcmr, (ether->reg + REG_CAMCMR));
+		writel(ether->camcmr, (ether->reg + REG_CAMCMR));
 
 	spin_lock_irqsave(&ether->lock, flags);
 	npcm7xx_clean_tx(dev, false);
@@ -1552,10 +1552,10 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		}
 
 		spin_lock_irqsave(&ether->lock, flags);
-		__raw_writel(__raw_readl((ether->reg + REG_MIEN)) | ENRXGD,  (ether->reg + REG_MIEN));
+		writel(readl((ether->reg + REG_MIEN)) | ENRXGD,  (ether->reg + REG_MIEN));
 		spin_unlock_irqrestore(&ether->lock, flags);
 	} else {
-		rx_offset = (__raw_readl((ether->reg + REG_CRXDSA))-ether->start_rx_ptr)/
+		rx_offset = (readl((ether->reg + REG_CRXDSA))-ether->start_rx_ptr)/
 			sizeof(struct npcm7xx_txbd);
 		local_count = (rx_offset >= ether->cur_rx) ? rx_offset -
 			ether->cur_rx : rx_offset + RX_DESC_SIZE -
@@ -1568,15 +1568,15 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			/* we are porbably in a storm of short packets and we don't want to get */
 			/* into RDU since short packets in RDU cause many RXOV which may cause */
 			/* EMC halt, so we filter out all comming packets */
-			__raw_writel(0, (ether->reg + REG_CAMCMR));
+			writel(0, (ether->reg + REG_CAMCMR));
 		if (local_count <= RX_POLL_SIZE)
 			/* we can restore accepting of packets */
-			__raw_writel(ether->camcmr, (ether->reg + REG_CAMCMR));
+			writel(ether->camcmr, (ether->reg + REG_CAMCMR));
 	}
 rx_out:
 
 	/* trigger RX */
-	__raw_writel(ENSTART, (ether->reg + REG_RSDR));
+	writel(ENSTART, (ether->reg + REG_RSDR));
 	return rx_cnt;
 }
 
@@ -1604,7 +1604,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 		npcm7xx_info_print(dev);
 #endif
 		spin_lock_irqsave(&ether->lock, flags);
-		__raw_writel(0, (ether->reg + REG_MIEN)); /* disable any interrupt */
+		writel(0, (ether->reg + REG_MIEN)); /* disable any interrupt */
 		spin_unlock_irqrestore(&ether->lock, flags);
 		ether->need_reset = 1;
 		napi_schedule(&ether->napi);
@@ -1613,7 +1613,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 
 	if (unlikely(status & (MISTA_RXOV | MISTA_RDU))) {
 		/* filter out all received packets until we have enough avaiable buffer descriptors */
-		__raw_writel(0, (ether->reg + REG_CAMCMR));
+		writel(0, (ether->reg + REG_CAMCMR));
 		any_err = 1;
 		if (status & (MISTA_RXOV))
 			ether->rxov++;
@@ -1621,12 +1621,12 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 			ether->rdu++;
 
 		/* workaround Errata 1.36: EMC Hangs on receiving 253-256 byte packet */
-		RXFSM = __raw_readl((ether->reg + REG_RXFSM));
+		RXFSM = readl((ether->reg + REG_RXFSM));
 
 		if ((RXFSM & 0xFFFFF000) == 0x08044000) {
 			int i;
 			for (i = 0; i < 32; i++) {
-				RXFSM = __raw_readl((ether->reg + REG_RXFSM));
+				RXFSM = readl((ether->reg + REG_RXFSM));
 				if ((RXFSM & 0xFFFFF000) != 0x08044000)
 					break;
 			}
@@ -1636,7 +1636,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 #ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG
 				npcm7xx_info_print(dev);
 #endif
-				__raw_writel(0,  (ether->reg + REG_MIEN));
+				writel(0,  (ether->reg + REG_MIEN));
 				spin_unlock_irqrestore(&ether->lock, flags);
 				ether->need_reset = 1;
 				    napi_schedule(&ether->napi);
@@ -1686,7 +1686,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 		last_iUsCnt1[1] = iUsCnt2[1];
 	}
 #endif
-	__raw_writel(__raw_readl((ether->reg + REG_MIEN)) & ~ENRXGD,  (ether->reg + REG_MIEN));
+	writel(readl((ether->reg + REG_MIEN)) & ~ENRXGD,  (ether->reg + REG_MIEN));
 	spin_unlock_irqrestore(&ether->lock, flags);
 	napi_schedule(&ether->napi);
 
@@ -1732,7 +1732,7 @@ static int npcm7xx_ether_open(struct net_device *dev)
 	napi_enable(&ether->napi);
 
 	/* trigger RX */
-	__raw_writel(ENSTART, (ether->reg + REG_RSDR));
+	writel(ENSTART, (ether->reg + REG_RSDR));
 
 	/* Start the NCSI device */
 	if (ether->use_ncsi) {
@@ -1897,7 +1897,7 @@ static int npcm7xx_mii_setup(struct net_device *dev)
 	platform_set_drvdata(ether->pdev, ether->mii_bus);
 
 	/* Enable MDIO Clock */
-	__raw_writel(__raw_readl((ether->reg + REG_MCMDR)) | MCMDR_ENMDC, (ether->reg + REG_MCMDR));
+	writel(readl((ether->reg + REG_MCMDR)) | MCMDR_ENMDC, (ether->reg + REG_MCMDR));
 
 
 	if (mdiobus_register(ether->mii_bus)) {
