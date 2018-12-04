@@ -214,9 +214,6 @@ static struct dentry *npcm7xx_fs_dir = NULL;
 #define MHZ (1000*1000)
 #define MII_TIMEOUT	100
 
-static struct regmap *gcr_regmap;
-static struct regmap *rst_regmap;
-
 struct plat_npcm7xx_emc_data {
 	char *phy_bus_name;
 	int phy_addr;
@@ -224,17 +221,17 @@ struct plat_npcm7xx_emc_data {
 };
 
 struct npcm7xx_rxbd {
-	unsigned int sl;
-	unsigned int buffer;
-	unsigned int reserved;
-	unsigned int next;
+	__le32 sl;
+	__le32 buffer;
+	__le32 reserved;
+	__le32 next;
 };
 
 struct npcm7xx_txbd {
-	unsigned int mode;   /* Ownership bit and some other bits	*/
-	unsigned int buffer; /* Transmit Buffer Starting Address	*/
-	unsigned int sl;     /* Transmit Byte Count and status bits	*/
-	unsigned int next;   /* Next Tx Descriptor Starting Address	*/
+	__le32 mode;   /* Ownership bit and some other bits	*/
+	__le32 buffer; /* Transmit Buffer Starting Address	*/
+	__le32 sl;     /* Transmit Byte Count and status bits	*/
+	__le32 next;   /* Next Tx Descriptor Starting Address	*/
 };
 
 struct  npcm7xx_ether {
@@ -262,19 +259,20 @@ struct  npcm7xx_ether {
 	unsigned int cur_rx;
 	unsigned int finish_tx;
 	unsigned int pending_tx;
-	unsigned int start_tx_ptr;
-	unsigned int start_rx_ptr;
+	__le32 start_tx_ptr;
+	__le32 start_rx_ptr;
 	unsigned int rx_berr;
 	unsigned int rx_err;
 	unsigned int rdu;
 	unsigned int rxov;
-	unsigned int camcmr;
+	__le32 camcmr;
 	unsigned int rx_stuck;
 	int link;
 	int speed;
 	int duplex;
 	int need_reset;
 	char *dump_buf;
+	struct regmap *rst_regmap;
 
 	/* debug counters */
 	unsigned int max_waiting_rx;
@@ -626,7 +624,7 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether) {
 
 static void npcm7xx_opmode(struct net_device *dev, int speed, int duplex)
 {
-	unsigned int val;
+	__le32 val;
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 
 	val = readl((ether->reg + REG_MCMDR));
@@ -687,7 +685,7 @@ static void npcm7xx_write_cam(struct net_device *dev,
 				unsigned int x, unsigned char *pval)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	unsigned int msw, lsw;
+	__le32 msw, lsw;
 
 	msw = (pval[0] << 24) | (pval[1] << 16) | (pval[2] << 8) | pval[3];
 
@@ -779,7 +777,7 @@ static int npcm7xx_init_desc(struct net_device *dev)
 			offset = sizeof(struct npcm7xx_txbd) * (i + 1);
 
 		tdesc->next = ether->tdesc_phys + offset;
-		tdesc->buffer = (unsigned int)NULL;
+		tdesc->buffer = (__le32)NULL;
 		tdesc->sl = 0;
 		tdesc->mode = 0;
 	}
@@ -884,7 +882,7 @@ static void npcm7xx_free_desc(struct net_device *dev, bool free_also_descriptors
 static void npcm7xx_set_fifo_threshold(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	unsigned int val;
+	__le32 val;
 
 	val = RXTHD | TXTHD | BLENGTH;
 	writel(val, (ether->reg + REG_FFTCR));
@@ -893,8 +891,8 @@ static void npcm7xx_set_fifo_threshold(struct net_device *dev)
 static void npcm7xx_return_default_idle(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	unsigned int val;
-	unsigned int saved_bits;
+	__le32 val;
+	__le32 saved_bits;
 
 	val = readl((ether->reg + REG_MCMDR));
 	saved_bits = val & (MCMDR_FDUP | MCMDR_OPMOD);
@@ -922,7 +920,7 @@ static void npcm7xx_return_default_idle(struct net_device *dev)
 static void npcm7xx_enable_mac_interrupt(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	unsigned int val;
+	__le32 val;
 
 	val = 	ENRXINTR |  /* Start of RX interrupts */
 		ENCRCE   |
@@ -950,7 +948,7 @@ static void npcm7xx_enable_mac_interrupt(struct net_device *dev)
 }
 
 static void npcm7xx_get_and_clear_int(struct net_device *dev,
-							unsigned int *val, unsigned int mask)
+							__le32 *val, __le32 mask)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 
@@ -961,7 +959,7 @@ static void npcm7xx_get_and_clear_int(struct net_device *dev,
 static void npcm7xx_set_global_maccmd(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	unsigned int val;
+	__le32 val;
 
 	val = readl((ether->reg + REG_MCMDR));
 
@@ -978,7 +976,7 @@ static void npcm7xx_set_global_maccmd(struct net_device *dev)
 static void npcm7xx_enable_cam(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(dev);
-	unsigned int val;
+	__le32 val;
 
 	npcm7xx_write_cam(dev, CAM0, dev->dev_addr);
 
@@ -999,7 +997,7 @@ static void npcm7xx_set_curdest(struct net_device *dev)
 static void npcm7xx_ether_set_multicast_list(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether;
-	unsigned int rx_mode;
+	__le32 rx_mode;
 
 	ether = netdev_priv(dev);
 
@@ -1173,7 +1171,8 @@ static int npcm7xx_clean_tx(struct net_device *dev, bool from_xmit)
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	struct npcm7xx_txbd *txbd;
 	struct sk_buff *s;
-	unsigned int cur_entry, entry, sl;
+	dma_addr_t cur_entry, entry;
+	__le32 sl;
 
 	if (ether->pending_tx == 0)
 		return (0);
@@ -1276,7 +1275,7 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	npcm7xx_clean_tx(dev, true);
 
 	if (ether->pending_tx >= TX_DESC_SIZE-1) {
-		unsigned int reg_mien;
+		__le32 reg_mien;
 		unsigned int index_to_wake = ether->cur_tx + (TX_DESC_SIZE*3/4);
 
 		if (index_to_wake >= TX_DESC_SIZE)
@@ -1306,7 +1305,7 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 	struct npcm7xx_ether *ether;
 	struct platform_device *pdev;
 	struct net_device *dev;
-	unsigned int status;
+	__le32 status;
 	unsigned long flags;
 
 	dev = dev_id;
@@ -1338,7 +1337,7 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 
     /* if we got MISTA_TXCP | MISTA_TDU remove those interrupt and call napi */
 	if (status & (MISTA_TXCP | MISTA_TDU) & readl((ether->reg + REG_MIEN))) {
-		unsigned int reg_mien;
+		__le32 reg_mien;
 
 		spin_lock_irqsave(&ether->lock, flags);
 		reg_mien = readl((ether->reg + REG_MIEN));
@@ -1367,7 +1366,8 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 	struct net_device *dev = ether->ndev;
 	struct platform_device *pdev = ether->pdev;
 	struct sk_buff *skb, *s;
-	unsigned int length, status;
+	unsigned int length;
+	__le32 status;
 	unsigned long flags;
 	int rx_cnt = 0;
 	int complete = 0;
@@ -1525,10 +1525,10 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 	struct net_device *dev = (struct net_device *)dev_id;
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	struct platform_device *pdev = ether->pdev;
-	unsigned int status;
+	__le32 status;
 	unsigned long flags;
 	unsigned int any_err = 0;
-	u32 RXFSM;
+	__le32 rxfsm;
 
 	spin_lock_irqsave(&ether->lock, flags);
 	npcm7xx_get_and_clear_int(dev, &status, 0xFFFF);
@@ -1561,13 +1561,13 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 			ether->rdu++;
 
 		/* workaround Errata 1.36: EMC Hangs on receiving 253-256 byte packet */
-		RXFSM = readl((ether->reg + REG_RXFSM));
+		rxfsm = readl((ether->reg + REG_RXFSM));
 
-		if ((RXFSM & 0xFFFFF000) == 0x08044000) {
+		if ((rxfsm & 0xFFFFF000) == 0x08044000) {
 			int i;
 			for (i = 0; i < 32; i++) {
-				RXFSM = readl((ether->reg + REG_RXFSM));
-				if ((RXFSM & 0xFFFFF000) != 0x08044000)
+				rxfsm = readl((ether->reg + REG_RXFSM));
+				if ((rxfsm & 0xFFFFF000) != 0x08044000)
 					break;
 			}
 			if (i == 32) {
@@ -1582,7 +1582,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 				    napi_schedule(&ether->napi);
 				dev_err(&pdev->dev, "stuck on REG_RXFSM = "
 						    "0x%08X status=%08X doing "
-						    "reset!\n", RXFSM, status);
+						    "reset!\n", rxfsm, status);
 				return IRQ_HANDLED;
 			}
 		}
@@ -1908,51 +1908,6 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	/* Enable Clock */
 	clk_prepare_enable(emc_clk);
 
-	/* disable for now - need to check if necessary */
-	gcr_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
-	if (IS_ERR(gcr_regmap)) {
-		dev_err(&pdev->dev, "%s: failed to find nuvoton,npcm750-gcr\n", __func__);
-		return IS_ERR(gcr_regmap);
-	}
-
-	rst_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-rst");
-	if (IS_ERR(rst_regmap)) {
-		dev_err(&pdev->dev, "%s: failed to find nuvoton,npcm750-rst\n", __func__);
-		return IS_ERR(rst_regmap);
-	}
-
-	/* Muxing RMII MDIO */
-	if (pdev->id == 0) {
-		regmap_update_bits(gcr_regmap, MFSEL3_OFFSET, (0x1 << 9),
-				   (0x1 << 9));
-		regmap_update_bits(gcr_regmap, MFSEL1_OFFSET, (0x1 << 13),
-				   (0x1 << 13));
-		regmap_update_bits(gcr_regmap, MFSEL1_OFFSET, (0x1 << 12),
-				   (0x1 << 12));
-		regmap_update_bits(gcr_regmap, INTCR_OFFSET, (0x1 << 5),
-				   (0x1 << 5));
-	}
-	if (pdev->id == 1) {
-		regmap_update_bits(gcr_regmap, MFSEL1_OFFSET, (0x1 << 14),
-				   (0x1 << 14));
-		regmap_update_bits(gcr_regmap, MFSEL1_OFFSET, (0x1 << 16),
-				   (0x1 << 16));
-		regmap_update_bits(gcr_regmap, MFSEL1_OFFSET, (0x1 << 15),
-				   (0x1 << 15));
-	}
-
-	/* Reset EMC module */
-	if (pdev->id == 0) {
-		regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 6),
-				   (0x1 << 6));
-		regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 6), 0);
-	}
-	if (pdev->id == 1) {
-		regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 21),
-				   (0x1 << 21));
-		regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 21), 0);
-	}
-
 	of_id = of_match_device(emc_dt_id, &pdev->dev);
 	if (!of_id) {
 		dev_err(&pdev->dev, "Error: No device match found\n");
@@ -1974,6 +1929,24 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	snprintf(dev->name, IFNAMSIZ, "eth%d", pdev->id);
 
 	ether = netdev_priv(dev);
+
+	ether->rst_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-rst");
+	if (IS_ERR(ether->rst_regmap)) {
+		dev_err(&pdev->dev, "%s: failed to find nuvoton,npcm750-rst\n", __func__);
+		return IS_ERR(ether->rst_regmap);
+	}
+
+	/* Reset EMC module */
+	if (pdev->id == 0) {
+		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET, (0x1 << 6),
+				   (0x1 << 6));
+		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET, (0x1 << 6), 0);
+	}
+	if (pdev->id == 1) {
+		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET, (0x1 << 21),
+				   (0x1 << 21));
+		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET, (0x1 << 21), 0);
+	}
 
 	ether->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (ether->res == NULL) {
