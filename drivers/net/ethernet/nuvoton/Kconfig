@@ -40,10 +40,4 @@ config NPCM7XX_EMC_ETH_DEBUG
 	---help---
 	  Say Y here if you want debug info via /proc/driver/npcm7xx_emc.x
 
-config NPCM7XX_EMC_ETH_DEBUG_EXT
-	bool "Nuvoton NPCM7XX Ethernet EMC extra debug"
-	depends on NPCM7XX_EMC_ETH_DEBUG
-	---help---
-	  Say Y here if you want extra debug info via /proc/driver/npcm7xx_emc.x
-
 endif # NET_VENDOR_NUVOTON

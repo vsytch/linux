@@ -228,12 +228,6 @@ struct npcm7xx_rxbd {
 	unsigned int buffer;
 	unsigned int reserved;
 	unsigned int next;
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-	unsigned int diff;
-	unsigned int ts;
-	unsigned int r2;
-	unsigned int r3;
-#endif
 };
 
 struct npcm7xx_txbd {
@@ -241,12 +235,6 @@ struct npcm7xx_txbd {
 	unsigned int buffer; /* Transmit Buffer Starting Address	*/
 	unsigned int sl;     /* Transmit Byte Count and status bits	*/
 	unsigned int next;   /* Next Tx Descriptor Starting Address	*/
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-	unsigned int diff;
-	unsigned int ts;
-	unsigned int t2;
-	unsigned int t3;
-#endif
 };
 
 struct  npcm7xx_ether {
@@ -306,10 +294,6 @@ struct  npcm7xx_ether {
 	struct dentry *dbgfs_dma_cap;
 #endif
 };
-
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-void npcm7xx_clk_GetTimeStamp(u32 time_quad[2]);
-#endif
 
 #if defined CONFIG_NPCM7XX_EMC_ETH_DEBUG || defined CONFIG_DEBUG_FS
 #define REG_PRINT(reg_name) {t = scnprintf(next, size, "%-10s = %08X\n", \
@@ -453,14 +437,8 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 			cur = (cur + 1)%TX_DESC_SIZE;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("cur_tx %3d txbd mode %08X buffer %08X sl "
-				   "%08X next %08X ", cur, txbd->mode,
+				   "%08X next %08X\n", cur, txbd->mode,
 				   txbd->buffer, txbd->sl, txbd->next);
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-			DUMP_PRINT("diff %08X ts %08X  MISTA %08X MIEN %08X\n",
-				   txbd->diff, txbd->ts, txbd->t2, txbd->t3);
-#else
-			DUMP_PRINT("\n");
-#endif
 		}
 		DUMP_PRINT("\n");
 
@@ -469,14 +447,8 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 			cur = (cur + 1)%RX_DESC_SIZE;
 			rxbd = (ether->rdesc + cur);
 			DUMP_PRINT("cur_rx %3d rxbd sl   %08X buffer %08X sl "
-				   "%08X next %08X ", cur, rxbd->sl,
+				   "%08X next %08X\n", cur, rxbd->sl,
 				   rxbd->buffer, rxbd->reserved, rxbd->next);
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-			DUMP_PRINT("diff %08X ts %08X i_diff %08X i_ts %08X\n",
-				   rxbd->diff, rxbd->ts, rxbd->r2, rxbd->r3);
-#else
-			DUMP_PRINT("\n");
-#endif
 		}
 		DUMP_PRINT("\n");
 
@@ -1301,22 +1273,6 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_lock_irqsave(&ether->lock, flags);
 	ether->pending_tx++;
 
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-	{
-		static u32 last_iUsCnt1[2] = {0};
-		u32 iUsCnt2[2];
-
-		npcm7xx_clk_GetTimeStamp(iUsCnt2);
-		txbd->diff =  (MHZ * (iUsCnt2[1] - last_iUsCnt1[1])) +
-			iUsCnt2[0]/25 - last_iUsCnt1[0]/25;
-		txbd->ts =  (MHZ * iUsCnt2[1]) + iUsCnt2[0]/25;
-		txbd->t2 = readl((ether->reg + REG_MISTA));
-		txbd->t3 = readl((ether->reg + REG_MIEN));
-		last_iUsCnt1[0] = iUsCnt2[0];
-		last_iUsCnt1[1] = iUsCnt2[1];
-	}
-#endif
-
 	npcm7xx_clean_tx(dev, true);
 
 	if (ether->pending_tx >= TX_DESC_SIZE-1) {
@@ -1448,22 +1404,6 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			complete = 1;
 			break;
 		}
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-		{
-			static u32 last_iUsCnt1[2] = {0};
-			u32 iUsCnt2[2];
-
-			spin_lock_irqsave(&ether->lock, flags);
-			npcm7xx_clk_GetTimeStamp(iUsCnt2);
-			spin_unlock_irqrestore(&ether->lock, flags);
-			rxbd->diff = ((rx_cnt+1)<<28) +
-				(MHZ * (iUsCnt2[1] - last_iUsCnt1[1])) +
-				iUsCnt2[0]/25 - last_iUsCnt1[0]/25;
-			rxbd->ts =  (MHZ * iUsCnt2[1]) + iUsCnt2[0]/25;
-			last_iUsCnt1[0] = iUsCnt2[0];
-			last_iUsCnt1[1] = iUsCnt2[1];
-		}
-#endif
 		rxbd->reserved = status; /* for debug puposes we save the previous value */
 		s = ether->rx_skb[ether->cur_rx];
 		length = status & 0xFFFF;
@@ -1673,19 +1613,6 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 		dev_err(&pdev->dev, "emc rx MISTA status=0x%08X\n", status);
 
 	spin_lock_irqsave(&ether->lock, flags);
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG_EXT
-	{
-		struct npcm7xx_rxbd *rxbd = (ether->rdesc + ether->cur_rx);
-		static u32 last_iUsCnt1[2] = {0};
-		u32 iUsCnt2[2];
-
-		npcm7xx_clk_GetTimeStamp(iUsCnt2);
-		rxbd->r2 =  status;
-		rxbd->r3 =  (MHZ * iUsCnt2[1]) + iUsCnt2[0]/25;
-		last_iUsCnt1[0] = iUsCnt2[0];
-		last_iUsCnt1[1] = iUsCnt2[1];
-	}
-#endif
 	writel(readl((ether->reg + REG_MIEN)) & ~ENRXGD,  (ether->reg + REG_MIEN));
 	spin_unlock_irqrestore(&ether->lock, flags);
 	napi_schedule(&ether->napi);
