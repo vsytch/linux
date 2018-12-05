@@ -178,8 +178,8 @@ static struct dentry *npcm7xx_fs_dir = NULL;
 #define ENTXBERR		BIT(24)
 
 /* rx and tx owner bit */
-#define RX_OWEN_DMA		BIT(31)
-#define TX_OWEN_DMA		BIT(31)
+#define RX_OWN_DMA		BIT(31)
+#define TX_OWN_DMA		BIT(31)
 
 /* tx frame desc controller bit */
 #define MACTXINTEN		BIT(2)
@@ -192,8 +192,8 @@ static struct dentry *npcm7xx_fs_dir = NULL;
 #define BLENGTH			(0x02 << 20)
 
 /* global setting for driver */
-#define RX_DESC_SIZE	128
-#define TX_DESC_SIZE	64
+#define RX_QUEUE_LEN	128
+#define TX_QUEUE_LEN	64
 #define MAX_RBUFF_SZ	0x600
 #define MAX_TBUFF_SZ	0x600
 #define TX_TIMEOUT	50
@@ -235,8 +235,8 @@ struct npcm7xx_txbd {
 };
 
 struct  npcm7xx_ether {
-	struct sk_buff *rx_skb[RX_DESC_SIZE];
-	struct sk_buff *tx_skb[TX_DESC_SIZE];
+	struct sk_buff *rx_skb[RX_QUEUE_LEN];
+	struct sk_buff *tx_skb[TX_QUEUE_LEN];
 	spinlock_t lock;
 	struct npcm7xx_rxbd *rdesc;
 	struct npcm7xx_txbd *tdesc;
@@ -411,7 +411,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 	if (ether->tdesc && ether->rdesc) {
 		cur = ether->finish_tx - 2;
 		for (i = 0; i < 3; i++) {
-			cur = (cur + 1)%TX_DESC_SIZE;
+			cur = (cur + 1)%TX_QUEUE_LEN;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("finish %3d txbd mode %08X buffer %08X sl "
 				   "%08X next %08X tx_skb %p\n", cur,
@@ -422,7 +422,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 
 		cur = txd_offset - 2;
 		for (i = 0; i < 3; i++) {
-			cur = (cur + 1)%TX_DESC_SIZE;
+			cur = (cur + 1)%TX_QUEUE_LEN;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("txd_of %3d txbd mode %08X buffer %08X sl "
 				   "%08X next %08X\n", cur, txbd->mode,
@@ -432,7 +432,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 
 		cur = ether->cur_tx - 63;
 		for (i = 0; i < 64; i++) {
-			cur = (cur + 1)%TX_DESC_SIZE;
+			cur = (cur + 1)%TX_QUEUE_LEN;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("cur_tx %3d txbd mode %08X buffer %08X sl "
 				   "%08X next %08X\n", cur, txbd->mode,
@@ -442,7 +442,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 
 		cur = ether->cur_rx - 63;
 		for (i = 0; i < 64; i++) {
-			cur = (cur + 1)%RX_DESC_SIZE;
+			cur = (cur + 1)%RX_QUEUE_LEN;
 			rxbd = (ether->rdesc + cur);
 			DUMP_PRINT("cur_rx %3d rxbd sl   %08X buffer %08X sl "
 				   "%08X next %08X\n", cur, rxbd->sl,
@@ -452,7 +452,7 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *dev)
 
 		cur = rxd_offset - 2;
 		for (i = 0; i < 3; i++) {
-			cur = (cur + 1)%RX_DESC_SIZE;
+			cur = (cur + 1)%RX_QUEUE_LEN;
 			rxbd = (ether->rdesc + cur);
 			DUMP_PRINT("rxd_of %3d rxbd sl %08X buffer %08X sl %08X"
 				   " next %08X\n", cur, rxbd->sl, rxbd->buffer,
@@ -735,7 +735,7 @@ static int npcm7xx_init_desc(struct net_device *dev)
 		ether->tdesc = (struct npcm7xx_txbd *)
 				dma_alloc_coherent(&pdev->dev,
 						   sizeof(struct npcm7xx_txbd) *
-						   TX_DESC_SIZE,
+						   TX_QUEUE_LEN,
 						   &ether->tdesc_phys,
 						   GFP_KERNEL);
 
@@ -750,7 +750,7 @@ static int npcm7xx_init_desc(struct net_device *dev)
 		ether->rdesc = (struct npcm7xx_rxbd *)
 				dma_alloc_coherent(&pdev->dev,
 						   sizeof(struct npcm7xx_rxbd) *
-						   RX_DESC_SIZE,
+						   RX_QUEUE_LEN,
 						   &ether->rdesc_phys,
 						   GFP_KERNEL);
 
@@ -759,19 +759,19 @@ static int npcm7xx_init_desc(struct net_device *dev)
 					    "rx desc\n");
 			dma_free_coherent(&pdev->dev,
 					  sizeof(struct npcm7xx_txbd) *
-					  TX_DESC_SIZE, ether->tdesc,
+					  TX_QUEUE_LEN, ether->tdesc,
 					  ether->tdesc_phys);
 			ether->tdesc = NULL;
 			return -ENOMEM;
 		}
 	}
 
-	for (i = 0; i < TX_DESC_SIZE; i++) {
+	for (i = 0; i < TX_QUEUE_LEN; i++) {
 		unsigned int offset;
 
 		tdesc = (ether->tdesc + i);
 
-		if (i == TX_DESC_SIZE - 1)
+		if (i == TX_QUEUE_LEN - 1)
 			offset = 0;
 		else
 			offset = sizeof(struct npcm7xx_txbd) * (i + 1);
@@ -784,18 +784,18 @@ static int npcm7xx_init_desc(struct net_device *dev)
 
 	ether->start_tx_ptr = ether->tdesc_phys;
 
-	for (i = 0; i < RX_DESC_SIZE; i++) {
+	for (i = 0; i < RX_QUEUE_LEN; i++) {
 		unsigned int offset;
 
 		rdesc = (ether->rdesc + i);
 
-		if (i == RX_DESC_SIZE - 1)
+		if (i == RX_QUEUE_LEN - 1)
 			offset = 0;
 		else
 			offset = sizeof(struct npcm7xx_rxbd) * (i + 1);
 
 		rdesc->next = ether->rdesc_phys + offset;
-		rdesc->sl = RX_OWEN_DMA;
+		rdesc->sl = RX_OWN_DMA;
 
 		if (get_new_skb(dev, i) == NULL) {
 			dev_err(&pdev->dev, "get_new_skb() failed\n");
@@ -811,11 +811,11 @@ static int npcm7xx_init_desc(struct net_device *dev)
 
 			dma_free_coherent(&pdev->dev,
 					  sizeof(struct npcm7xx_txbd) *
-					  TX_DESC_SIZE,
+					  TX_QUEUE_LEN,
 					  ether->tdesc, ether->tdesc_phys);
 			dma_free_coherent(&pdev->dev,
 					  sizeof(struct npcm7xx_rxbd) *
-					  RX_DESC_SIZE,
+					  RX_QUEUE_LEN,
 					  ether->rdesc, ether->rdesc_phys);
 
 			return -ENOMEM;
@@ -824,7 +824,7 @@ static int npcm7xx_init_desc(struct net_device *dev)
 
 	ether->start_rx_ptr = ether->rdesc_phys;
 	wmb();
-	for (i = 0; i < TX_DESC_SIZE; i++)
+	for (i = 0; i < TX_QUEUE_LEN; i++)
 		ether->tx_skb[i] = NULL;
 
 	return 0;
@@ -838,7 +838,7 @@ static void npcm7xx_free_desc(struct net_device *dev, bool free_also_descriptors
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	struct platform_device *pdev = ether->pdev;
 
-	for (i = 0; i < TX_DESC_SIZE; i++) {
+	for (i = 0; i < TX_QUEUE_LEN; i++) {
 		skb = ether->tx_skb[i];
 		if (skb != NULL) {
 			dma_unmap_single(&dev->dev, (dma_addr_t)((ether->tdesc +
@@ -849,7 +849,7 @@ static void npcm7xx_free_desc(struct net_device *dev, bool free_also_descriptors
 		}
 	}
 
-	for (i = 0; i < RX_DESC_SIZE; i++) {
+	for (i = 0; i < RX_QUEUE_LEN; i++) {
 		skb = ether->rx_skb[i];
 		if (skb != NULL) {
 			dma_unmap_single(&dev->dev, (dma_addr_t)((ether->rdesc +
@@ -865,14 +865,14 @@ static void npcm7xx_free_desc(struct net_device *dev, bool free_also_descriptors
 		if (ether->tdesc)
 			dma_free_coherent(&pdev->dev,
 					  sizeof(struct npcm7xx_txbd) *
-					  TX_DESC_SIZE,
+					  TX_QUEUE_LEN,
 					  ether->tdesc, ether->tdesc_phys);
 		ether->tdesc = NULL;
 
 		if (ether->rdesc)
 			dma_free_coherent(&pdev->dev,
 					  sizeof(struct npcm7xx_rxbd) *
-					  RX_DESC_SIZE,
+					  RX_QUEUE_LEN,
 					  ether->rdesc, ether->rdesc_phys);
 		ether->rdesc = NULL;
 	}
@@ -994,7 +994,7 @@ static void npcm7xx_set_curdest(struct net_device *dev)
 	writel(ether->start_tx_ptr, (ether->reg + REG_TXDLSA));
 }
 
-static void npcm7xx_ether_set_multicast_list(struct net_device *dev)
+static void npcm7xx_ether_set_rx_mode(struct net_device *dev)
 {
 	struct npcm7xx_ether *ether;
 	__le32 rx_mode;
@@ -1040,7 +1040,7 @@ static void npcm7xx_reset_mac(struct net_device *dev, int need_free)
 
 	npcm7xx_set_curdest(dev);
 	npcm7xx_enable_cam(dev);
-	npcm7xx_ether_set_multicast_list(dev);
+	npcm7xx_ether_set_rx_mode(dev);
 	npcm7xx_enable_mac_interrupt(dev);
 	npcm7xx_set_global_maccmd(dev);
 
@@ -1196,7 +1196,7 @@ static int npcm7xx_clean_tx(struct net_device *dev, bool from_xmit)
 		consume_skb(s);
 		ether->tx_skb[ether->finish_tx] = NULL;
 
-		if (++ether->finish_tx >= TX_DESC_SIZE)
+		if (++ether->finish_tx >= TX_QUEUE_LEN)
 			ether->finish_tx = 0;
 		ether->pending_tx--;
 
@@ -1213,10 +1213,10 @@ static int npcm7xx_clean_tx(struct net_device *dev, bool from_xmit)
 	}
 
 	if (!from_xmit && unlikely(netif_queue_stopped(dev) &&
-				   (TX_DESC_SIZE - ether->pending_tx) > 1)) {
+				   (TX_QUEUE_LEN - ether->pending_tx) > 1)) {
 		netif_tx_lock(dev);
 		if (netif_queue_stopped(dev) &&
-		    (TX_DESC_SIZE - ether->pending_tx) > 1) {
+		    (TX_QUEUE_LEN - ether->pending_tx) > 1) {
 			netif_wake_queue(dev);
 		}
 		netif_tx_unlock(dev);
@@ -1230,17 +1230,6 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	struct npcm7xx_txbd *txbd;
 	unsigned long flags;
-
-	/* This is a hard error log it. */
-	if (ether->pending_tx >= (TX_DESC_SIZE-1)) {
-		dev_err(&ether->pdev->dev, "%s: BUG! Tx Ring full when queue "
-					   "awake!\n", dev->name);
-#ifdef CONFIG_NPCM7XX_EMC_ETH_DEBUG
-		npcm7xx_info_print(dev);
-#endif
-		netif_stop_queue(dev);
-		return NETDEV_TX_BUSY;
-	}
 
 	ether->count_xmit++;
 
@@ -1259,30 +1248,30 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *dev)
 			MAX_PACKET_SIZE);
 
 	txbd->sl = skb->len > MAX_PACKET_SIZE ? MAX_PACKET_SIZE : skb->len;
-	wmb();
+	dma_wmb();
 
-	txbd->mode = TX_OWEN_DMA | PADDINGMODE | CRCMODE;
+	txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE;
 	wmb();
 
 	/* trigger TX */
 	writel(ENSTART, (ether->reg + REG_TSDR));
 
-	if (++ether->cur_tx >= TX_DESC_SIZE)
+	if (++ether->cur_tx >= TX_QUEUE_LEN)
 		ether->cur_tx = 0;
 	spin_lock_irqsave(&ether->lock, flags);
 	ether->pending_tx++;
 
 	npcm7xx_clean_tx(dev, true);
 
-	if (ether->pending_tx >= TX_DESC_SIZE-1) {
+	if (ether->pending_tx >= TX_QUEUE_LEN-1) {
 		__le32 reg_mien;
-		unsigned int index_to_wake = ether->cur_tx + (TX_DESC_SIZE*3/4);
+		unsigned int index_to_wake = ether->cur_tx + (TX_QUEUE_LEN*3/4);
 
-		if (index_to_wake >= TX_DESC_SIZE)
-			index_to_wake -= TX_DESC_SIZE;
+		if (index_to_wake >= TX_QUEUE_LEN)
+			index_to_wake -= TX_QUEUE_LEN;
 
 		txbd = (ether->tdesc + index_to_wake);
-		txbd->mode = TX_OWEN_DMA | PADDINGMODE | CRCMODE | MACTXINTEN;
+		txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE | MACTXINTEN;
 		wmb();
 
 		writel(MISTA_TDU, (ether->reg + REG_MISTA)); /* Clear TDU interrupt */
@@ -1312,9 +1301,7 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 	ether = netdev_priv(dev);
 	pdev = ether->pdev;
 
-	spin_lock_irqsave(&ether->lock, flags);
 	npcm7xx_get_and_clear_int(dev, &status, 0xFFFF0000);
-	spin_unlock_irqrestore(&ether->lock, flags);
 
 	ether->tx_int_count++;
 
@@ -1358,168 +1345,6 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int npcm7xx_poll(struct napi_struct *napi, int budget)
-{
-	struct npcm7xx_ether *ether =
-		container_of(napi, struct npcm7xx_ether, napi);
-	struct npcm7xx_rxbd *rxbd;
-	struct net_device *dev = ether->ndev;
-	struct platform_device *pdev = ether->pdev;
-	struct sk_buff *skb, *s;
-	unsigned int length;
-	__le32 status;
-	unsigned long flags;
-	int rx_cnt = 0;
-	int complete = 0;
-	unsigned int rx_offset = (readl((ether->reg + REG_CRXDSA)) -
-				  ether->start_rx_ptr)/
-				sizeof(struct npcm7xx_txbd);
-	unsigned int local_count = (rx_offset >= ether->cur_rx) ?
-		rx_offset - ether->cur_rx : rx_offset +
-		RX_DESC_SIZE - ether->cur_rx;
-
-	if (local_count > ether->max_waiting_rx)
-		ether->max_waiting_rx = local_count;
-
-	if (local_count > (4*RX_POLL_SIZE))
-		/* we are porbably in a storm of short packets and we don't want to get */
-		/* into RDU since short packets in RDU cause many RXOV which may cause */
-		/* EMC halt, so we filter out all comming packets */
-		writel(0, (ether->reg + REG_CAMCMR));
-
-	if (local_count <= budget)
-		/* we can restore accepting of packets */
-		writel(ether->camcmr, (ether->reg + REG_CAMCMR));
-
-	spin_lock_irqsave(&ether->lock, flags);
-	npcm7xx_clean_tx(dev, false);
-	spin_unlock_irqrestore(&ether->lock, flags);
-
-	rxbd = (ether->rdesc + ether->cur_rx);
-
-	while (rx_cnt < budget) {
-
-		status = rxbd->sl;
-		if ((status & RX_OWEN_DMA) == RX_OWEN_DMA) {
-			complete = 1;
-			break;
-		}
-		rxbd->reserved = status; /* for debug puposes we save the previous value */
-		s = ether->rx_skb[ether->cur_rx];
-		length = status & 0xFFFF;
-
-		/* If VLAN is not supporte RXDS_PTLE (packet too long) is also an error */
-		if (likely((status & (RXDS_RXGD|RXDS_CRCE|RXDS_ALIE|RXDS_RP
-				      | (IS_VLAN? 0: RXDS_PTLE))) == RXDS_RXGD) &&
-		    likely(length <= MAX_PACKET_SIZE)) {
-			dma_unmap_single(&dev->dev, (dma_addr_t)rxbd->buffer,
-					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
-					 DMA_FROM_DEVICE);
-
-			skb_put(s, length);
-			s->protocol = eth_type_trans(s, dev);
-			netif_receive_skb(s);
-			ether->stats.rx_packets++;
-			ether->stats.rx_bytes += length;
-			rx_cnt++;
-			ether->rx_count_pool++;
-
-			/* now we allocate new skb instead if the used one. */
-			skb = dev_alloc_skb(roundup(MAX_PACKET_SIZE_W_CRC, 4));
-
-			if (!skb) {
-				dev_err(&pdev->dev, "get skb buffer error\n");
-				ether->stats.rx_dropped++;
-				goto rx_out;
-			}
-
-			/* Do not unmark the following skb_reserve() Receive
-			 * Buffer Starting Address must be aligned
-			 * to 4 bytes and the following line if unmarked
-			 * will make it align to 2 and this likely
-			 * will hult the RX and crash the linux
-			 * skb_reserve(skb, NET_IP_ALIGN);
-			 */
-			skb->dev = dev;
-
-			rxbd->buffer = dma_map_single(&dev->dev, skb->data,
-						      roundup(MAX_PACKET_SIZE_W_CRC, 4),
-						      DMA_FROM_DEVICE);
-			ether->rx_skb[ether->cur_rx] = skb;
-		} else {
-			ether->rx_err_count++;
-			ether->stats.rx_errors++;
-			dev_dbg(&pdev->dev, "rx_errors = %lu status = 0x%08X\n",
-				  ether->stats.rx_errors, status);
-
-			if (status & RXDS_RP) {
-				ether->stats.rx_length_errors++;
-				dev_dbg(&pdev->dev, "rx_length_errors = %lu\n",
-					  ether->stats.rx_length_errors);
-			} else if (status & RXDS_CRCE) {
-				ether->stats.rx_crc_errors++;
-				dev_dbg(&pdev->dev, "rx_crc_errors = %lu\n",
-					  ether->stats.rx_crc_errors);
-			} else if (status & RXDS_ALIE) {
-				ether->stats.rx_frame_errors++;
-				dev_dbg(&pdev->dev, "rx_frame_errors = %lu\n",
-					  ether->stats.rx_frame_errors);
-			}
-			else if (((!IS_VLAN) && (status & RXDS_PTLE)) || length > MAX_PACKET_SIZE) {
-				ether->stats.rx_length_errors++;
-				dev_dbg(&pdev->dev, "rx_length_errors = %lu\n",
-					  ether->stats.rx_length_errors);
-			}
-		}
-
-		wmb();
-		rxbd->sl = RX_OWEN_DMA;
-		wmb();
-
-		if (++ether->cur_rx >= RX_DESC_SIZE)
-			ether->cur_rx = 0;
-
-		rxbd = (ether->rdesc + ether->cur_rx);
-
-	}
-
-	if (complete) {
-		napi_complete(napi);
-
-		if (ether->need_reset) {
-			dev_dbg(&pdev->dev, "Reset\n");
-			npcm7xx_reset_mac(dev, 1);
-		}
-
-		spin_lock_irqsave(&ether->lock, flags);
-		writel(readl((ether->reg + REG_MIEN)) | ENRXGD,  (ether->reg + REG_MIEN));
-		spin_unlock_irqrestore(&ether->lock, flags);
-	} else {
-		rx_offset = (readl((ether->reg + REG_CRXDSA))-ether->start_rx_ptr)/
-			sizeof(struct npcm7xx_txbd);
-		local_count = (rx_offset >= ether->cur_rx) ? rx_offset -
-			ether->cur_rx : rx_offset + RX_DESC_SIZE -
-			ether->cur_rx;
-
-		if (local_count > ether->max_waiting_rx)
-			ether->max_waiting_rx = local_count;
-
-		if (local_count > (3*RX_POLL_SIZE))
-			/* we are porbably in a storm of short packets and we don't want to get */
-			/* into RDU since short packets in RDU cause many RXOV which may cause */
-			/* EMC halt, so we filter out all comming packets */
-			writel(0, (ether->reg + REG_CAMCMR));
-		if (local_count <= RX_POLL_SIZE)
-			/* we can restore accepting of packets */
-			writel(ether->camcmr, (ether->reg + REG_CAMCMR));
-	}
-rx_out:
-
-	/* trigger RX */
-	writel(ENSTART, (ether->reg + REG_RSDR));
-	return rx_cnt;
-}
-
 static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 {
 	struct net_device *dev = (struct net_device *)dev_id;
@@ -1530,9 +1355,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 	unsigned int any_err = 0;
 	__le32 rxfsm;
 
-	spin_lock_irqsave(&ether->lock, flags);
 	npcm7xx_get_and_clear_int(dev, &status, 0xFFFF);
-	spin_unlock_irqrestore(&ether->lock, flags);
 
 	ether->rx_int_count++;
 
@@ -1618,6 +1441,168 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 	napi_schedule(&ether->napi);
 
 	return IRQ_HANDLED;
+}
+
+static int npcm7xx_poll(struct napi_struct *napi, int budget)
+{
+	struct npcm7xx_ether *ether =
+		container_of(napi, struct npcm7xx_ether, napi);
+	struct npcm7xx_rxbd *rxbd;
+	struct net_device *dev = ether->ndev;
+	struct platform_device *pdev = ether->pdev;
+	struct sk_buff *skb, *s;
+	unsigned int length;
+	__le32 status;
+	unsigned long flags;
+	int rx_cnt = 0;
+	int complete = 0;
+	unsigned int rx_offset = (readl((ether->reg + REG_CRXDSA)) -
+				  ether->start_rx_ptr)/
+				sizeof(struct npcm7xx_txbd);
+	unsigned int local_count = (rx_offset >= ether->cur_rx) ?
+		rx_offset - ether->cur_rx : rx_offset +
+		RX_QUEUE_LEN - ether->cur_rx;
+
+	if (local_count > ether->max_waiting_rx)
+		ether->max_waiting_rx = local_count;
+
+	if (local_count > (4*RX_POLL_SIZE))
+		/* we are porbably in a storm of short packets and we don't want to get */
+		/* into RDU since short packets in RDU cause many RXOV which may cause */
+		/* EMC halt, so we filter out all comming packets */
+		writel(0, (ether->reg + REG_CAMCMR));
+
+	if (local_count <= budget)
+		/* we can restore accepting of packets */
+		writel(ether->camcmr, (ether->reg + REG_CAMCMR));
+
+	spin_lock_irqsave(&ether->lock, flags);
+	npcm7xx_clean_tx(dev, false);
+	spin_unlock_irqrestore(&ether->lock, flags);
+
+	rxbd = (ether->rdesc + ether->cur_rx);
+
+	while (rx_cnt < budget) {
+
+		status = rxbd->sl;
+		if ((status & RX_OWN_DMA) == RX_OWN_DMA) {
+			complete = 1;
+			break;
+		}
+		rxbd->reserved = status; /* for debug puposes we save the previous value */
+		s = ether->rx_skb[ether->cur_rx];
+		length = status & 0xFFFF;
+
+		/* If VLAN is not supporte RXDS_PTLE (packet too long) is also an error */
+		if (likely((status & (RXDS_RXGD|RXDS_CRCE|RXDS_ALIE|RXDS_RP
+				      | (IS_VLAN? 0: RXDS_PTLE))) == RXDS_RXGD) &&
+		    likely(length <= MAX_PACKET_SIZE)) {
+			dma_unmap_single(&dev->dev, (dma_addr_t)rxbd->buffer,
+					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					 DMA_FROM_DEVICE);
+
+			skb_put(s, length);
+			s->protocol = eth_type_trans(s, dev);
+			netif_receive_skb(s);
+			ether->stats.rx_packets++;
+			ether->stats.rx_bytes += length;
+			rx_cnt++;
+			ether->rx_count_pool++;
+
+			/* now we allocate new skb instead if the used one. */
+			skb = dev_alloc_skb(roundup(MAX_PACKET_SIZE_W_CRC, 4));
+
+			if (!skb) {
+				dev_err(&pdev->dev, "get skb buffer error\n");
+				ether->stats.rx_dropped++;
+				goto rx_out;
+			}
+
+			/* Do not unmark the following skb_reserve() Receive
+			 * Buffer Starting Address must be aligned
+			 * to 4 bytes and the following line if unmarked
+			 * will make it align to 2 and this likely
+			 * will hult the RX and crash the linux
+			 * skb_reserve(skb, NET_IP_ALIGN);
+			 */
+			skb->dev = dev;
+
+			rxbd->buffer = dma_map_single(&dev->dev, skb->data,
+						      roundup(MAX_PACKET_SIZE_W_CRC, 4),
+						      DMA_FROM_DEVICE);
+			ether->rx_skb[ether->cur_rx] = skb;
+		} else {
+			ether->rx_err_count++;
+			ether->stats.rx_errors++;
+			dev_dbg(&pdev->dev, "rx_errors = %lu status = 0x%08X\n",
+				  ether->stats.rx_errors, status);
+
+			if (status & RXDS_RP) {
+				ether->stats.rx_length_errors++;
+				dev_dbg(&pdev->dev, "rx_length_errors = %lu\n",
+					  ether->stats.rx_length_errors);
+			} else if (status & RXDS_CRCE) {
+				ether->stats.rx_crc_errors++;
+				dev_dbg(&pdev->dev, "rx_crc_errors = %lu\n",
+					  ether->stats.rx_crc_errors);
+			} else if (status & RXDS_ALIE) {
+				ether->stats.rx_frame_errors++;
+				dev_dbg(&pdev->dev, "rx_frame_errors = %lu\n",
+					  ether->stats.rx_frame_errors);
+			}
+			else if (((!IS_VLAN) && (status & RXDS_PTLE)) || length > MAX_PACKET_SIZE) {
+				ether->stats.rx_length_errors++;
+				dev_dbg(&pdev->dev, "rx_length_errors = %lu\n",
+					  ether->stats.rx_length_errors);
+			}
+		}
+
+		wmb();
+		rxbd->sl = RX_OWN_DMA;
+		wmb();
+
+		if (++ether->cur_rx >= RX_QUEUE_LEN)
+			ether->cur_rx = 0;
+
+		rxbd = (ether->rdesc + ether->cur_rx);
+
+	}
+
+	if (complete) {
+		napi_complete(napi);
+
+		if (ether->need_reset) {
+			dev_dbg(&pdev->dev, "Reset\n");
+			npcm7xx_reset_mac(dev, 1);
+		}
+
+		spin_lock_irqsave(&ether->lock, flags);
+		writel(readl((ether->reg + REG_MIEN)) | ENRXGD,  (ether->reg + REG_MIEN));
+		spin_unlock_irqrestore(&ether->lock, flags);
+	} else {
+		rx_offset = (readl((ether->reg + REG_CRXDSA))-ether->start_rx_ptr)/
+			sizeof(struct npcm7xx_txbd);
+		local_count = (rx_offset >= ether->cur_rx) ? rx_offset -
+			ether->cur_rx : rx_offset + RX_QUEUE_LEN -
+			ether->cur_rx;
+
+		if (local_count > ether->max_waiting_rx)
+			ether->max_waiting_rx = local_count;
+
+		if (local_count > (3*RX_POLL_SIZE))
+			/* we are porbably in a storm of short packets and we don't want to get */
+			/* into RDU since short packets in RDU cause many RXOV which may cause */
+			/* EMC halt, so we filter out all comming packets */
+			writel(0, (ether->reg + REG_CAMCMR));
+		if (local_count <= RX_POLL_SIZE)
+			/* we can restore accepting of packets */
+			writel(ether->camcmr, (ether->reg + REG_CAMCMR));
+	}
+rx_out:
+
+	/* trigger RX */
+	writel(ENSTART, (ether->reg + REG_RSDR));
+	return rx_cnt;
 }
 
 static int npcm7xx_ether_open(struct net_device *dev)
@@ -1721,15 +1706,12 @@ static int npcm7xx_set_settings(struct net_device *dev,
 	struct npcm7xx_ether *ether = netdev_priv(dev);
 	struct phy_device *phydev = ether->phy_dev;
 	int ret;
-	unsigned long flags;
 
 	if (phydev == NULL)
 		return -ENODEV;
 
 	dev_info(&ether->pdev->dev, "\n\nnpcm7xx_set_settings\n");
-	spin_lock_irqsave(&ether->lock, flags);
 	ret =  phy_ethtool_ksettings_set(phydev, cmd);
-	spin_unlock_irqrestore(&ether->lock, flags);
 
 	return ret;
 }
@@ -1762,7 +1744,7 @@ static const struct net_device_ops npcm7xx_ether_netdev_ops = {
 	.ndo_stop		= npcm7xx_ether_close,
 	.ndo_start_xmit		= npcm7xx_ether_start_xmit,
 	.ndo_get_stats		= npcm7xx_ether_stats,
-	.ndo_set_rx_mode	= npcm7xx_ether_set_multicast_list,
+	.ndo_set_rx_mode	= npcm7xx_ether_set_rx_mode,
 	.ndo_set_mac_address	= npcm7xx_set_mac_address,
 	.ndo_do_ioctl		= npcm7xx_ether_ioctl,
 	.ndo_validate_addr	= eth_validate_addr,
@@ -1893,7 +1875,6 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	int error;
 
 	struct clk *emc_clk = NULL;
-	const struct of_device_id *of_id;
 	struct device_node *np = pdev->dev.of_node;
 
 	pdev->id = of_alias_get_id(np, "ethernet");
@@ -1908,16 +1889,6 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	/* Enable Clock */
 	clk_prepare_enable(emc_clk);
 
-	of_id = of_match_device(emc_dt_id, &pdev->dev);
-	if (!of_id) {
-		dev_err(&pdev->dev, "Error: No device match found\n");
-		return -ENODEV;
-	}
-	/*
-	 * Right now device-tree probed devices don't get dma_mask set.
-	 * Since shared usb code relies on it, set it here for now.
-	 * Once we have dma capability bindings this can go away.
-	 */
 	error = dma_coerce_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
 	if (error)
 		return -ENODEV;
@@ -1925,8 +1896,6 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	dev = alloc_etherdev(sizeof(struct npcm7xx_ether));
 	if (!dev)
 		return -ENOMEM;
-
-	snprintf(dev->name, IFNAMSIZ, "eth%d", pdev->id);
 
 	ether = netdev_priv(dev);
 
@@ -1996,7 +1965,7 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	dev->netdev_ops = &npcm7xx_ether_netdev_ops;
 	dev->ethtool_ops = &npcm7xx_ether_ethtool_ops;
 
-	dev->tx_queue_len = TX_DESC_SIZE;
+	dev->tx_queue_len = TX_QUEUE_LEN;
 	dev->dma = 0x0;
 	dev->watchdog_timeo = TX_TIMEOUT;
 
@@ -2032,7 +2001,6 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 
 	netif_napi_add(dev, &ether->napi, npcm7xx_poll, RX_POLL_SIZE);
 
-	ether_setup(dev);
 	if (pdev->dev.of_node &&
 	    of_get_property(pdev->dev.of_node, "use-ncsi", NULL)) {
 		if (!IS_ENABLED(CONFIG_NET_NCSI)) {
