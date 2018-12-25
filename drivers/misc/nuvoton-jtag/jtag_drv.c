@@ -706,6 +706,10 @@ static int jtag_pspi_probe(struct platform_device *pdev)
 		pr_err("of_address_to_resource fail ret %d\n", ret);
 		return -EINVAL;
 	}
+	dev_info(&pdev->dev, "jtag_pspi_probe: res 0x%x\n", res.start);
+
+	if ((res.start & 0xFFFF) != ((nvt_jtag->pspi_index - 1) * 0x1000))
+		return -ENODEV;
 
 	pspi_virt_addr = ioremap(res.start, resource_size(&res));
 
@@ -713,7 +717,6 @@ static int jtag_pspi_probe(struct platform_device *pdev)
 		pr_info("pspi_virt_addr fail\n");
 		return -ENOMEM;
 	}
-	pspi_virt_addr = pspi_virt_addr + (nvt_jtag->pspi_index - 1) * 0x1000;
 
 	apb_clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(apb_clk)) {
@@ -799,6 +802,7 @@ static int nvt_jtag_probe(struct platform_device *pdev)
 	u32 value;
 	void __iomem *gpio_base;
 	u32 baseadr[2];
+	dev_info(&pdev->dev, "nvt_jtag_probe\n");
 
 	nvt_jtag = kzalloc(sizeof(struct jtag_info), GFP_KERNEL);
 	if (!nvt_jtag)
