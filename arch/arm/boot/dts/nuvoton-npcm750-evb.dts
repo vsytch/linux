@@ -295,6 +295,10 @@
 				status = "okay";
 			};
 
+			adc: adc@c000 {
+				status = "okay";
+			};
+
 			otp:otp@189000 {
 				status = "okay";
 			};

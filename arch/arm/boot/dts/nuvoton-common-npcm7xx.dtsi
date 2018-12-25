@@ -456,10 +456,10 @@
 
 			adc: adc@c000 {
 				compatible = "nuvoton,npcm750-adc";
-				reg = <0xc000 0x1000>;
+				reg = <0xc000 0x8>;
+				interrupts = <GIC_SPI 0 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clk NPCM7XX_CLK_ADC>;
-				clock-names = "clk_adc";
-				vref = <2048>;
+				status = "disabled";
 			};
 
 			otp:otp@189000 {
