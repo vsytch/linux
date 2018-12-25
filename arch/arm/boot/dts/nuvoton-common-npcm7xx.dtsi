@@ -75,7 +75,7 @@
 		rst: rst@f0801000 {
 			compatible = "nuvoton,npcm750-rst", "syscon",
 			"simple-mfd";
-			reg = <0x801000 0x1000>;
+			reg = <0x801000 0x6C>;
 		};
 
 		scu: scu@3fe000 {
