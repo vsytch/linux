@@ -127,9 +127,6 @@
 			ethernet = <0>;
 			clocks	= <&clk_rg1refck>, <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "stmmaceth", "clk_gmac";
-			pinctrl-names = "default";
-			pinctrl-0 = <&rg1_pins
-			             &rg1mdio_pins>;
 			status = "disabled";
 		};
 
@@ -141,10 +138,7 @@
 					<GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
-			pinctrl-names = "default";
-			pinctrl-0 = <&r1_pins
-			             &r1err_pins
-				     &r1md_pins>;
+			status = "disabled";
 		};
 
 		ehci1:usb@f0806000 {
@@ -220,6 +214,7 @@
 			#size-cells = <0>;
 			reg = <0xfb000000 0x1000>, <0x80000000 0x10000000>;
 			reg-names = "control", "memory";
+			chip-max-address-map = <0x8000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 			status = "disabled";
@@ -231,6 +226,7 @@
 			#size-cells = <0>;
 			reg = <0xc0000000 0x1000>, <0xA0000000 0x20000000>;
 			reg-names = "control", "memory";
+			chip-max-address-map = <0x8000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 			pinctrl-names = "default";
@@ -244,6 +240,7 @@
 			#size-cells = <0>;
 			reg = <0xfb001000 0x1000>, <0xf8000000 0x2000000>;
 			reg-names = "control", "memory";
+			chip-max-address-map = <0x1000000>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_ahb";
 			status = "disabled";
@@ -489,19 +486,6 @@
 						<GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>,
 						<GIC_SPI 102 IRQ_TYPE_LEVEL_HIGH>,
 						<GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
-				pinctrl-names = "default";
-				pinctrl-0 = <&pwm0_pins &pwm1_pins
-						&pwm2_pins &pwm3_pins
-						&pwm4_pins &pwm5_pins
-						&pwm6_pins &pwm7_pins
-						&fanin0_pins &fanin1_pins
-						&fanin2_pins &fanin3_pins
-						&fanin4_pins &fanin5_pins
-						&fanin6_pins &fanin7_pins
-						&fanin8_pins &fanin9_pins
-						&fanin10_pins &fanin11_pins
-						&fanin12_pins &fanin13_pins
-						&fanin14_pins &fanin15_pins>;
 				status = "disabled";
 			};
 
@@ -699,6 +683,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x0 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 0 32>;
 		};
@@ -706,6 +692,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x1000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 32 32>;
 		};
@@ -713,6 +701,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x2000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 64 32>;
 		};
@@ -720,6 +710,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x3000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 96 32>;
 		};
@@ -727,6 +719,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x4000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 128 32>;
 		};
@@ -734,6 +728,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x5000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 160 32>;
 		};
@@ -741,6 +737,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x6000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 192 32>;
 		};
@@ -748,6 +746,8 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 			reg = <0x7000 0x80>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 			interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>;
 			gpio-ranges = <&pinctrl 0 224 32>;
 		};
@@ -1229,7 +1229,7 @@
 			function = "hgpio1";
 		};
 		hgpio2_pins: hgpio2-pins {
-			groups = "hgpio2";
+			groups = "hgpio2" ;
 			function = "hgpio2";
 		};
 		hgpio3_pins: hgpio3-pins {
