@@ -963,7 +963,7 @@ static irqreturn_t npcm750_vcd_interrupt(int irq, void *dev_instance)
 			}
 		}
 	}
-	npcm750_vcd_write(vcd, VCD_STAT, status & VCD_STAT_CLEAR);
+	npcm750_vcd_write(vcd, VCD_STAT, status);
 
 	spin_unlock(&vcd->lock);
 
@@ -1043,7 +1043,10 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 						VCD_OP_TIMEOUT);
 			if (!timeout) {
 				dev_dbg(vcd->dev, "VCD_OP_TIMEOUT\n");
+				npcm750_vcd_inte(vcd, 0);
+				npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 				npcm750_vcd_reset(vcd);
+				npcm750_vcd_inte(vcd, VCD_INTE_VAL);
 				ret = -EBUSY;
 			}
 		}
@@ -1111,7 +1114,10 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 		break;
 	}
 	case VCD_IOCRESET:
+		npcm750_vcd_inte(vcd, 0);
+		npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 		npcm750_vcd_reset(vcd);
+		npcm750_vcd_inte(vcd, VCD_INTE_VAL);
 		break;
 	default:
 		break;
