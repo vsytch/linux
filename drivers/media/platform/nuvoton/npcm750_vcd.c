@@ -38,8 +38,10 @@
 #define VCD_IOCGETDIFF	_IOR(VCD_IOC_MAGIC,  4, struct rect)
 #define VCD_IOCDIFFCNT	_IOR(VCD_IOC_MAGIC,  5, int)
 #define VCD_IOCDEMODE	_IOR(VCD_IOC_MAGIC,  6, u8)
-#define VCD_IOCRESET    _IO(VCD_IOC_MAGIC, 7)
-#define VCD_IOC_MAXNR     7
+#define VCD_IOCRESET	_IO(VCD_IOC_MAGIC, 7)
+#define VCD_GETREG	_IOR(VCD_IOC_MAGIC, 8, struct vcd_info)
+#define VCD_SETREG	_IOW(VCD_IOC_MAGIC, 9, struct vcd_info)
+#define VCD_IOC_MAXNR     9
 
 #define VCD_OP_TIMEOUT msecs_to_jiffies(100)
 
@@ -53,6 +55,9 @@
 #define VCD_MAX_HIGHT	1536
 #define VCD_MIN_LP	512
 #define VCD_MAX_LP	4096
+#define VCD_MAX_HBP 1440
+#define VCD_VBP_OFFSET 4
+#define VCD_HBP_OFFSET 2
 
 /* VCD  Register */
 #define VCD_DIFF_TBL	0x0000
@@ -137,7 +142,7 @@
 #define  VCD_INTE_HSYNC_IE	BIT(11)
 #define  VCD_INTE_BSD2_IE	BIT(12)
 #define  VCD_INTE_BSD3_IE	BIT(13)
-#define  VCD_INTE_VAL	(VCD_INTE_DONE_IE | VCD_INTE_IFOR_IE)
+#define  VCD_INTE_VAL	(VCD_INTE_DONE_IE)
 
 #define VCD_RCHG	0x8028
 #define VCD_RCHG_TIM_PRSCL_OFFSET 9
@@ -287,6 +292,9 @@ struct vcd_info {
 	int r_shift;
 	int g_shift;
 	int b_shift;
+	int mode;
+	u32 reg;
+	u32 reg_val;
 };
 
 struct rect {
@@ -333,6 +341,8 @@ struct npcm750_vcd {
 	wait_queue_head_t wait;
 	atomic_t clients;
 	u8 de_mode;
+	u8 hbp_offset;
+	u8 vbp_offset;
 };
 
 static void npcm750_vcd_update(struct npcm750_vcd *vcd, u32 reg,
@@ -563,6 +573,14 @@ static int npcm750_vcd_reset(struct npcm750_vcd *vcd)
 	return 0;
 }
 
+static void npcm750_vcd_io_reset(struct npcm750_vcd *vcd)
+{
+	npcm750_vcd_write(vcd, VCD_INTE, 0);
+	npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
+	npcm750_vcd_reset(vcd);
+	npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
+}
+
 static void npcm750_vcd_dehs(struct npcm750_vcd *vcd, u8 is_de)
 {
 	struct regmap *gcr = vcd->gcr_regmap;
@@ -606,6 +624,7 @@ static void npcm750_vcd_detect_video_mode(struct npcm750_vcd *vcd)
 	vcd->video_name = "Digital";
 	vcd->info.pixelclk = npcm750_vcd_pclk(vcd);
 	vcd->info.bpp = npcm750_vcd_get_bpp(vcd);
+	vcd->info.mode = npcm750_vcd_is_mga(vcd);
 	vcd->info.refresh_rate = 60;
 	vcd->info.hfrontporch = 0;
 	vcd->info.hbackporch = 0;
@@ -622,14 +641,6 @@ static void npcm750_vcd_detect_video_mode(struct npcm750_vcd *vcd)
 
 	npcm750_vcd_capres(vcd, vcd->info.hdisp, vcd->info.vdisp);
 
-	if (!vcd->de_mode) {
-		vcd->info.hbackporch = npcm750_vcd_horbp(vcd);
-		vcd->info.vbackporch = npcm750_vcd_verbp(vcd);
-	}
-
-	/* TODO: HSYNC mode: adjust delay when using internal gfx */
-	npcm750_vcd_dvod(vcd, vcd->info.hbackporch, vcd->info.vbackporch);
-
 	npcm750_vcd_set_linepitch(
 		vcd, vcd->info.hdisp * npcm750_vcd_get_bpp(vcd));
 	vcd->info.line_pitch = npcm750_vcd_get_linepitch(vcd);
@@ -642,14 +653,9 @@ static void npcm750_vcd_detect_video_mode(struct npcm750_vcd *vcd)
 		npcm750_vcd_is_mga(vcd) ? "Hi Res" : "VGA");
 
 	dev_dbg(vcd->dev, "Resolution: %d x %d, Pixel Clk %zuKHz, Line Pitch %d\n",
-		vcd->info.hdisp, vcd->info.vdisp,
-		vcd->info.pixelclk,
-		vcd->info.line_pitch);
-}
-
-static void npcm750_vcd_inte(struct npcm750_vcd *vcd, u32 flags)
-{
-	npcm750_vcd_write(vcd, VCD_INTE, flags);
+			vcd->info.hdisp, vcd->info.vdisp,
+			vcd->info.pixelclk,
+			vcd->info.line_pitch);
 }
 
 static u32 npcm750_vcd_get_curline(struct npcm750_vcd *vcd)
@@ -703,7 +709,8 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 	if ((vcd->info.hdisp != npcm750_vcd_hres(vcd)) ||
 		(vcd->info.vdisp != npcm750_vcd_vres(vcd))) {
 
-		npcm750_vcd_inte(vcd, 0);
+		npcm750_vcd_write(vcd, VCD_INTE, 0);
+		npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 
 		/* wait for valid and stable resolution */
 		do {
@@ -711,10 +718,14 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 		} while (npcm750_vcd_vres(vcd) < 100 ||
 				npcm750_vcd_pclk(vcd) == 0);
 
+		/* setup resolution change detect register*/
 		npcm750_vcd_detect_video_mode(vcd);
 
 		/* Enable interrupt */
-		npcm750_vcd_inte(vcd, VCD_INTE_VAL);
+		if (!vcd->de_mode)
+			npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL | VCD_INTE_HAC_CHG_IE);
+		else
+			npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
 
 		return 1;
 	}
@@ -933,15 +944,26 @@ static int npcm750_vcd_init(struct npcm750_vcd *vcd)
 	npcm750_vcd_detect_video_mode(vcd);
 
 	/* Enable interrupt */
-	npcm750_vcd_inte(vcd, VCD_INTE_VAL);
+	if (!vcd->de_mode) {
+		npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL | VCD_INTE_HAC_CHG_IE);
+		npcm750_vcd_update(vcd, VCD_RCHG, VCD_RCHG_TIM_PRSCL,
+			0x01 << VCD_RCHG_TIM_PRSCL_OFFSET);
+	} else {
+		npcm750_vcd_dvod(vcd, 0, 0);
+		npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
+		npcm750_vcd_write(vcd, VCD_RCHG, 0);
+	}
 
 	return 0;
 }
 
 static void npcm750_vcd_stop(struct npcm750_vcd *vcd)
 {
-	npcm750_vcd_inte(vcd, 0);
-	npcm750_vcd_update(vcd, VCD_MODE, 0xFFFFFFFF, 0);
+	npcm750_vcd_write(vcd, VCD_INTE, 0);
+	npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
+	npcm750_vcd_write(vcd, VCD_MODE, 0);
+	npcm750_vcd_write(vcd, VCD_RCHG, 0);
+
 	npcm750_vcd_free_diff_table(vcd);
 	memset(&vcd->info, 0, sizeof(struct vcd_info));
 }
@@ -962,7 +984,29 @@ static irqreturn_t npcm750_vcd_interrupt(int irq, void *dev_instance)
 				npcm750_vcd_get_diff_table(vcd);
 			}
 		}
+
+		if (status & VCD_STAT_HAC_CHG) {
+			u32 tmp = npcm750_vcd_read(vcd, VCD_HOR_AC_TIM);
+			u32 horAct = (tmp & VCD_HOR_AC_TIM_VALUE);
+
+			if (horAct != VCD_HOR_AC_TIM_VALUE) {
+				vcd->info.hbackporch = npcm750_vcd_horbp(vcd);
+				vcd->info.vbackporch = npcm750_vcd_verbp(vcd);
+
+				if (horAct < vcd->info.hdisp)
+					vcd->info.hbackporch =
+						vcd->info.hbackporch + horAct + vcd->hbp_offset;
+
+				if (vcd->info.hbackporch >= VCD_MAX_HBP)
+					vcd->info.vbackporch =
+						vcd->info.vbackporch + vcd->vbp_offset;
+
+				npcm750_vcd_dvod(vcd, vcd->info.hbackporch, vcd->info.vbackporch);
+			}
+			npcm750_vcd_write(vcd, VCD_HOR_AC_LAST, horAct);
+		}
 	}
+
 	npcm750_vcd_write(vcd, VCD_STAT, status);
 
 	spin_unlock(&vcd->lock);
@@ -1043,10 +1087,7 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 						VCD_OP_TIMEOUT);
 			if (!timeout) {
 				dev_dbg(vcd->dev, "VCD_OP_TIMEOUT\n");
-				npcm750_vcd_inte(vcd, 0);
-				npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
-				npcm750_vcd_reset(vcd);
-				npcm750_vcd_inte(vcd, VCD_INTE_VAL);
+				npcm750_vcd_io_reset(vcd);
 				ret = -EBUSY;
 			}
 		}
@@ -1114,11 +1155,30 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 		break;
 	}
 	case VCD_IOCRESET:
-		npcm750_vcd_inte(vcd, 0);
-		npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
-		npcm750_vcd_reset(vcd);
-		npcm750_vcd_inte(vcd, VCD_INTE_VAL);
+		npcm750_vcd_io_reset(vcd);
+
 		break;
+	case VCD_GETREG:
+	{
+		ret = copy_from_user(&vcd->info, argp, sizeof(vcd->info))
+			? -EFAULT : 0;
+		if (!ret && vcd->info.reg <= VCD_FIFO)
+			vcd->info.reg_val = readl(vcd->base + vcd->info.reg);
+
+		ret = copy_to_user(argp, &vcd->info, sizeof(vcd->info))
+			? -EFAULT : 0;
+		break;
+	}
+	case VCD_SETREG:
+	{
+		ret = copy_from_user(&vcd->info, argp, sizeof(vcd->info))
+			? -EFAULT : 0;
+
+		if (!ret && vcd->info.reg <= VCD_FIFO)
+			writel(vcd->base + vcd->info.reg, vcd->info.reg_val);
+		break;
+	}
+
 	default:
 		break;
 	}
@@ -1222,10 +1282,21 @@ static int npcm750_vcd_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	of_property_read_u32_index(pdev->dev.of_node,
+	ret = of_property_read_u32_index(pdev->dev.of_node,
 			     "phy-memory", 0, &vcd->frame_start);
-	of_property_read_u32_index(pdev->dev.of_node,
+	if (ret) {
+		dev_err(&pdev->dev, "%s: failed to find memory address\n",
+			__func__);
+		goto err;
+	}
+
+	ret = of_property_read_u32_index(pdev->dev.of_node,
 			     "phy-memory", 1, &vcd->frame_len);
+	if (ret) {
+		dev_err(&pdev->dev, "%s: failed to find memory length\n",
+			__func__);
+		goto err;
+	}
 
 	vcd->base = of_iomap(pdev->dev.of_node, 0);
 	if (IS_ERR(vcd->base)) {
@@ -1235,8 +1306,21 @@ static int npcm750_vcd_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	of_property_read_u8(pdev->dev.of_node,
+	ret = of_property_read_u8(pdev->dev.of_node,
 			     "de-mode", &vcd->de_mode);
+	if (ret)
+		vcd->de_mode = 1;
+
+	ret = of_property_read_u8(pdev->dev.of_node,
+		"hbp-offset", &vcd->hbp_offset);
+	if (ret)
+		vcd->hbp_offset = VCD_HBP_OFFSET;
+
+	ret = of_property_read_u8(pdev->dev.of_node,
+		"vbp-offset", &vcd->vbp_offset);
+	if (ret)
+		vcd->hbp_offset = VCD_VBP_OFFSET;
+
 	ret = npcm750_vcd_init(vcd);
 	if (ret) {
 		dev_err(&pdev->dev, "%s: failed to init vcd module\n",
