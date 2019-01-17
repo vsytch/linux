@@ -44,6 +44,7 @@
 #define NPCM7XX_RST_SWRSTC2	0x48
 #define NPCM7XX_RST_SWRSTC3	0x4C
 #define NPCM7XX_RST_SWRSTC4	0x50
+#define NPCM7XX_RST_CORSTC	0x5C
 
 #define GPIOX_MODULE_RESET	BIT(16)
 #define CA9C_MODULE_RESET	BIT(0)
@@ -1610,6 +1611,8 @@ static int npcm7xx_gpio_reset_persist(struct npcm7xx_pinctrl *npcm,
 				   GPIOX_MODULE_RESET << banknum, 0);
 		regmap_update_bits(npcm->rst_regmap, NPCM7XX_RST_WD2RCR,
 				   GPIOX_MODULE_RESET << banknum, 0);
+		regmap_update_bits(npcm->rst_regmap, NPCM7XX_RST_CORSTC,
+				   GPIOX_MODULE_RESET << banknum, 0);
 	} else {
 		regmap_update_bits(npcm->rst_regmap, NPCM7XX_RST_WD0RCR,
 				   (GPIOX_MODULE_RESET << banknum) |
@@ -1622,6 +1625,11 @@ static int npcm7xx_gpio_reset_persist(struct npcm7xx_pinctrl *npcm,
 				   (GPIOX_MODULE_RESET << banknum) |
 				   CA9C_MODULE_RESET);
 		regmap_update_bits(npcm->rst_regmap, NPCM7XX_RST_WD2RCR,
+				   (GPIOX_MODULE_RESET << banknum) |
+				   CA9C_MODULE_RESET,
+				   (GPIOX_MODULE_RESET << banknum) |
+				   CA9C_MODULE_RESET);
+		regmap_update_bits(npcm->rst_regmap, NPCM7XX_RST_CORSTC,
 				   (GPIOX_MODULE_RESET << banknum) |
 				   CA9C_MODULE_RESET,
 				   (GPIOX_MODULE_RESET << banknum) |
