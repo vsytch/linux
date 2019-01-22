@@ -343,6 +343,7 @@ struct npcm750_vcd {
 	u8 de_mode;
 	u8 hbp_offset;
 	u8 vbp_offset;
+	int irq;
 };
 
 static void npcm750_vcd_update(struct npcm750_vcd *vcd, u32 reg,
@@ -409,11 +410,8 @@ static u32 npcm750_vcd_hres(struct npcm750_vcd *vcd)
 	apb_hor_res = (((hvcnth & HVCNTH_MASK) << 8)
 		+ (hvcntl & HVCNTL_MASK) + 1);
 
-	if (npcm750_vcd_is_mga(vcd))
-		return (apb_hor_res > VCD_MAX_WIDTH) ?
-			    VCD_MAX_WIDTH : apb_hor_res;
-
-	return vcd->info.hdisp;
+	return (apb_hor_res > VCD_MAX_WIDTH) ?
+		VCD_MAX_WIDTH : apb_hor_res;
 }
 
 static u32 npcm750_vcd_vres(struct npcm750_vcd *vcd)
@@ -427,12 +425,8 @@ static u32 npcm750_vcd_vres(struct npcm750_vcd *vcd)
 	apb_ver_res = (((vvcnth & VVCNTH_MASK) << 8)
 		+ (vvcntl & VVCNTL_MASK));
 
-	if (npcm750_vcd_is_mga(vcd)) {
-		return (apb_ver_res > VCD_MAX_HIGHT) ?
-			    VCD_MAX_HIGHT : apb_ver_res;
-	}
-
-	return vcd->info.vdisp;
+	return (apb_ver_res > VCD_MAX_HIGHT) ?
+		VCD_MAX_HIGHT : apb_ver_res;
 }
 
 static void npcm750_vcd_local_display(struct npcm750_vcd *vcd, u8 enable)
@@ -554,19 +548,19 @@ npcm750_vcd_capres(struct npcm750_vcd *vcd, u32 width, u32 height)
 static int npcm750_vcd_reset(struct npcm750_vcd *vcd)
 {
 	struct regmap *gcr = vcd->gcr_regmap;
-	static u8 second_reset = 1;
 
 	npcm750_vcd_update(vcd, VCD_CMD, VCD_CMD_RST, VCD_CMD_RST);
+
 	while (!(npcm750_vcd_read(vcd, VCD_STAT) & VCD_STAT_DONE))
 		continue;
 
-	if (second_reset)
-		regmap_update_bits(
-			gcr, INTCR2, INTCR2_GIRST2, INTCR2_GIRST2);
+	/* Active graphic reset */
+	regmap_update_bits(
+		gcr, INTCR2, INTCR2_GIRST2, INTCR2_GIRST2);
 
 	npcm750_vcd_write(vcd, VCD_STAT, 0xffffffff);
 
-	/* Inactive graphic */
+	/* Inactive graphic reset */
 	regmap_update_bits(
 		gcr, INTCR2, INTCR2_GIRST2, ~INTCR2_GIRST2);
 
@@ -576,7 +570,6 @@ static int npcm750_vcd_reset(struct npcm750_vcd *vcd)
 static void npcm750_vcd_io_reset(struct npcm750_vcd *vcd)
 {
 	npcm750_vcd_write(vcd, VCD_INTE, 0);
-	npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 	npcm750_vcd_reset(vcd);
 	npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
 }
@@ -707,16 +700,19 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 {
 	/* check with GFX registers if resolution changed from last time */
 	if ((vcd->info.hdisp != npcm750_vcd_hres(vcd)) ||
-		(vcd->info.vdisp != npcm750_vcd_vres(vcd))) {
+		(vcd->info.vdisp != npcm750_vcd_vres(vcd)) ||
+		(vcd->info.mode != npcm750_vcd_is_mga(vcd))) {
 
 		npcm750_vcd_write(vcd, VCD_INTE, 0);
 		npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 
-		/* wait for valid and stable resolution */
-		do {
-			mdelay(500);
-		} while (npcm750_vcd_vres(vcd) < 100 ||
-				npcm750_vcd_pclk(vcd) == 0);
+		if (npcm750_vcd_hres(vcd) && npcm750_vcd_vres(vcd)) {
+			/* wait for valid and stable resolution */
+			do {
+				mdelay(500);
+			} while (npcm750_vcd_vres(vcd) < 100 ||
+					npcm750_vcd_pclk(vcd) == 0);
+		}
 
 		/* setup resolution change detect register*/
 		npcm750_vcd_detect_video_mode(vcd);
@@ -1254,7 +1250,6 @@ err:
 static int npcm750_vcd_probe(struct platform_device *pdev)
 {
 	struct npcm750_vcd *vcd;
-	int irq;
 	int ret;
 
 	vcd = kzalloc(sizeof(*vcd), GFP_KERNEL);
@@ -1334,8 +1329,8 @@ static int npcm750_vcd_probe(struct platform_device *pdev)
 	if (ret)
 		goto err;
 
-	irq = of_irq_get(pdev->dev.of_node, 0);
-	ret = request_irq(irq, npcm750_vcd_interrupt,
+	vcd->irq = of_irq_get(pdev->dev.of_node, 0);
+	ret = request_irq(vcd->irq, npcm750_vcd_interrupt,
 			  IRQF_SHARED, vcd_name, vcd->dev);
 	if (ret) {
 		dev_err(&pdev->dev, "%s: failed to request irq for vcd\n",
@@ -1363,7 +1358,14 @@ static int npcm750_vcd_remove(struct platform_device *pdev)
 
 	npcm750_vcd_stop(vcd);
 
+	free_irq(vcd->irq, vcd->dev);
+
 	device_destroy(vcd_class, vcd->dev_t);
+	class_destroy(vcd_class);
+	cdev_del(&vcd->dev_cdev);
+	unregister_chrdev_region(vcd->dev_t, 1);
+
+	mutex_destroy(&vcd->mlock);
 
 	kfree(vcd);
 
