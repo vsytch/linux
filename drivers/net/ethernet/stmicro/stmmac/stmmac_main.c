@@ -369,9 +369,12 @@ static void stmmac_enable_eee_mode(struct stmmac_priv *priv)
  */
 void stmmac_disable_eee_mode(struct stmmac_priv *priv)
 {
+	unsigned long flags;
 	stmmac_reset_eee_mode(priv, priv->hw);
 	del_timer_sync(&priv->eee_ctrl_timer);
+	spin_lock_irqsave(&priv->lpi_lock, flags);
 	priv->tx_path_in_lpi_mode = false;
+	spin_unlock_irqrestore(&priv->lpi_lock, flags);
 }
 
 /**
@@ -1939,9 +1942,17 @@ static int stmmac_tx_clean(struct stmmac_priv *priv, int budget, u32 queue)
 		netif_tx_wake_queue(netdev_get_tx_queue(priv->dev, queue));
 	}
 
-	if ((priv->eee_enabled) && (!priv->tx_path_in_lpi_mode)) {
-		stmmac_enable_eee_mode(priv);
-		mod_timer(&priv->eee_ctrl_timer, STMMAC_LPI_T(eee_timer));
+	if (priv->eee_enabled) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&priv->lpi_lock, flags);
+		if (!priv->tx_path_in_lpi_mode) {
+		    stmmac_enable_eee_mode(priv);
+			mod_timer(&priv->eee_ctrl_timer,
+				  STMMAC_LPI_T(eee_timer));
+		}
+
+		spin_unlock_irqrestore(&priv->lpi_lock, flags);
 	}
 
 	__netif_tx_unlock_bh(netdev_get_tx_queue(priv->dev, queue));
@@ -3698,11 +3709,13 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
 		int mtl_status;
 
 		if (unlikely(status)) {
+			spin_lock(&priv->lpi_lock);
 			/* For LPI we need to save the tx status */
 			if (status & CORE_IRQ_TX_PATH_IN_LPI_MODE)
 				priv->tx_path_in_lpi_mode = true;
 			if (status & CORE_IRQ_TX_PATH_EXIT_LPI_MODE)
 				priv->tx_path_in_lpi_mode = false;
+			spin_unlock(&priv->lpi_lock);
 		}
 
 		for (queue = 0; queue < queues_count; queue++) {
@@ -4354,6 +4367,7 @@ int stmmac_dvr_probe(struct device *device,
 	}
 
 	mutex_init(&priv->lock);
+	spin_lock_init(&priv->lpi_lock);
 
 	/* If a specific clk_csr value is passed from the platform
 	 * this means that the CSR Clock Range selection cannot be
