@@ -746,6 +746,7 @@ config I2C_NOMADIK
 config I2C_NPCM7XX
 	tristate "Nuvoton I2C Controller"
 	depends on ARCH_NPCM7XX
+	select I2C_SLAVE
 	select CRC8
 	help
 	  If you say yes to this option, support will be included for the

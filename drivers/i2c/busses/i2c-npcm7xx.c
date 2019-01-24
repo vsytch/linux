@@ -20,7 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/jiffies.h>
 
-#define I2C_VERSION "0.0.5"
+#define I2C_VERSION "0.0.6"
 
 enum smb_mode {
 	SMB_SLAVE = 1,
@@ -1100,7 +1100,10 @@ static void npcm_smb_set_fifo(struct npcm_i2c *bus, int nread, int nwrite)
 	if (nread > 0) {
 
 		rxf_ctl = min((u16)nread, (u16)SMBUS_FIFO_SIZE);
-		rxf_ctl |= NPCM_SMBRXF_CTL_THR_RXIE;
+
+		if((bus->rd_size - bus->rd_ind) > 1)
+			rxf_ctl |= NPCM_SMBRXF_CTL_THR_RXIE;
+
 
 		// set LAST bit. if LAST is set enxt FIFO packet is nacked at the end.
 
@@ -2362,6 +2365,7 @@ static void npcm_smb_int_master_handler(struct npcm_i2c *bus)
 		} else if ((bus->rd_size == 1) && !bus->read_block_use){
 			// Receiving one byte only - set NACK after ensuring
 			// slave ACKed the address byte
+			npcm_smb_clear_rx_fifo(bus);
 			npcm_smb_nack(bus);
 		}
 
@@ -2728,7 +2732,7 @@ static irqreturn_t npcm_i2c_bus_irq(int irq, void *dev_id)
 #endif
 
 	dev_err(bus->dev, "int unknown on bus%d\n", bus->num);
-	return IRQ_NONE;
+	return IRQ_HANDLED;
 }
 
 static bool npcm_smb_master_start_xmit(struct npcm_i2c *bus,
