@@ -507,6 +507,7 @@ static ssize_t npcm_fiu_read(struct spi_nor *nor, loff_t from, size_t len,
 	int i, readlen, currlen;
 	struct mtd_info *mtd;
 	size_t retlen = 0;
+	int cnt_w, cnt_b;
 	u8 *buf_ptr;
 	u32 addr;
 	int ret;
@@ -519,7 +520,15 @@ static ssize_t npcm_fiu_read(struct spi_nor *nor, loff_t from, size_t len,
 			npcm_fiu_set_drd(nor, host);
 			host->direct_rd_proto = chip->direct_rd_proto;
 		}
-		npcm_fiu_direct_read(mtd, from, len, &retlen, read_buf);
+		for (cnt_w=0; cnt_w < (len / 4); cnt_w++) {		
+			buf_ptr = read_buf + (cnt_w*4);
+			*((u32*)buf_ptr)= ioread32(chip->flash_region_mapped_ptr + from + (cnt_w*4));
+		}
+		for (cnt_b=0; cnt_b < (len % 4); cnt_b++) {
+			buf_ptr = read_buf + (cnt_w*4) + cnt_b;
+			*(buf_ptr)= ioread8(chip->flash_region_mapped_ptr + from + (cnt_w*4) + cnt_b);
+		}
+		retlen = cnt_b + (cnt_w*4);
 	} else {
 		i = 0;
 		currlen = (int)len;
@@ -621,7 +630,7 @@ static int npcm_mtd_ram_register(struct device_node *np,
 	mtd = &nor->mtd;
 
 	chip->flash_region_mapped_ptr =
-		devm_ioremap(dev, (host->res_mem->start +
+		devm_ioremap_nocache(dev, (host->res_mem->start +
 				   (host->info->max_map_size *
 				    chip->chipselect)), MAP_SIZE_8MB);
 	if (!chip->flash_region_mapped_ptr) {
@@ -698,7 +707,7 @@ static void npcm_fiu_enable_direct_rd(struct spi_nor *nor,
 	}
 
 	chip->flash_region_mapped_ptr =
-		devm_ioremap(dev, (host->res_mem->start +
+		devm_ioremap_nocache(dev, (host->res_mem->start +
 				   (host->info->max_map_size *
 				    chip->chipselect)), flashsize);
 	if (!chip->flash_region_mapped_ptr) {
