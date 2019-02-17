@@ -56,6 +56,9 @@
 
 static struct regmap *gcr_regmap;
 
+#define  INTCR3_OFFSET 0x9C
+#define  NPCM_INTCR3_USBPHYSW	GENMASK(13, 12)
+
 #define  USB1PHYCTL_OFFSET 0x140
 #define  USB2PHYCTL_OFFSET 0x144
 
@@ -2779,6 +2782,7 @@ static int npcmX50_udc_probe(struct platform_device *pdev)
 		 regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 6), 0);
 		 break;
 	 case 9:
+		 regmap_update_bits(gcr_regmap, INTCR3_OFFSET, NPCM_INTCR3_USBPHYSW, NPCM_INTCR3_USBPHYSW);
 		 regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 7), 0);
 		 break;
 	 default :
