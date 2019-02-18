@@ -626,7 +626,7 @@ static int npcm750_ece_probe(struct platform_device *pdev)
 		goto irq_err;
 	}
 
-	pr_info("NPCM750 ECE Driver probed\n");
+	pr_info("NPCM750 ECE Driver probed %s\n", ECE_VERSION);
 	return 0;
 
 irq_err:
@@ -645,7 +645,9 @@ static int npcm750_ece_remove(struct platform_device *pdev)
 	device_destroy(ece->ece_class, ece->dev_t);
 
 	class_destroy(ece->ece_class);
+
 	cdev_del(&ece->dev_cdev);
+
 	unregister_chrdev_region(ece->dev_t, 1);
 
 	mutex_destroy(&ece->mlock);
