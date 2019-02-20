@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.3"
+#define VCD_VERSION "0.0.4"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -58,12 +58,9 @@
 #define VCD_MAX_HIGHT	1536
 #define VCD_MIN_LP	512
 #define VCD_MAX_LP	4096
-#define VCD_MAX_HBP 1440
-#define VCD_VBP_OFFSET 4
-#define VCD_HBP_OFFSET 2
 
 /* VCD  Register */
-#define VCD_DIFF_TBL	0x0000
+#define VCD_DIFF_TBL 0x0000
 #define VCD_FBA_ADR	0x8000
 #define VCD_FBB_ADR	0x8004
 
@@ -914,16 +911,17 @@ static int npcm750_vcd_init(struct npcm750_vcd *vcd)
 	/* Detect video mode */
 	npcm750_vcd_detect_video_mode(vcd);
 
-	/* enable interrupt */
+	/* Enable interrupt */
 	npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
 
-	if (!vcd->de_mode) {
+	/* Reset dvo delay */
+	npcm750_vcd_dvod(vcd, 0, 0);
+
+	if (!vcd->de_mode)
 		npcm750_vcd_update(vcd, VCD_RCHG, VCD_RCHG_TIM_PRSCL,
 			0x01 << VCD_RCHG_TIM_PRSCL_OFFSET);
-	} else {
-		npcm750_vcd_dvod(vcd, 0, 0);
+	else
 		npcm750_vcd_write(vcd, VCD_RCHG, 0);
-	}
 
 	return 0;
 }
@@ -971,7 +969,7 @@ static irqreturn_t npcm750_vcd_irq_handler(int irq, void *dev_instance)
 
 		if (status & VCD_STAT_HAC_CHG) {
 			dev_dbg(vcd->dev, "VCD_STAT_HAC_CHG\n");
-			status_ack |= VCD_STAT_DONE;
+			status_ack |= VCD_STAT_HAC_CHG;
 		}
 
 		if (status & VCD_STAT_HLC_CHG) {
