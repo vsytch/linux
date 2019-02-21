@@ -4,6 +4,7 @@
 
 /dts-v1/;
 #include "nuvoton-npcm750.dtsi"
+#include "nuvoton-npcm750-gpio.dtsi"
 
 / {
 	model = "Nuvoton npcm750 Development Board (Device Tree)";
