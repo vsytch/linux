@@ -20,7 +20,9 @@
 #include <linux/regmap.h>
 #include <linux/jiffies.h>
 
-#define I2C_VERSION "0.0.6"
+#define I2C_VERSION "0.0.9"
+
+// #define _I2C_DEBUG_
 
 enum smb_mode {
 	SMB_SLAVE = 1,
@@ -258,15 +260,15 @@ const int  NPCM_SMBADDR[10] = {NPCM_SMBADDR1, NPCM_SMBADDR2, NPCM_SMBADDR3,
 //	 on current version 16 bytes FIFO is set using a define
 #ifdef SMB_CAPABILITY_32B_FIFO
 #define NPCM_SMBRXF_CTL_RX_THR		GENMASK(5, 0)
-#define NPCM_SMBRXF_CTL_THR_RXIE	BIT(6)
 #define NPCM_SMBRXF_CTL_LAST_PEC	BIT(7)
 #define SMBUS_FIFO_SIZE			32
 #else
 #define NPCM_SMBRXF_CTL_RX_THR		GENMASK(4, 0)
 #define NPCM_SMBRXF_CTL_LAST_PEC	BIT(5)
-#define NPCM_SMBRXF_CTL_THR_RXIE	BIT(6)
 #define SMBUS_FIFO_SIZE			16
 #endif
+#define NPCM_SMBRXF_CTL_THR_RXIE	BIT(6)
+
 
 // SMB_VER reg fields
 #define SMB_VER_VERSION			GENMASK(6, 0)
@@ -381,10 +383,10 @@ struct npcm_i2c {
 
 	// This module can be master and slave at the same time. seperate ptrs
 	// and counters:
-	u16			slv_rd_size;
-	u16			slv_rd_ind;
-	u16			slv_wr_size;
-	u16			slv_wr_ind;
+	int			slv_rd_size;
+	int			slv_rd_ind;
+	int			slv_wr_size;
+	int			slv_wr_ind;
 
 	u8 			slv_rd_buf[SMBUS_FIFO_SIZE];
 	u8 			slv_wr_buf[SMBUS_FIFO_SIZE];
@@ -405,18 +407,22 @@ static inline void npcm_smb_select_bank(struct npcm_i2c *bus,
 			 bus->reg + NPCM_SMBCTL3);
 }
 
-
+//------------------
+// DEBUG PRINTS:
+//------------------
 static inline bool npcm_smb_is_quick(struct npcm_i2c *bus);
 static void pdebug(struct npcm_i2c *bus, char str[20])
 {
 	char str2[65];
 	char *s = str2;
 	int rd_size, wr_size, rd_ind, wr_ind;
-
+#ifndef _I2C_DEBUG_
 	return; // for debug, remove this line..
-
+#endif
 	//if(npcm_smb_is_quick(bus))
 	//	return;
+
+	if(bus->num != 1) return;
 
 	if (bus->master_or_slave == SMB_MASTER) {
 		rd_size = bus->rd_size;
@@ -437,90 +443,92 @@ static void pdebug(struct npcm_i2c *bus, char str[20])
 
 	switch (bus->stop_ind) {
 	case SMB_NO_STATUS_IND:
-		s += sprintf(s, "NO_STATUS_IND	            ");
+		s += sprintf(s, "NO_STATUS_IND	    ");
 		break;
 	case SMB_SLAVE_RCV_IND:
-		s += sprintf(s, "SLAVE_RCV_IND	            ");
+		s += sprintf(s, "SLAVE_RCV_IND	    ");
 		break;
 	case SMB_SLAVE_XMIT_IND:
-		s += sprintf(s, "SLAVE_XMIT_IND	            ");
+		s += sprintf(s, "SLAVE_XMIT_IND	    ");
 		break;
 	case SMB_SLAVE_XMIT_MISSING_DATA_IND:
-		s += sprintf(s, "SLAVE_XMIT_MISSING_DATA_IND ");
+		s += sprintf(s, "SLAVE_XMIT_MISSING ");
 		break;
 	case SMB_SLAVE_RESTART_IND:
-		s += sprintf(s, "SLAVE_RESTART_IND	    ");
+		s += sprintf(s, "SLAVE_RESTART_IND  ");
 		break;
 	case SMB_SLAVE_DONE_IND:
-		s += sprintf(s, "SLAVE_DONE_IND	            ");
+		s += sprintf(s, "SLAVE_DONE_IND	    ");
 		break;
 	case SMB_MASTER_DONE_IND:
-		s += sprintf(s, "MASTER_DONE_IND	    ");
+		s += sprintf(s, "MASTER_DONE_IND    ");
 		break;
 	case SMB_NO_DATA_IND:
-		s += sprintf(s, "NO_DATA_IND		    ");
+		s += sprintf(s, "NO_DATA_IND        ");
 		break;
 	case SMB_NACK_IND:
-		return;
-		s += sprintf(s, "NACK_IND		    ");
+
+		//return;
+
+		s += sprintf(s, "NACK_IND           ");
 		break;
 	case SMB_BUS_ERR_IND:
-		s += sprintf(s, "BUS_ERR_IND		    ");
+		s += sprintf(s, "BUS_ERR_IND        ");
 		break;
 	case SMB_WAKE_UP_IND:
-		s += sprintf(s, "WAKE_UP_IND                ");
+		s += sprintf(s, "WAKE_UP_IND        ");
 		break;
 	case SMB_MASTER_PEC_ERR_IND:
-		s += sprintf(s, "MASTER_PEC_ERR_IND	    ");
+		s += sprintf(s, "MASTER_PEC_ERR_IND ");
 		break;
 	case SMB_BLOCK_BYTES_ERR_IND:
-		s += sprintf(s, "BLOCK_BYTES_ERR_IND	    ");
+		s += sprintf(s, "BLK_BYTES_ERR_IND  ");
 		break;
 	case SMB_SLAVE_PEC_ERR_IND:
-		s += sprintf(s, "SLAVE_PEC_ERR_IND	    ");
+		s += sprintf(s, "SLAVE_PEC_ERR_IND  ");
 		break;
 	case SMB_SLAVE_RCV_MISSING_DATA_IND:
-		s += sprintf(s, "SLAVE_RCV_MISSING_DATA_IND ");
+		s += sprintf(s, "SLAVE_RCV_MISSING  ");
 		break;
 	}
+
 	switch (bus->operation) {
 	case SMB_NO_OPER:
-		s += sprintf(s, "NO_OPER    ");
+		s += sprintf(s, "NO ");
 		break;
 	case SMB_WRITE_OPER:
-		s += sprintf(s, "WRITE_OPER ");
+		s += sprintf(s, "WR ");
 		break;
 	case SMB_READ_OPER:
-		s += sprintf(s, "READ_OPER  ");
+		s += sprintf(s, "RD ");
 		break;
 	}
 	switch (bus->state) {
 	case  SMB_DISABLE:
-		s += sprintf(s, "DISABLE	");
+		s += sprintf(s, "DISABLE      ");
 		break;
 	case  SMB_IDLE:
-		s += sprintf(s, "IDLE	        ");
+		s += sprintf(s, "IDLE	      ");
 		break;
 	case  SMB_MASTER_START:
-		s += sprintf(s, "MASTER_START   ");
+		s += sprintf(s, "MASTER_START ");
 		break;
 	case  SMB_SLAVE_MATCH:
-		s += sprintf(s, "SLAVE_MATCH    ");
+		s += sprintf(s, "SLAVE_MATCH  ");
 		break;
 	case  SMB_OPER_STARTED:
-		s += sprintf(s, "OPER_STARTED   ");
+		s += sprintf(s, "OPER_STARTED ");
 		break;
 	case  SMB_STOP_PENDING:
-		s += sprintf(s, "STOP_PENDING   ");
+		s += sprintf(s, "STOP_PENDING ");
 		break;
 	}
 
-	npcm_smb_select_bank(bus, SMB_BANK_1);
+	//npcm_smb_select_bank(bus, SMB_BANK_1);
 
-	pr_err("%s %s wr%d,%d rd%d,%d int%d ev0x%02x (prv=0x%02x) blk%d quick%d\tST=%x\tCST=%x\tCTL1=%x\t CTL3=%x\tCST2=%x\tCST3=%x\tFIF_CTS=%x\tTXF_CTL=%x\tT_OUT=%x\tCST2=%x\tCST3=%x\tTXF_STS=%x\tRXF_STS=%x\tRXF_CTL=%x\n",
+	printk("%s %s wr%d,%d rd%d,%d int%d ev0x%02x (prv=0x%02x) blk%d ST=%02x CST=%02x CTL1=%02x CTL3=%02x CST2=%02x CST3=%02x FIF_CTS=%02x TXF_CTL=%02x T_OUT=%02x CST2=%02x CST3=%02x TXF_STS=%02x RXF_STS=%02x RXF_CTL=%02x ",
 		str2, str, wr_size, wr_ind, rd_size, rd_ind,
 		bus->int_cnt, bus->event_log, bus->event_log_prev, (int)bus->read_block_use,
-		npcm_smb_is_quick(bus),
 		ioread8(bus->reg + NPCM_SMBST),
 		ioread8(bus->reg + NPCM_SMBCST),
 		ioread8(bus->reg + NPCM_SMBCTL1 ),
@@ -537,25 +545,59 @@ static void pdebug(struct npcm_i2c *bus, char str[20])
 		ioread8(bus->reg + NPCM_SMBRXF_STS ),
 		ioread8(bus->reg + NPCM_SMBRXF_CTL )  );
 
-	npcm_smb_select_bank(bus, SMB_BANK_0);
-	pr_err("\tCTL4=%x\tCTL5=%x\tFIF_CTL=%x\n",
-		ioread8(bus->reg + NPCM_SMBCTL4 ),
-		ioread8(bus->reg + NPCM_SMBCTL5 ),
-		ioread8(bus->reg + NPCM_SMBFIF_CTL ));
-	npcm_smb_select_bank(bus, SMB_BANK_1);
+	//npcm_smb_select_bank(bus, SMB_BANK_0);
+	//printk("CTL4=%02x CTL5=%02x FIF_CTL=%02x\n",
+	//	ioread8(bus->reg + NPCM_SMBCTL4 ),
+	//	ioread8(bus->reg + NPCM_SMBCTL5 ),
+	//	ioread8(bus->reg + NPCM_SMBFIF_CTL ));
+	//npcm_smb_select_bank(bus, SMB_BANK_1);
+	return;
 
 
 }
 
+
+
 static void pdebug_lvl2(struct npcm_i2c *bus, char str[20])
 {
 	// remove for in-depth debug:
+#ifndef _I2C_DEBUG_
 	return;
+#endif
 	pdebug(bus, str);
 }
 
 
 DECLARE_CRC8_TABLE(npcm7xx_crc8);
+
+
+static void npcm_smb_init_params(struct npcm_i2c *bus)
+{
+	bus->stop_ind = SMB_NO_STATUS_IND;
+	bus->rd_size = 0;
+	bus->wr_size = 0;
+	bus->rd_ind = 0;
+	bus->wr_ind = 0;
+	bus->slv_rd_size = 0;
+	bus->slv_wr_size = 0;
+	bus->slv_rd_ind = 0;
+	bus->slv_wr_ind = 0;
+	bus->operation = SMB_NO_OPER;
+	bus->state = SMB_IDLE;
+	bus->retry_count = 0;
+	bus->int_cnt = 0;
+	bus->event_log_prev = bus->event_log;
+	bus->event_log = 0;
+	bus->read_block_use = false;
+	bus->int_time_stamp = 0;
+	bus->cmd_err = -EPERM;
+	bus->PEC_use = false;
+	bus->PEC_mask = 0;
+	bus->master_or_slave = SMB_SLAVE;
+	bus->threshold_fifo = SMBUS_FIFO_SIZE;
+
+	return;
+}
 
 static u8 npcm_smb_calc_crc8(u8 crc_data, u8 data)
 {
@@ -780,10 +822,7 @@ static inline void npcm_smb_master_stop(struct npcm_i2c *bus)
 		else
 			npcm_smb_clear_tx_fifo(bus);
 
-		iowrite8(ioread8(bus->reg + NPCM_SMBFIF_CTS) |
-				 NPCM_SMBFIF_CTS_SLVRSTR |
-				 NPCM_SMBFIF_CTS_RXF_TXE,
-				 bus->reg + NPCM_SMBFIF_CTS);
+		npcm_smb_clear_fifo_int(bus);
 
 		iowrite8(0, bus->reg + NPCM_SMBTXF_CTL);
 	}
@@ -814,7 +853,7 @@ static void npcm_smb_reset(struct npcm_i2c *bus)
 	// Save NPCM_SMBCTL1 relevant bits. It is being cleared when the
 	// module is disabled
 	u8 smbctl1;
-	pdebug(bus, "*** reset bus ***");
+	pdebug(bus, "reset bus");
 
 	smbctl1 = ioread8(bus->reg + NPCM_SMBCTL1);
 
@@ -855,10 +894,8 @@ static bool npcm_smb_slave_start_receive(struct npcm_i2c *bus, u16 nread,
 static bool npcm_smb_slave_start_xmit(struct npcm_i2c *bus, u16 nwrite,
 				      u8 *write_data);
 static void npcm_smb_slave_abort(struct npcm_i2c *bus);
-//static int  npcm_i2c_slave_get_rd_buf(struct npcm_i2c *bus);
 static int  npcm_i2c_slave_get_wr_buf(struct npcm_i2c *bus);
 static void npcm_i2c_slave_send_rd_buf(struct npcm_i2c *bus);
-static void npcm_i2c_slave_restart_or_stop_flush_wr_buf(struct npcm_i2c *bus);
 #endif
 
 static void npcm_smb_callback(struct npcm_i2c *bus,
@@ -869,8 +906,6 @@ static void npcm_smb_callback(struct npcm_i2c *bus,
 
 	NPCM_I2C_EVENT_LOG(NPCM_I2C_EVENT_CB);
 
-	//if (op_status != 6)
-		pdebug_lvl2(bus, "CB");
 	switch (op_status) {
 	case SMB_MASTER_DONE_IND:
 	// Master transaction finished and all transmit bytes were sent
@@ -892,7 +927,7 @@ static void npcm_smb_callback(struct npcm_i2c *bus,
 		NPCM_I2C_EVENT_LOG(NPCM_I2C_EVENT_DONE);
 
 		if((ioread8(bus->reg + NPCM_SMBCST) & NPCM_SMBCST_BB) != 0)
-			pdebug(bus, "WARNING busy at done");
+			pdebug(bus, "WARNING busy done");
 		complete(&bus->cmd_complete);
 
 	}
@@ -904,18 +939,20 @@ static void npcm_smb_callback(struct npcm_i2c *bus,
 	//on receive: number of actual bytes received
 	//	when PEC is used even if 'info' is the expected number
 	//	of bytes,it means that PEC error occurred.
-	{
-		if (msgs[0].flags & I2C_M_RD)
-			msgs[0].len = info;
-		else if (msgs_num == 2 && msgs[1].flags & I2C_M_RD)
-			msgs[1].len = info;
-
-		bus->cmd_err = -EFAULT;
 		pdebug(bus, "CB NO DATA");
-		if (bus->master_or_slave == SMB_MASTER)
+		if (bus->master_or_slave == SMB_MASTER) {
+			if (msgs[0].flags & I2C_M_RD)
+				msgs[0].len = info;
+			else if (msgs_num == 2 && msgs[1].flags & I2C_M_RD)
+				msgs[1].len = info;
+
+			bus->cmd_err = -EFAULT;
+
 			complete(&bus->cmd_complete);
-	}
-	break;
+		}
+		else
+			npcm_smb_init_params(bus);
+		break;
 	case SMB_NACK_IND:
 		// MASTER transmit got a NAK before transmitting all bytes
 		// info: number of transmitted bytes
@@ -932,69 +969,13 @@ static void npcm_smb_callback(struct npcm_i2c *bus,
 		pdebug(bus, "CB BER  ");
 		if (bus->master_or_slave == SMB_MASTER)
 			complete(&bus->cmd_complete);
+
 		break;
 	case SMB_WAKE_UP_IND:
 		pdebug(bus, "wake_up");
 		// SMBus wake up
 		// info: has no meaning
 		break;
-#if IS_ENABLED(CONFIG_I2C_SLAVE)
-		//extern u8  rd_buf[PAGE_SIZE];
-		//extern u16 rd_size;
-		//extern u8  wr_buf[32];
-		//extern u16 wr_size;
-	case SMB_SLAVE_RCV_IND:
-		// Slave got an address match with direction bit clear so it
-		//	should receive datathe int must call
-		//      npcm_smb_slave_start_receive()
-		//      info: the enum SMB_ADDR_T address match
-
-
-		//npcm_i2c_slave_get_rd_buf(bus); // if the buffer is empty nothing will be sent
-
-		// this module does not support saying no to bytes. it will always ACK.
-
-		if(!npcm_smb_slave_start_receive(bus, 32*1024, bus->slv_rd_buf))
-			printk("npcm_smb_slave_start_receive fail");
-
-		pdebug_lvl2(bus, "CB start slv rcv   ");
-		break;
-
-	case SMB_SLAVE_RESTART_IND: // if switch from read to write forget the bytes saved from before.
-	case SMB_SLAVE_XMIT_IND:
-		// Slave got an address match with direction bit set so it
-		//      should transmit data
-		//	the int must call npcm_smb_slave_start_xmit()
-		// info: the enum SMB_ADDR_T address match
-
-		npcm_i2c_slave_send_rd_buf(bus); // send up whatever is on the buffer.
-
-		npcm_i2c_slave_restart_or_stop_flush_wr_buf(bus);
-
-		if(!npcm_smb_slave_start_xmit(bus,bus->slv_wr_size,
-					  bus->slv_wr_buf))
-			printk("npcm_smb_slave_start_xmit fail");
-
-		pdebug_lvl2(bus, "CB start slv xmit  ");
-		break;
-	case SMB_SLAVE_DONE_IND:
-		// Slave done transmitting or receiving
-		// info:
-		//	on receive: number of actual bytes received
-		//	on transmit: number of actual bytes transmitted,
-		//	when PEC is used 'info' should be (nwrite+1) which means
-		//		 that 'nwrite' bytes were sent + the PEC byte
-		//		'nwrite' is the second parameter
-		//               npcm_smb_slave_start_xmit()
-
-		npcm_i2c_slave_send_rd_buf(bus); // if the buffer is empty nothing will be sent
-
-		i2c_slave_event(bus->slave, I2C_SLAVE_STOP, (u8 *)&info);
-
-		bus->int_cnt = 0;
-		pdebug_lvl2(bus, "CB_DONE");
-		break;
-#endif // CONFIG_I2C_SLAVE
 	default:
 		pdebug(bus, "CB default");
 		break;
@@ -1045,43 +1026,25 @@ static void npcm_smb_write_to_fifo_slave(struct npcm_i2c *bus, u16 max_bytes_to_
 	pdebug_lvl2(bus, "wr_fifo");
 	// Fill the FIFO, while the FIFO is not full and there are more bytes to
 	// write
+	npcm_smb_clear_fifo_int(bus);
+	npcm_smb_clear_tx_fifo(bus);
+	iowrite8(0, bus->reg + NPCM_SMBTXF_CTL);
+	iowrite8(0, bus->reg + NPCM_SMBRXF_CTL);
+
 	while ((max_bytes_to_send--) && (SMBUS_FIFO_SIZE -
 					 npcm_smb_get_fifo_fullness(bus))) {
 		// write the data
-		if (bus->slv_wr_ind < bus->slv_wr_size) {
-			if (bus->PEC_use &&
-			    (bus->slv_wr_ind + 1 == bus->slv_wr_size) &&
-			    (bus->slv_rd_size == 0 ||
-			     bus->master_or_slave == SMB_SLAVE)) {
-				// Master send PEC in write protocol, Slave send
-				// PEC in read protocol.
-				npcm_smb_write_PEC(bus);
-				bus->slv_wr_ind++;
-			} else {
-				npcm_smb_wr_byte(bus,
-						 bus->slv_wr_buf[bus->slv_wr_ind++]);
-			}
-		} else {
-#ifdef SMB_WRAP_AROUND_BUFFER
-			// We're out of bytes. Ask the higher level for
-			// more bytes. Let it know that driver
-			// used all its' bytes
-
-			npcm_smb_clear_tx_fifo(bus);
-
-			// Reset state for the remaining bytes transaction
-			bus->state = SMB_SLAVE_MATCH;
-
-			// Notify upper layer of transaction completion
-			npcm_smb_callback(bus, SMB_SLAVE_XMIT_MISSING_DATA_IND,
-					  bus->slv_wr_ind);
-
-			iowrite8(NPCM_SMBST_SDAST, bus->reg + NPCM_SMBST);
-#else
-			npcm_smb_wr_byte(bus, 0xFF);
-#endif
+		if (bus->slv_wr_size > 0) {
+			npcm_smb_wr_byte(bus,
+					 bus->slv_wr_buf[bus->slv_wr_ind % SMBUS_FIFO_SIZE]);
+			bus->slv_wr_ind = (bus->slv_wr_ind + 1) % SMBUS_FIFO_SIZE;
+			bus->slv_wr_size--;  // more bytes in fifo, less in cyclic buffer.
 		}
+		else
+			break;
 	}
+
+	pdebug_lvl2(bus, "wr_fifo_done");
 }
 #endif
 
@@ -1100,9 +1063,6 @@ static void npcm_smb_set_fifo(struct npcm_i2c *bus, int nread, int nwrite)
 	if (nread > 0) {
 
 		rxf_ctl = min((u16)nread, (u16)SMBUS_FIFO_SIZE);
-
-		if((bus->rd_size - bus->rd_ind) > 1)
-			rxf_ctl |= NPCM_SMBRXF_CTL_THR_RXIE;
 
 
 		// set LAST bit. if LAST is set enxt FIFO packet is nacked at the end.
@@ -1143,6 +1103,10 @@ static void npcm_smb_set_fifo(struct npcm_i2c *bus, int nread, int nwrite)
 static void npcm_smb_read_from_fifo(struct npcm_i2c *bus, u8 bytes_in_fifo)
 {
 	u8 data;
+#ifdef _I2C_DEBUG_
+	if (bus->num == 1)
+		printk("read fifo %d\n", bytes_in_fifo);
+#endif
 	while (bytes_in_fifo--) {
 		npcm_smb_rd_byte(bus, &data);
 
@@ -1158,12 +1122,12 @@ static void npcm_smb_read_from_fifo(struct npcm_i2c *bus, u8 bytes_in_fifo)
 			}
 		} else { // SMB_SLAVE:
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
-			if (bus->slv_rd_ind < bus->slv_rd_size) {
-				bus->slv_rd_buf[bus->slv_rd_ind++] = data;
+				bus->slv_rd_buf[bus->slv_rd_ind % SMBUS_FIFO_SIZE] = data;
+				bus->slv_rd_ind++;
 				if (bus->slv_rd_ind == 1 && bus->read_block_use)
 					// First byte indicates length in block protocol
 					bus->rd_size = data;
-			}
+
 #endif
 		}
 	}
@@ -1277,6 +1241,8 @@ static u8 npcm_smb_get_slave_addr_l(struct npcm_i2c *bus,
 
 	// return to bank 1 and enable ints (if needed)
 	npcm_smb_select_bank(bus, SMB_BANK_1);
+
+	spin_unlock_irqrestore(&bus->lock, flags);
 	return  slaveAddress;
 }
 
@@ -1378,10 +1344,7 @@ static int  npcm_smb_slave_ARP_enable(struct npcm_i2c *bus, bool enable)
 static bool npcm_smb_slave_start_receive(struct npcm_i2c *bus, u16 nread,
 					    u8 *read_data)
 {
-
-	// Allow only if bus is not busy
-	if ((bus->state != SMB_SLAVE_MATCH) || nread > 32*1024)
-		return false;
+	pdebug(bus, "start slv rcv");
 
 	// Update driver state
 	bus->state = SMB_OPER_STARTED;
@@ -1389,13 +1352,12 @@ static bool npcm_smb_slave_start_receive(struct npcm_i2c *bus, u16 nread,
 	//bus->slv_rd_buf   = read_data;
 	bus->slv_rd_size	 = nread;
 	bus->slv_rd_ind	= 0;
-	bus->slv_wr_size	= 0;
-	bus->slv_wr_ind	= 0;
 
-	npcm_smb_set_fifo(bus, min(nread, bus->threshold_fifo), -1);
+	iowrite8(0, bus->reg + NPCM_SMBTXF_CTL);
+	iowrite8(SMBUS_FIFO_SIZE, bus->reg + NPCM_SMBRXF_CTL);
 
-	// triggers new data reception
-	iowrite8(NPCM_SMBST_NMATCH, bus->reg + NPCM_SMBST);
+	npcm_smb_clear_tx_fifo(bus);
+	npcm_smb_clear_rx_fifo(bus);
 
 	return true;
 }
@@ -1403,31 +1365,19 @@ static bool npcm_smb_slave_start_receive(struct npcm_i2c *bus, u16 nread,
 static bool npcm_smb_slave_start_xmit(struct npcm_i2c *bus, u16 nwrite,
 					 u8 *write_data)
 {
+	pdebug(bus, "slv xmt ");
 
 	// Allow only if bus is not busy
-	if ((bus->state != SMB_SLAVE_MATCH) || (nwrite == 0))
+	if (nwrite == 0)
 		return false;
-
-
-	// Update driver state
-	if (bus->PEC_use)
-		nwrite++;
 
 	bus->state = SMB_OPER_STARTED;
 	bus->operation	 = SMB_WRITE_OPER;
-	bus->slv_wr_size	= nwrite;
-	bus->slv_wr_ind	= 0;
 
 	if (bus->fifo_use == true) {
-		// triggers new data reception
-		iowrite8(NPCM_SMBST_NMATCH, bus->reg + NPCM_SMBST);
-
 		if (nwrite > 0) {
-
-			npcm_smb_set_fifo(bus, -1, min((u16)bus->threshold_fifo, nwrite));
-
 			// Fill the FIFO with data
-			npcm_smb_write_to_fifo_slave(bus, min((u16)bus->threshold_fifo, nwrite));
+			npcm_smb_write_to_fifo_slave(bus, nwrite);
 		}
 	}
 	else // bus->fifo_use == FALSE
@@ -1439,141 +1389,110 @@ static bool npcm_smb_slave_start_xmit(struct npcm_i2c *bus, u16 nwrite,
 
 static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 {
-	enum smb_state_ind ind;
-
-	pdebug_lvl2(bus, "int_slave_handler ");
-
 	// Slave: A negative acknowledge has occurred
 	if (FIELD_GET(NPCM_SMBST_NEGACK , ioread8(bus->reg + NPCM_SMBST))) {
-		pdebug_lvl2(bus, "NACK slave");
+		pdebug_lvl2(bus, "int NACK slave");
 		NPCM_I2C_EVENT_LOG(NPCM_I2C_EVENT_NACK);
+		bus->stop_ind = SMB_NACK_IND;
 		if (bus->fifo_use) {
-
-			// if there are still untransmitted bytes in TX FIFO reduce them from slv_wr_ind
-			bus->slv_wr_ind -= FIELD_GET(NPCM_SMBTXF_STS_TX_BYTES,
-						      ioread8(bus->reg + NPCM_SMBTXF_STS));
-
-			if (bus->operation == SMB_WRITE_OPER)
-				bus->slv_wr_ind -= npcm_smb_get_fifo_fullness(bus);
 			// clear the FIFO
 			iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
 				 bus->reg + NPCM_SMBFIF_CTS);
 		}
 
 		// In slave write operation, NACK is OK, otherwise it is a problem
-		if (!(	(bus->slv_wr_ind != 0) && (bus->slv_wr_ind == bus->slv_wr_size)))
-			// Either not slave, or number of bytes sent to master less than required
-			// In either case notify upper layer. If we are slave - the upper layer
-			// should still wait for a Slave Stop.
-		{
-
-
-			// iowrite8(NPCM_SMBST_NEGACK, bus->reg + NPCM_SMBST);
-			bus->state = SMB_IDLE;
-			npcm_smb_callback(bus, SMB_NACK_IND, bus->slv_wr_ind);
-		}
+		bus->state = SMB_IDLE;
+		bus->stop_ind = SMB_NO_STATUS_IND;
+		bus->operation = SMB_NO_OPER;
+		bus->int_cnt = 0;
+		bus->event_log_prev = bus->event_log;
+		bus->event_log = 0;
+		bus->read_block_use = false;
+		bus->int_time_stamp = 0;
+		bus->PEC_use = false;
+		bus->PEC_mask = 0;
+		bus->threshold_fifo = SMBUS_FIFO_SIZE;
 
 
 		// Slave has to wait for SMB_STOP to decide this is the end of the transaction.
 		// Therefore transaction is not yet considered as done
-		iowrite8(NPCM_SMBST_NEGACK, bus->reg + NPCM_SMBST);
+		iowrite8(0xFF, bus->reg + NPCM_SMBST);
 
 		return 0;
 	}
 
-#if defined (SMB_CAPABILITY_TIMEOUT_SUPPORT)
 
-	// Slave: A Bus Timeout has been identified
-	if ((FIELD_GET(NPCM_SMBT_OUT_T_OUTIE, ioread8(bus->reg + NPCM_SMBT_OUT) ) == 1) &&  // bus timeout int is on
-	    (FIELD_GET(NPCM_SMBT_OUT_T_OUTST, ioread8(bus->reg + NPCM_SMBT_OUT) ))) {         // and bus timeout status is set
-		pdebug(bus, "TO slave ");
-		// Reset the module
-		npcm_smb_reset(bus);
-		iowrite8(ioread8(bus->reg + NPCM_SMBT_OUT) | NPCM_SMBT_OUT_T_OUTST, bus->reg + NPCM_SMBT_OUT);// Clear EO_BUSY pending bit
+
+	// Slave mode: a Bus Error has been identified
+	if (FIELD_GET(NPCM_SMBST_BER, ioread8(bus->reg + NPCM_SMBST))) {
+		// Check whether bus arbitration or Start or Stop during data
+		// xfer bus arbitration problem should not result in recovery
+		NPCM_I2C_EVENT_LOG(NPCM_I2C_EVENT_BER);
+		iowrite8(NPCM_SMBST_BER, bus->reg + NPCM_SMBST);
 		bus->state = SMB_IDLE;
-		npcm_smb_callback(bus, SMB_BUS_ERR_IND, npcm_smb_get_index(bus));
+		bus->stop_ind = SMB_BUS_ERR_IND;
+		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
+				 bus->reg + NPCM_SMBFIF_CTS);
+		npcm_smb_init_params(bus);
+		iowrite8(0xFF, bus->reg + NPCM_SMBST);
 		return 0;
 	}
-#endif
 
-	// A Slave End of Busy (meaning Stop Condition happened)
-	if ((FIELD_GET(NPCM_SMBCTL1_EOBINTE,
-		       ioread8(bus->reg + NPCM_SMBCTL1)) == 1) &&
-	    (FIELD_GET(NPCM_SMBCST3_EO_BUSY,
-		       ioread8(bus->reg + NPCM_SMBCST3)))) {
-		NPCM_I2C_EVENT_LOG(NPCM_I2C_EVENT_EOB);
-		pdebug_lvl2(bus, "slave EOB");
-
-		npcm_smb_eob_int(bus, false);
-
-		bus->state = SMB_IDLE;
-		npcm_smb_callback(bus, bus->stop_ind, bus->slv_rd_ind);
-		return 0;
-	}
 
 	// A Slave Stop Condition has been identified
 	if (FIELD_GET(NPCM_SMBST_SLVSTP , ioread8(bus->reg + NPCM_SMBST))) {
-		enum smb_state_ind ind;
 
-		pdebug_lvl2(bus, "slave stop ");
-		if (bus->master_or_slave != SMB_SLAVE)
-			pdebug(bus, "slave error ");
-		iowrite8(NPCM_SMBST_SLVSTP, bus->reg + NPCM_SMBST);
+		pdebug_lvl2(bus, "int slv stop");
 
+		if (bus->operation == SMB_READ_OPER) {
+			npcm_smb_read_from_fifo(bus, npcm_smb_get_fifo_fullness(bus));
 
-		// Check whether bus arbitration or Start or Stop during data xfer
-		bus->state = SMB_IDLE;
+			bus->stop_ind = SMB_SLAVE_DONE_IND;
+
+			// if PEC is not used or PEC is used and PEC is correct
+			if ((bus->PEC_use == true) &&
+			    (npcm_smb_get_PEC(bus) != 0)){
+				bus->stop_ind = SMB_SLAVE_PEC_ERR_IND;
+			}
+		}
+		if (bus->operation == SMB_WRITE_OPER) {
+			//bus->state = SMB_IDLE;
+			bus->stop_ind = SMB_SLAVE_DONE_IND;
+		}
+
+		// Slave done transmitting or receiving
+		npcm_i2c_slave_send_rd_buf(bus); // if the buffer is empty nothing will be sent
+
+		bus->stop_ind = SMB_NO_STATUS_IND;
+
+		// Note , just because we got here, it doesn't mean we through away the wr buffer.
+		// we keep it until the next received offset.
+		bus->operation = SMB_NO_OPER;
+		bus->int_cnt = 0;
+		bus->event_log_prev = bus->event_log;
+		bus->event_log = 0;
+		pdebug_lvl2(bus, "SLV_DONE");
+
+		i2c_slave_event(bus->slave, I2C_SLAVE_STOP, 0);
+
+		iowrite8(0xFF, bus->reg + NPCM_SMBST);
+
 		if (bus->fifo_use) {
-			if (bus->operation == SMB_READ_OPER) {
-				npcm_smb_read_from_fifo(bus,
-							   FIELD_GET(NPCM_SMBRXF_STS_RX_BYTES,
-							   ioread8(bus->reg + NPCM_SMBRXF_STS)));
+			npcm_smb_clear_fifo_int(bus);
+			npcm_smb_clear_rx_fifo(bus);
+			npcm_smb_clear_tx_fifo(bus);
 
-				// Be prepared for new transactions
-				//bus->state = SMB_IDLE;
+			// clear the FIFO
+			iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
+				 bus->reg + NPCM_SMBFIF_CTS);
 
-				// if PEC is not used or PEC is used and PEC is correct
-				if ((bus->PEC_use == false) ||
-				    (npcm_smb_get_PEC(bus) == 0)){
-					ind = SMB_SLAVE_DONE_IND;
-				}
-
-				// PEC value is not correct
-				else {
-					ind = SMB_SLAVE_PEC_ERR_IND;
-				}
-				npcm_smb_callback(bus, ind, bus->slv_rd_ind);
-			}
-			if (bus->operation == SMB_WRITE_OPER) {
-				//bus->state = SMB_IDLE;
-				npcm_smb_callback(bus, SMB_SLAVE_DONE_IND,
-						     bus->slv_wr_ind);
-			}
-
-			iowrite8(NPCM_SMBFIF_CTS_SLVRSTR |
-				 NPCM_SMBFIF_CTS_CLR_FIFO |
-				 NPCM_SMBFIF_CTS_RXF_TXE, bus->reg + NPCM_SMBFIF_CTS);
+			iowrite8(0, bus->reg + NPCM_SMBTXF_CTL);
+			pdebug_lvl2(bus, "int slv stop done1");
+			iowrite8(0, bus->reg + NPCM_SMBRXF_CTL);
 		}
 
-		// FIFO is not used (slave)
-		else {
-			if (bus->operation == SMB_READ_OPER) {
 
-				// if PEC is not used or PEC is used and PEC is correct
-				if ((bus->PEC_use == false) ||
-				    (npcm_smb_get_PEC(bus) == 0))
-				    ind = SMB_SLAVE_DONE_IND;
-
-				// PEC value is not correct
-				else
-					ind = SMB_SLAVE_PEC_ERR_IND;
-
-				npcm_smb_callback(bus, ind, bus->slv_rd_ind);
-			} else
-				//bus->state = SMB_IDLE;
-				npcm_smb_callback(bus, SMB_SLAVE_DONE_IND,
-				bus->slv_wr_ind);
-		}
+		pdebug_lvl2(bus, "int slv stop done2");
 
 		return 0;
 	}
@@ -1581,37 +1500,65 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 	// A Slave restart Condition has been identified
 	if (bus->fifo_use && FIELD_GET(NPCM_SMBFIF_CTS_SLVRSTR,
 				       ioread8(bus->reg + NPCM_SMBFIF_CTS))) {
-		pdebug_lvl2(bus, "slave restart ");
-		if (bus->master_or_slave != SMB_SLAVE)
-			pdebug(bus, "slave restart error ");
+		pdebug_lvl2(bus, "int slave restart");
 
-		if (bus->operation == SMB_READ_OPER)
-			npcm_smb_read_from_fifo(bus,
-						FIELD_GET(NPCM_SMBRXF_STS_RX_BYTES,
-						ioread8(bus->reg + NPCM_SMBRXF_STS)));
+		bus->stop_ind = SMB_SLAVE_RESTART_IND;
+
+		int bytes_read = npcm_smb_get_fifo_fullness(bus);
+
+		if (bus->operation == SMB_READ_OPER){
+			npcm_smb_read_from_fifo(bus, bytes_read);
+		}
+
+		bus->operation = SMB_WRITE_OPER;
+
+		// clear the FIFO
+		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
+			 bus->reg + NPCM_SMBFIF_CTS);
+
+		iowrite8(0, bus->reg + NPCM_SMBRXF_CTL);
+
+		pdebug_lvl2(bus, "CB: slv restart");
+		npcm_i2c_slave_send_rd_buf(bus); // send up whatever is on the buffer.
+
+		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
+				 bus->reg + NPCM_SMBFIF_CTS);
+
+		// Slave got an address match with direction bit set so it
+		//	should transmit data
+
+		npcm_i2c_slave_get_wr_buf(bus);
+
+		npcm_smb_clear_fifo_int(bus);
+
+		// Write till the master will NACK
+		npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
 
 		iowrite8(NPCM_SMBFIF_CTS_SLVRSTR, bus->reg + NPCM_SMBFIF_CTS);
+		return 0;
 	}
+
 
 	// A Slave Address Match has been identified
 	if (FIELD_GET(NPCM_SMBST_NMATCH , ioread8(bus->reg + NPCM_SMBST))) {
-		bool slave_tx;
-		enum smb_state_ind ind = SMB_NO_STATUS_IND;
 		u8 info = 0;
 
-		pdebug_lvl2(bus, "slave match ");
+		pdebug_lvl2(bus, "int slave match");
 
-		if (bus->fifo_use == false)
-			iowrite8(NPCM_SMBST_NMATCH, bus->reg + NPCM_SMBST);
+		npcm_smb_clear_fifo_int(bus);
+		npcm_smb_clear_rx_fifo(bus);
+		npcm_smb_clear_tx_fifo(bus);
+		iowrite8(0, bus->reg + NPCM_SMBTXF_CTL);
+		iowrite8(SMBUS_FIFO_SIZE, bus->reg + NPCM_SMBRXF_CTL);
+
 
 		if (FIELD_GET(NPCM_SMBST_XMIT, ioread8(bus->reg + NPCM_SMBST))) {
-			slave_tx = true;
-			ind = SMB_SLAVE_XMIT_IND;
+			bus->stop_ind = SMB_SLAVE_XMIT_IND;
+			bus->state = SMB_OPER_STARTED;
+			iowrite8(NPCM_SMBST_XMIT, bus->reg + NPCM_SMBST);
 		} else {
-			slave_tx = false;
-			if (bus->state == SMB_IDLE)
-				i2c_slave_event(bus->slave, I2C_SLAVE_WRITE_REQUESTED, &info);
-			ind = SMB_SLAVE_RCV_IND;
+			i2c_slave_event(bus->slave, I2C_SLAVE_WRITE_REQUESTED, &info);
+			bus->stop_ind = SMB_SLAVE_RCV_IND;
 		}
 
 		if (bus->state == SMB_IDLE) {
@@ -1630,7 +1577,7 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 				if (bus->PEC_mask & BIT(info)) {
 					bus->PEC_use = true;
 					bus->crc_data = 0;
-					if (slave_tx)
+					if (bus->stop_ind == SMB_SLAVE_XMIT_IND)
 						npcm_smb_calc_PEC(bus, (bus->own_slave_addr & 0x7F) << 1 | 1);
 					else
 						npcm_smb_calc_PEC(bus, (bus->own_slave_addr & 0x7F) << 1);
@@ -1654,10 +1601,10 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 			//  2. Start, SA, read , data , restart, SA, read,  ... ( slave read in fragmented mode)
 			//  3. Start, SA, write, data, restart, SA, read, .. ( regular write-read mode)
 			if ((bus->state == SMB_OPER_STARTED &&
-				bus->operation == SMB_READ_OPER && slave_tx) ||
-				(!slave_tx)){
+				bus->operation == SMB_READ_OPER && bus->stop_ind == SMB_SLAVE_XMIT_IND) ||
+				(bus->stop_ind == SMB_SLAVE_RCV_IND)){
 				// slave transmit after slave receive w/o Slave Stop implies repeated start
-				ind = SMB_SLAVE_RESTART_IND;
+				bus->stop_ind = SMB_SLAVE_RESTART_IND;
 				info = (u8)(bus->slv_rd_ind);
 				npcm_smb_calc_PEC(bus, (bus->own_slave_addr & 0x7F) << 1 | 1);
 				pdebug_lvl2(bus, "slave Sr ");
@@ -1668,11 +1615,32 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		bus->master_or_slave = SMB_SLAVE;
 		bus->state = SMB_SLAVE_MATCH;
 
-		// Notify upper layer
-		// Upper layer must at this stage call the driver routine for slave tx or rx,
-		// to eliminate a condition of slave being notified but not yet starting
-		// transaction - and thus an endless int from SDAST for the slave RCV or TX !
-		npcm_smb_callback(bus, ind, info);
+		if(bus->operation == SMB_WRITE_OPER) {
+
+			// Slave got an address match with direction bit set so it
+			//	should transmit data
+
+			pdebug_lvl2(bus, "CB: slv xmit ind");
+
+			npcm_i2c_slave_get_wr_buf(bus);
+
+			npcm_smb_clear_fifo_int(bus);
+
+			// Write till the master will NACK
+			npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
+		} else {
+
+			// Slave got an address match with direction bit clear so it
+			//	should receive data.
+			// this module does not support saying no to bytes. it will always ACK.
+			pdebug_lvl2(bus, "CB: slv rcv");
+			npcm_i2c_slave_send_rd_buf(bus);
+
+			npcm_smb_slave_start_receive(bus, bus->adap.quirks->max_read_len, bus->slv_rd_buf);
+		}
+
+
+		iowrite8(NPCM_SMBST_NMATCH, bus->reg + NPCM_SMBST);
 
 #ifdef SMB_RECOVERY_SUPPORT
 
@@ -1686,7 +1654,7 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		// state.
 		if (bus->state == SMB_SLAVE_MATCH) {
 			npcm_smb_slave_abort(bus);
-			npcm_smb_callback(bus, SMB_BUS_ERR_IND, npcm_smb_get_index(bus));
+			//npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
 			return 0;
 		}
 
@@ -1695,12 +1663,12 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		// the Slave device will enter dead-lock and stall bus forever
 		// Add this check rule to avoid this condition
 		if ((bus->operation == SMB_READ_OPER  &&
-			ind == SMB_SLAVE_XMIT_IND) ||
+			bus->stop_ind == SMB_SLAVE_XMIT_IND) ||
 			(bus->operation == SMB_WRITE_OPER
-			&& ind == SMB_SLAVE_RCV_IND)) {
+			&& bus->stop_ind == SMB_SLAVE_RCV_IND)) {
 			npcm_smb_slave_abort(bus);
 
-			npcm_smb_callback(bus, SMB_BUS_ERR_IND, npcm_smb_get_index(bus));
+			//npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
 			return 0;
 		}
 #endif
@@ -1715,121 +1683,50 @@ static int npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 	if (FIELD_GET(NPCM_SMBST_SDAST, ioread8(bus->reg + NPCM_SMBST)) ||
 	    (bus->fifo_use   &&
 	    (npcm_smb_tx_fifo_empty(bus) || npcm_smb_rx_fifo_full(bus)))) {
-		// Status Bit is cleared by writing to or reading from SDA
-		// (depending on current direction)
 
 		pdebug_lvl2(bus, "SDA slave set");
 
-		// SDA status is set - transmit or receive: Handle slave mode
-
 		// Perform slave read. No need to distinguish between last byte and the rest of the bytes.
 		if ((bus->operation == SMB_READ_OPER)) {
-			if (bus->fifo_use == false) {
-				u8 data;
+			npcm_smb_read_from_fifo(bus, npcm_smb_get_fifo_fullness(bus));
 
-				(void)npcm_smb_rd_byte(bus, &data);
-				if (bus->slv_rd_ind < bus->slv_rd_size) {
-					// Keep read data
-					bus->slv_rd_buf[bus->slv_rd_ind++] = data;
-					if ((bus->slv_rd_ind == 1) && bus->read_block_use)
-						// First byte indicates length in block protocol
-						bus->slv_rd_size = data;
+			npcm_smb_clear_fifo_int(bus);
 
-#ifdef SMB_WRAP_AROUND_BUFFER
-					if (bus->slv_rd_ind == bus->slv_rd_size) {
-						// Reset state for the remaining bytes transaction
-						bus->state = SMB_SLAVE_MATCH;
+			bus->stop_ind = SMB_SLAVE_RCV_IND;
 
-						// Notify upper layer of that a byte had received
-						npcm_smb_callback(bus,
-								     SMB_SLAVE_RCV_MISSING_DATA_IND,
-								     npcm_smb_get_index(bus));
-					}
-#endif
-				}
-			}
-			// FIFO is used
-			else {
-				if (npcm_smb_rx_fifo_full(bus)) {
-					npcm_smb_read_from_fifo(bus,
-								   FIELD_GET(NPCM_SMBRXF_CTL_RX_THR,
-								   ioread8(bus->reg + NPCM_SMBRXF_CTL)));
+			// Slave got an address match with direction bit clear so it
+			//	should receive data.
+			// this module does not support saying no to bytes. it will always ACK.
+			pdebug_lvl2(bus, "CB: slv rcv");
+			npcm_i2c_slave_send_rd_buf(bus);
 
-					npcm_smb_clear_rx_fifo(bus);
-				}
-			}
+			npcm_smb_slave_start_receive(bus, bus->adap.quirks->max_read_len, bus->slv_rd_buf);
+
 		}
 		// Perform slave write.
-		else {
-			// More bytes to write
-			if ((bus->operation == SMB_WRITE_OPER) && (bus->slv_wr_ind < bus->slv_wr_size)) {
-				if (bus->fifo_use == false) {
-					if (bus->slv_wr_ind + 1 == bus->slv_wr_size)
-						npcm_smb_write_PEC(bus);
-					else if (bus->slv_wr_ind < bus->slv_wr_size)
-						npcm_smb_wr_byte(bus, bus->slv_wr_buf[bus->slv_wr_ind]);
-					bus->slv_wr_ind++;
-				}
-				// FIFO is used
-				else {
-					u16 wcount;
-					wcount =  (bus->slv_wr_size - bus->slv_wr_ind);
+		else if (bus->operation == SMB_WRITE_OPER){
+			npcm_i2c_slave_get_wr_buf(bus);
+			npcm_smb_write_to_fifo_slave(bus, SMBUS_FIFO_SIZE - npcm_smb_get_fifo_fullness(bus));
 
-					// TODO: replace :
-					if (wcount >= SMBUS_FIFO_SIZE)
-						wcount = SMBUS_FIFO_SIZE;
+			npcm_smb_clear_fifo_int(bus);
+			// Notify upper layer of transaction completion
+			bus->stop_ind = SMB_SLAVE_XMIT_MISSING_DATA_IND;
+			// Slave got an address match with direction bit set so it
+			//	should transmit data
 
-					iowrite8((u8)wcount, bus->reg + NPCM_SMBTXF_CTL);
+			pdebug_lvl2(bus, "CB: slv xmit ind");
 
-					// with:
-					npcm_smb_set_fifo(bus, -1, wcount);
-					npcm_smb_write_to_fifo_slave(bus, wcount);
+			npcm_i2c_slave_get_wr_buf(bus);
 
-					npcm_smb_clear_tx_fifo(bus);
-				}
-			}
+			npcm_smb_clear_fifo_int(bus);
 
-			// If all bytes were written, ignore further master read requests.
-			else {
-				if (bus->fifo_use == false) {
-					// Clear SDA Status bit
-					if (bus->slv_wr_ind != 0){
-						// Was writing
-#ifdef SMB_WRAP_AROUND_BUFFER
-						// We're out of bytes. Ask the higher level for more bytes. Let it know that driver used all its' bytes
-
-						// Reset state for the remaining bytes transaction
-						bus->state = SMB_SLAVE_MATCH;
-
-						// Notify upper layer of transaction completion
-						// by overrind ind and info_p in next EXECUTE_FUNC()
-						ind = SMB_SLAVE_XMIT_MISSING_DATA_IND;
-						//  TBD : info_p = &(bus->slv_wr_ind);
-#else
-						npcm_smb_wr_byte(bus, 0xFF);
-#endif
-					} else {
-						u8 data;
-						// Was reading
-						(void)npcm_smb_rd_byte(bus, &data);
-					}
-				}
-				// write\read redundant bytes with FIFO (if there are any bytes to write)
-				else {
-					// Set threshold size
-					iowrite8((u8)SMBUS_FIFO_SIZE, bus->reg + NPCM_SMBTXF_CTL);
-
-					// TODO: replace with:
-					// npcm_smb_set_fifo(bus, -1, wcount);
-
-					npcm_smb_write_to_fifo_slave(bus, SMBUS_FIFO_SIZE);
-
-					npcm_smb_clear_tx_fifo(bus);
-				}
-				// Notify upper layer of transaction completion
-				npcm_smb_callback(bus, SMB_NO_DATA_IND, bus->slv_rd_ind);
-			} // All bytes sent/received
+			// Write till the master will NACK
+			npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
 		}
+
+
+		iowrite8( NPCM_SMBST_SDAST, bus->reg + NPCM_SMBST);
+
 		return 0;
 	} //SDAST
 	return 1;
@@ -1839,6 +1736,7 @@ static void npcm_smb_slave_abort(struct npcm_i2c *bus)
 {
 	volatile u8 temp;
 
+	printk("bus%d: slv abort", bus->num);
 	// Disable int.
 	npcm_smb_int_enable(bus, false);
 
@@ -1853,6 +1751,7 @@ static void npcm_smb_slave_abort(struct npcm_i2c *bus)
 
 	// Reset driver status
 	bus->state = SMB_IDLE;
+	bus->stop_ind = SMB_BUS_ERR_IND;
 
 	// Disable SMB Module
 	iowrite8((ioread8(bus->reg + NPCM_SMBCTL2)	& ~SMBCTL2_ENABLE),
@@ -1875,39 +1774,59 @@ static void npcm_smb_slave_abort(struct npcm_i2c *bus)
 // to the FIFO and onward to the bus .
 // NACK on read will be once reached to bus->adap->quirks->max_read_len
 // sending a NACK wherever the backend requests for it is not supported.
-// the next two functions allow reading to local buffer before writung it all
+// the next two functions allow reading to local buffer before writing it all
 // to the HW FIFO.
 // ret val: number of bytes read form the IF:
 
 static int npcm_i2c_slave_get_wr_buf(struct npcm_i2c *bus)
 {
-	int max_length = 0;
 	u8 value = 0;
 	int ret = bus->slv_wr_ind;
 	int i;
+	int left_in_fifo = npcm_smb_get_fifo_fullness(bus);
 
-	max_length = bus->adap.quirks->max_write_len;
 
-	if (bus->slv_wr_size == SMBUS_FIFO_SIZE) {
-		//printk("fifo full, ind=%d", bus->slv_wr_ind);
+	if(left_in_fifo >= SMBUS_FIFO_SIZE)
+		return;
+
+	pdebug(bus, "slv wr buf");
+
+	if (bus->slv_wr_size >= SMBUS_FIFO_SIZE) {
+#ifdef _I2C_DEBUG_
+		printk("wr buf full, [%d - %d] left %d",bus->slv_wr_ind, bus->slv_wr_size , left_in_fifo);
+#endif
 		return 0; // you can't fill a cup which is already full
 	}
 
-	for (i = bus->slv_wr_ind; i < min(max_length, SMBUS_FIFO_SIZE); i++){
+	// update the wr fifo ind, back to the untransmitted bytes:
+	bus->slv_wr_ind = bus->slv_wr_ind - left_in_fifo;
+	bus->slv_wr_size = bus->slv_wr_size + left_in_fifo;
+
+	if (bus->slv_wr_ind < 0)
+		bus->slv_wr_ind += SMBUS_FIFO_SIZE;
+
+
+	pdebug(bus, "slv wr buf 1");
+
+	// fill a cyclic buffer
+	for (i = 0; i < SMBUS_FIFO_SIZE; i++){
+		if (bus->slv_wr_size >= SMBUS_FIFO_SIZE)
+			break;
 		i2c_slave_event(bus->slave, I2C_SLAVE_READ_REQUESTED, &value);
-		bus->slv_wr_buf[i] = value;
-		bus->slv_wr_size++;
+		bus->slv_wr_buf[(i + bus->slv_wr_ind) % SMBUS_FIFO_SIZE] = value;  // save for debug
 		i2c_slave_event(bus->slave, I2C_SLAVE_READ_PROCESSED, &value);
+		bus->slv_wr_size++;
+
 	}
 
-	bus->slv_wr_ind = 0;
-
-	// printk("I2C%d get wr buf %d bytes slv_wr_size\n\t  %x %x %x %x   %x %x %x %x    %x %x %x %x    %x %x %x %x\n",
-	//bus->num, bus->slv_wr_size,
-	//bus->slv_wr_buf[0], bus->slv_wr_buf[1], bus->slv_wr_buf[2], bus->slv_wr_buf[3],
-	//bus->slv_wr_buf[4], bus->slv_wr_buf[5], bus->slv_wr_buf[6], bus->slv_wr_buf[7],
-	//bus->slv_wr_buf[8], bus->slv_wr_buf[9], bus->slv_wr_buf[10], bus->slv_wr_buf[11],
-	//bus->slv_wr_buf[12], bus->slv_wr_buf[13], bus->slv_wr_buf[14], bus->slv_wr_buf[15]);
+#ifdef _I2C_DEBUG_
+	printk("\nI2C%d get wr buf [%d / %d]\n\t  %x %x %x %x   %x %x %x %x    %x %x %x %x    %x %x %x %x\n",
+		bus->num, bus->slv_wr_ind, bus->slv_wr_size,
+		bus->slv_wr_buf[0], bus->slv_wr_buf[1], bus->slv_wr_buf[2], bus->slv_wr_buf[3],
+		bus->slv_wr_buf[4], bus->slv_wr_buf[5], bus->slv_wr_buf[6], bus->slv_wr_buf[7],
+		bus->slv_wr_buf[8], bus->slv_wr_buf[9], bus->slv_wr_buf[10], bus->slv_wr_buf[11],
+		bus->slv_wr_buf[12], bus->slv_wr_buf[13], bus->slv_wr_buf[14], bus->slv_wr_buf[15]);
+#endif
 
 	return SMBUS_FIFO_SIZE - ret;
 }
@@ -1918,52 +1837,27 @@ static void npcm_i2c_slave_send_rd_buf(struct npcm_i2c *bus)
 	int i;
 
 	for (i = 0; i < bus->slv_rd_ind; i++){
-		// printk("->   send 0x%x\n", bus->slv_rd_buf[i]);
+#ifdef _I2C_DEBUG_
+		printk("->   send 0x%x\n", bus->slv_rd_buf[i]);
+#endif
 		i2c_slave_event(bus->slave, I2C_SLAVE_WRITE_RECEIVED, &bus->slv_rd_buf[i]);
+
+		// once we send bytes up, need to reset the counter of the wr buf
+		// got data from master (new offset in device), ignore wr fifo:
+		bus->slv_wr_size = 0;
+		bus->slv_wr_ind = 0;
 	}
 
 	bus->slv_rd_ind = 0;
 	bus->slv_rd_size = 32*1024;
 
-	// printk("I2C%d npcm_i2c_slave_send_rd_buf %d bytes\n", bus->num, i);
+	// Clear status bits
+	iowrite8(NPCM_SMBST_NMATCH | NPCM_SMBST_SDAST,
+			 bus->reg + NPCM_SMBST);
+	npcm_smb_clear_rx_fifo(bus);
+
 
 }
-
-// handle un processed bytes
-static void npcm_i2c_slave_restart_or_stop_flush_wr_buf(struct npcm_i2c *bus)
-{
-	int i;
-
-	if (bus->operation != SMB_WRITE_OPER) {
-		// forget those bytes, master changed address:
-		// printk("npcm_i2c_slave_restart_or_stop_flush_wr_buf: forget");
-		bus->slv_wr_ind = 0;
-		bus->slv_wr_size = 0;
-	} else {
-		// shift remaining requested bytes to start of buffer. There they will
-		// wait till next read command will come. If write will come can forget those bytes.
-		bus->slv_wr_size = SMBUS_FIFO_SIZE - bus->slv_wr_ind;
-		for (i = bus->slv_wr_ind; i < SMBUS_FIFO_SIZE ; i++){
-			bus->slv_wr_buf[i - bus->slv_wr_ind] = bus->slv_wr_buf[i];
-		}
-
-		bus->slv_wr_ind = SMBUS_FIFO_SIZE - bus->slv_wr_ind;
-	}
-
-	npcm_i2c_slave_get_wr_buf(bus);
-
-	// printk("I2C%d npcm_i2c_slave_restart_or_stop_flush_wr_buf %d\n\t  %x %x %x %x   %x %x %x %x    %x %x %x %x    %x %x %x %x\n",
-	// bus->num, bus->slv_wr_size,
-	// bus->slv_wr_buf[0], bus->slv_wr_buf[1], bus->slv_wr_buf[2], bus->slv_wr_buf[3],
-	// bus->slv_wr_buf[4], bus->slv_wr_buf[5], bus->slv_wr_buf[6], bus->slv_wr_buf[7],
-	// bus->slv_wr_buf[8], bus->slv_wr_buf[9], bus->slv_wr_buf[10], bus->slv_wr_buf[11],
-	// bus->slv_wr_buf[12], bus->slv_wr_buf[13], bus->slv_wr_buf[14], bus->slv_wr_buf[15]);
-
-	bus->operation = SMB_WRITE_OPER;
-}
-
-
-
 
 
 static int  npcm_i2c_reg_slave(struct i2c_client *client)
@@ -1982,13 +1876,12 @@ static int  npcm_i2c_reg_slave(struct i2c_client *client)
 
 	spin_lock_irqsave(&bus->lock, lock_flags);
 
+	npcm_smb_init_params(bus);
 
-	bus->PEC_use = false;
-	bus->PEC_mask = 0;
-	bus->master_or_slave = SMB_SLAVE;
+	bus->dest_addr = client->addr;
 
-	// printk("I2C%d register slave SA=0x%x, PEC=%d, BA = 0x%p\n", bus->num,
-	//		client->addr, bus->PEC_use, bus->reg);
+	pr_err("I2C%d register slave SA=0x%x, PEC=%d\n", bus->num,
+			client->addr, bus->PEC_use);
 
 	//if (0 != npcm_smb_add_slave_addr(bus, client->addr, bus->PEC_use)) {
 	//	// printk("I2C%d can't add addr", bus->num);
@@ -1996,27 +1889,25 @@ static int  npcm_i2c_reg_slave(struct i2c_client *client)
 	//}
 
 
-	// printk("slave irq = %d\n", bus->irq);
+	printk("slave irq = %d\n", bus->irq);
 
-
-	// Disable ints and select bank 0 for address 3 to ...
 	npcm_smb_select_bank(bus, SMB_BANK_0);
 
-	// printk("I2C%d config addr 1 only\n", bus->num);
+	// printk("I2C%d config addr\n", bus->num);
 
 	// Set and enable the address
 	iowrite8(client->addr, bus->reg + NPCM_SMBADDR1);
 
-	// printk("I2C%d config addr 1 done\n", bus->num);
-
-	// return to bank 1 and enable ints (if needed)
-	npcm_smb_select_bank(bus, SMB_BANK_1);
+	// printk("I2C%d config addr done\n", bus->num);
 
 	npcm_smb_slave_enable_l(bus, SMB_SLAVE_ADDR1, client->addr, true);
 
-	//npcm_i2c_slave_get_wr_buf(bus);
+		// return to bank 1 and enable ints (if needed)
+	npcm_smb_select_bank(bus, SMB_BANK_1);
 
-	//npcm_i2c_slave_get_rd_buf(bus);
+	npcm_smb_clear_fifo_int(bus);
+	npcm_smb_clear_rx_fifo(bus);
+	npcm_smb_clear_tx_fifo(bus);
 
 	spin_unlock_irqrestore(&bus->lock, lock_flags);
 
@@ -2301,7 +2192,7 @@ static void npcm_smb_int_master_handler(struct npcm_i2c *bus)
 		// software clears NEGACK bit.
 		// Then a Stop condition is sent.
 		iowrite8(NPCM_SMBST_NEGACK, bus->reg + NPCM_SMBST);
-		npcm_smb_callback(bus, SMB_NACK_IND, bus->wr_ind);
+		npcm_smb_callback(bus, bus->stop_ind, bus->wr_ind);
 		return;
 	}
 
@@ -2327,8 +2218,8 @@ static void npcm_smb_int_master_handler(struct npcm_i2c *bus)
 		}
 		iowrite8(NPCM_SMBST_BER, bus->reg + NPCM_SMBST);
 		bus->state = SMB_IDLE;
-		npcm_smb_callback(bus, SMB_BUS_ERR_IND,
-				  npcm_smb_get_index(bus));
+		bus->stop_ind = SMB_BUS_ERR_IND;
+		npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
 		return;
 	}
 
@@ -2365,7 +2256,6 @@ static void npcm_smb_int_master_handler(struct npcm_i2c *bus)
 		} else if ((bus->rd_size == 1) && !bus->read_block_use){
 			// Receiving one byte only - set NACK after ensuring
 			// slave ACKed the address byte
-			npcm_smb_clear_rx_fifo(bus);
 			npcm_smb_nack(bus);
 		}
 
@@ -2731,7 +2621,7 @@ static irqreturn_t npcm_i2c_bus_irq(int irq, void *dev_id)
 	}
 #endif
 
-	dev_err(bus->dev, "int unknown on bus%d\n", bus->num);
+	pdebug(bus, "int unknown");
 	return IRQ_HANDLED;
 }
 
@@ -2837,15 +2727,13 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	int timeout = bus->adap.timeout;
 
 	spin_lock_irqsave(&bus->lock, flags);
-	bus->cmd_err = -EPERM;
-	bus->int_cnt = 0;
-	bus->stop_ind = SMB_NO_STATUS_IND;
-	bus->read_block_use = false;
-	bus->event_log_prev = bus->event_log;
-	bus->int_time_stamp = 0;
+
+	npcm_smb_init_params(bus);
 
 	if(ioread8(bus->reg + NPCM_SMBCST) & NPCM_SMBCST_BB){
-		pdebug(bus, " xfer bus busy ");
+		pdebug(bus, "xfer bus busy ");
+
+		// regmap_update_bits(gcr_regmap, IPSRST1_OFFSET, (0x1 << 25), (0x1 << 25));
 		npcm_smb_master_abort(bus); // recover the bus
 		spin_unlock_irqrestore(&bus->lock, flags);
 		return -EAGAIN;
@@ -2911,14 +2799,19 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	bus->msgs = msgs;
 	bus->msgs_num = num;
 
-	if(nread == 0 && nwrite == 0)
+	if(nread == 0 && nwrite == 0){
 		timeout = msecs_to_jiffies(1);
+	}
 	else if (bus->read_block_use)
 		timeout = usecs_to_jiffies((2 + I2C_SMBUS_BLOCK_MAX + nwrite)*1300);
-	else
+	else {
 		// resonable assumption which leaves time for clock stretching.
 		timeout = usecs_to_jiffies((2 + nread + nwrite)*1300);
+#if 1 //ifdef _I2C_DEBUG_
+		timeout = timeout * 1000;
+#endif
 
+	}
 
 	if (nwrite >= 32 * 1024 ||  nread >= 32 * 1024) {
 		pr_err("i2c%d buffer too big\n", bus->num);
