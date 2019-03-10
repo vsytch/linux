@@ -70,8 +70,7 @@
 			clock-names = "clk_emc";
 			pinctrl-names = "default";
 			pinctrl-0 = <&r2_pins
-			             &r2err_pins
-				     &r2md_pins>;
+					&r2md_pins>;
 		};
 
 		udc0:udc@f0830000 {

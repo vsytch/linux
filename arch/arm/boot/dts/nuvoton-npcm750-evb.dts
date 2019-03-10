@@ -89,12 +89,18 @@
 
 		emc0: eth@f0825000 {
 			phy-mode = "rmii";
+			pinctrl-0 = <&r1_pins
+					&r1err_pins
+					&r1md_pins>;
 			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
 		};
 
 		emc1: eth@f0826000 {
 			phy-mode = "rmii";
+			pinctrl-0 = <&r2_pins
+					&r2err_pins
+					&r2md_pins>;
 			#use-ncsi; /* add this to support ncsi */
 			status = "okay";
 		};
