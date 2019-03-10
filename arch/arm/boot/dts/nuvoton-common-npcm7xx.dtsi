@@ -143,7 +143,6 @@
 			clock-names = "clk_emc";
 			pinctrl-names = "default";
 			pinctrl-0 = <&r1_pins
-					&r1err_pins
 					&r1md_pins>;
 			status = "disabled";
 		};
