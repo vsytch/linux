@@ -2720,7 +2720,7 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	u8 slave_addr;
 	int ret = 0;
 	int timeout = bus->adap.timeout;
-	int time = 100;
+	int time = 1000;
 
 	spin_lock_irqsave(&bus->lock, flags);
 
