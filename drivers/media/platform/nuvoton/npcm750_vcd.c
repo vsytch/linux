@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.4"
+#define VCD_VERSION "0.0.5"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -551,6 +551,7 @@ static int npcm750_vcd_reset(struct npcm750_vcd *vcd)
 static void npcm750_vcd_io_reset(struct npcm750_vcd *vcd)
 {
 	npcm750_vcd_write(vcd, VCD_INTE, 0);
+	npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 	npcm750_vcd_reset(vcd);
 	npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
 }
@@ -914,14 +915,13 @@ static int npcm750_vcd_init(struct npcm750_vcd *vcd)
 	/* Enable interrupt */
 	npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
 
-	/* Reset dvo delay */
-	npcm750_vcd_dvod(vcd, 0, 0);
-
-	if (!vcd->de_mode)
+	if (!vcd->de_mode) {
 		npcm750_vcd_update(vcd, VCD_RCHG, VCD_RCHG_TIM_PRSCL,
 			0x01 << VCD_RCHG_TIM_PRSCL_OFFSET);
-	else
+	} else {
+		npcm750_vcd_dvod(vcd, 0, 0);
 		npcm750_vcd_write(vcd, VCD_RCHG, 0);
+	}
 
 	return 0;
 }
