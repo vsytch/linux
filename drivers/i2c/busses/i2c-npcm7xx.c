@@ -1505,11 +1505,11 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		bus->stop_ind = SMB_NACK_IND;
 
 		npcm_i2c_slave_wr_buf_sync(bus);
-
-		// clear the FIFO
-		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO | NPCM_SMBFIF_CTS_RXF_TXE,
-			 bus->reg + NPCM_SMBFIF_CTS);
-
+		if (bus->fifo_use) {
+			// clear the FIFO
+			iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
+				 bus->reg + NPCM_SMBFIF_CTS);
+		}
 		//npcm_smb_clear_rx_fifo(bus);
 		//npcm_smb_clear_tx_fifo(bus);
 
