@@ -20,7 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/jiffies.h>
 
-#define I2C_VERSION "0.0.12"
+#define I2C_VERSION "0.0.13"
 
 //#define _I2C_DEBUG_
 
@@ -575,7 +575,7 @@ static void npcm_smb_init_params(struct npcm_i2c *bus)
 	bus->slv_wr_size = 0;
 	bus->slv_rd_ind = 0;
 	bus->slv_wr_ind = 0;
-	bus->operation = SMB_NO_OPER;
+	//bus->operation = SMB_NO_OPER;
 	bus->retry_count = 0;
 	bus->int_cnt = 0;
 	bus->event_log_prev = bus->event_log;
@@ -1485,9 +1485,6 @@ static void npcm_i2c_slave_send_rd_buf(struct npcm_i2c *bus)
 	bus->slv_rd_ind = 0;
 	bus->slv_rd_size = 32*1024;
 
-	// Clear status bits
-	iowrite8(NPCM_SMBST_NMATCH | NPCM_SMBST_SDAST,
-			 bus->reg + NPCM_SMBST);
 	npcm_smb_clear_rx_fifo(bus);
 
 
@@ -1500,7 +1497,7 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 {
 	irqreturn_t ret = IRQ_NONE;
 
-	spin_lock(&bus->lock);
+	// spin_lock(&bus->lock);
 	// Slave: A negative acknowledge has occurred
 	if (FIELD_GET(NPCM_SMBST_NEGACK , ioread8(bus->reg + NPCM_SMBST))) {
 
@@ -1508,11 +1505,14 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		bus->stop_ind = SMB_NACK_IND;
 
 		npcm_i2c_slave_wr_buf_sync(bus);
-		if (bus->fifo_use) {
-			// clear the FIFO
-			iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
-				 bus->reg + NPCM_SMBFIF_CTS);
-		}
+
+		// clear the FIFO
+		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO | NPCM_SMBFIF_CTS_RXF_TXE,
+			 bus->reg + NPCM_SMBFIF_CTS);
+
+		//npcm_smb_clear_rx_fifo(bus);
+		//npcm_smb_clear_tx_fifo(bus);
+
 
 		pdebug_lvl2(bus, "int NACK slave");
 
@@ -1523,8 +1523,6 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		// Slave has to wait for SMB_STOP to decide this is the end of the transaction.
 		// Therefore transaction is not yet considered as done
 		iowrite8(NPCM_SMBST_NEGACK, bus->reg + NPCM_SMBST);
-
-		bus->state = SMB_IDLE;
 
 		ret = IRQ_HANDLED;
 	}
@@ -1540,6 +1538,7 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
 				 bus->reg + NPCM_SMBFIF_CTS);
 		npcm_smb_init_params(bus);
+		bus->state = SMB_IDLE;
 		iowrite8(NPCM_SMBST_BER, bus->reg + NPCM_SMBST);
 		ret =  IRQ_HANDLED;
 	}
@@ -1593,10 +1592,12 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 
 		pdebug_lvl2(bus, "int slv stop done2");
 
+		bus->state = SMB_IDLE;
+
 		ret =  IRQ_HANDLED;
 	}
 
-	// A Slave restart Condition has been identified
+	// When a start condition occurred, the Rx-FIFO was not empty
 	if (bus->fifo_use && FIELD_GET(NPCM_SMBFIF_CTS_SLVRSTR,
 				       ioread8(bus->reg + NPCM_SMBFIF_CTS))) {
 		pdebug_lvl2(bus, "int slave restart");
@@ -1609,29 +1610,22 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 
 		bus->operation = SMB_WRITE_OPER;
 
-		// clear the FIFO
-		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
-			 bus->reg + NPCM_SMBFIF_CTS);
-
 		iowrite8(0, bus->reg + NPCM_SMBRXF_CTL);
 
 		pdebug_lvl2(bus, "CB: slv restart");
 		npcm_i2c_slave_send_rd_buf(bus); // send up whatever is on the buffer.
 
-		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO,
-				 bus->reg + NPCM_SMBFIF_CTS);
+		iowrite8(NPCM_SMBFIF_CTS_CLR_FIFO | NPCM_SMBFIF_CTS_SLVRSTR |
+			 NPCM_SMBFIF_CTS_RXF_TXE, bus->reg + NPCM_SMBFIF_CTS);
 
 		// Slave got an address match with direction bit set so it
 		//	should transmit data
 
 		npcm_i2c_slave_get_wr_buf(bus);
 
-		npcm_smb_clear_fifo_int(bus);
-
 		// Write till the master will NACK
 		npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
 
-		iowrite8(NPCM_SMBFIF_CTS_SLVRSTR, bus->reg + NPCM_SMBFIF_CTS);
 		ret =  IRQ_HANDLED;
 	}
 
@@ -1713,7 +1707,7 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 			}
 		}
 
-			bus->state = SMB_SLAVE_MATCH;
+		bus->state = SMB_SLAVE_MATCH;
 
 		if(bus->operation == SMB_WRITE_OPER) {
 
@@ -1755,6 +1749,7 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		if (bus->state == SMB_SLAVE_MATCH) {
 			npcm_smb_slave_abort(bus);
 			//npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
+			//spin_unlock(&bus->lock);
 			return IRQ_HANDLED;
 		}
 
@@ -1769,6 +1764,7 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 			npcm_smb_slave_abort(bus);
 
 			//npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
+			//spin_unlock(&bus->lock);
 			return IRQ_HANDLED;
 		}
 #endif
@@ -1787,7 +1783,8 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		pdebug_lvl2(bus, "SDA slave set");
 
 		// Perform slave read. No need to distinguish between last byte and the rest of the bytes.
-		if ((bus->operation == SMB_READ_OPER)) {
+		if ((NPCM_SMBST_XMIT & ioread8(bus->reg + NPCM_SMBST)) == 0 ){
+			bus->operation = SMB_READ_OPER;
 			npcm_smb_read_from_fifo(bus, npcm_smb_get_fifo_fullness(bus));
 
 			npcm_smb_clear_fifo_int(bus);
@@ -1804,11 +1801,12 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 
 		}
 		// Perform slave write.
-		else if (bus->operation == SMB_WRITE_OPER){
+		else {
 			// Slave got an address match with direction bit set so it
 			//	should transmit data
 
 			pdebug_lvl2(bus, "CB: slv xmit ind");
+			bus->operation = SMB_WRITE_OPER;
 
 			// get the next buffer
 			npcm_i2c_slave_get_wr_buf(bus);
@@ -1825,7 +1823,8 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		ret =  IRQ_HANDLED;
 	} //SDAST
 
-	spin_unlock(&bus->lock);
+
+	//spin_unlock(&bus->lock);
 	return ret;
 }
 
