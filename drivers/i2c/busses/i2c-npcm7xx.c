@@ -2271,7 +2271,7 @@ static irqreturn_t npcm_smb_int_master_handler(struct npcm_i2c *bus)
 				npcm_smb_int_master_handler_read(bus);
 			}
 			else {
-				bus->operation = SMB_READ_OPER;
+				bus->operation = SMB_WRITE_OPER;
 				npcm_smb_int_master_handler_write(bus);
 			}
 
