@@ -20,7 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/jiffies.h>
 
-#define I2C_VERSION "0.0.13"
+#define I2C_VERSION "0.0.14"
 
 //#define _I2C_DEBUG_
 
@@ -576,7 +576,7 @@ static void npcm_smb_init_params(struct npcm_i2c *bus)
 	bus->slv_rd_ind = 0;
 	bus->slv_wr_ind = 0;
 	//bus->operation = SMB_NO_OPER;
-	bus->retry_count = 0;
+	bus->retry_count = SMB_RETRY_MAX_COUNT;
 	bus->int_cnt = 0;
 	bus->event_log_prev = bus->event_log;
 	bus->event_log = 0;
@@ -2589,7 +2589,7 @@ static irqreturn_t npcm_i2c_bus_irq(int irq, void *dev_id)
 static bool npcm_smb_master_start_xmit(struct npcm_i2c *bus,
 				       u8 slave_addr, u16 nwrite, u16 nread,
 				       u8 *write_data, u8 *read_data,
-				       bool use_PEC)
+				       bool use_PEC, bool use_read_block)
 {
 	u8 smbfif_cts;
 
@@ -2609,6 +2609,7 @@ static bool npcm_smb_master_start_xmit(struct npcm_i2c *bus,
 	bus->PEC_use = use_PEC;
 	bus->PEC_mask = 0;
 	bus->retry_count = SMB_RETRY_MAX_COUNT;
+	bus->read_block_use = use_read_block;
 
 	if (nread > 0)
 		bus->operation = SMB_READ_OPER;
@@ -2625,12 +2626,12 @@ static bool npcm_smb_master_start_xmit(struct npcm_i2c *bus,
 		smbfif_cts = ioread8(bus->reg + NPCM_SMBFIF_CTS);
 
 		// clear FIFO and relevant status bits.
-		iowrite8((smbfif_cts & NPCM_SMBFIF_CTS_SLVRSTR) |
+		iowrite8((smbfif_cts & (~NPCM_SMBFIF_CTS_SLVRSTR)) |
 			 NPCM_SMBFIF_CTS_CLR_FIFO,
 			 bus->reg + NPCM_SMBFIF_CTS);
 
-		// and enable it (if slave was enabled don't disable).
-		iowrite8((smbfif_cts & NPCM_SMBFIF_CTS_SLVRSTR) |
+		// and enable it
+		iowrite8((smbfif_cts & (~NPCM_SMBFIF_CTS_SLVRSTR)) |
 			 NPCM_SMBFIF_CTS_RXF_TXE,
 			 bus->reg + NPCM_SMBFIF_CTS);
 
@@ -2671,22 +2672,20 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	int ret = 0;
 	int timeout = bus->adap.timeout;
 	unsigned long timeout1;
+	bool read_block = false;
 
-	spin_lock_irqsave(&bus->lock, flags);
+
 
 	if (num > 2 || num < 1) {
 		pr_err("I2C command not supported, num of msgs = %d\n", num);
-		spin_unlock_irqrestore(&bus->lock, flags);
 		return -EINVAL;
 	}
 
-	npcm_smb_init_params(bus);
 	msg0 = &msgs[0];
 	slave_addr = msg0->addr;
 	if (msg0->flags & I2C_M_RD) { // read
 		if (num == 2) {
 			pr_err(" num = 2 but first msg is rd instead of wr\n");
-			spin_unlock_irqrestore(&bus->lock, flags);
 			return -EINVAL;
 		}
 		nwrite = 0;
@@ -2709,20 +2708,18 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 			if (slave_addr != msg1->addr) {
 				pr_err("SA==%02x but msg1->addr == %02x\n",
 				       slave_addr, msg1->addr);
-				spin_unlock_irqrestore(&bus->lock, flags);
 				return -EINVAL;
 			}
 			if ((msg1->flags & I2C_M_RD) == 0) {
 				pr_err("num = 2 but both msg are write.\n");
-				spin_unlock_irqrestore(&bus->lock, flags);
 				return -EINVAL;
 			}
 			if (msg1->flags & I2C_M_RECV_LEN) {
 				nread = 1;
-				bus->read_block_use = true;
+				read_block = true;
 			} else {
 				nread = msg1->len;
-				bus->read_block_use = false;
+				read_block = false;
 			}
 
 			read_data = msg1->buf;
@@ -2735,7 +2732,7 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	if(nread == 0 && nwrite == 0){
 		timeout = msecs_to_jiffies(1);
 	}
-	else if (bus->read_block_use)
+	else if (read_block)
 		timeout = usecs_to_jiffies((2 + I2C_SMBUS_BLOCK_MAX + nwrite)*1300);
 	else {
 		// resonable assumption which leaves time for clock stretching.
@@ -2748,7 +2745,6 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 
 	if (nwrite >= 32 * 1024 ||  nread >= 32 * 1024) {
 		pr_err("i2c%d buffer too big\n", bus->num);
-		spin_unlock_irqrestore(&bus->lock, flags);
 		return -EINVAL;
 	}
 
@@ -2757,16 +2753,19 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		(bus->state != SMB_IDLE)){
 		if (time_after(jiffies, timeout1)) {
 			pdebug(bus, "ETIMEDOUT");
-			spin_unlock_irqrestore(&bus->lock, flags);
 			return -ETIMEDOUT;
 		}
 		cpu_relax();
 	}
 
+	spin_lock_irqsave(&bus->lock, flags);
+
+	npcm_smb_init_params(bus);
+
 	reinit_completion(&bus->cmd_complete);
 
 	if (npcm_smb_master_start_xmit(bus, slave_addr, nwrite, nread,
-				       write_data, read_data, 0) == false)
+				       write_data, read_data, 0, read_block) == false)
 		ret = -(EBUSY);
 
 	if (ret != -(EBUSY)) {
@@ -2971,3 +2970,4 @@ MODULE_AUTHOR("Tali Perry <tali.perry@nuvoton.com>");
 MODULE_DESCRIPTION("Nuvoton I2C Bus Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION(I2C_VERSION);
+
