@@ -2266,12 +2266,15 @@ static irqreturn_t npcm_smb_int_master_handler(struct npcm_i2c *bus)
 
 		// SDA status is set - transmit or receive: Handle master mode
 		case SMB_OPER_STARTED:
-			if (bus->operation == SMB_WRITE_OPER)
-				npcm_smb_int_master_handler_write(bus);
-			else if (bus->operation == SMB_READ_OPER)
+			if ((NPCM_SMBST_XMIT & ioread8(bus->reg + NPCM_SMBST)) == 0 ){
+				bus->operation = SMB_READ_OPER;
 				npcm_smb_int_master_handler_read(bus);
-			else
-				pr_err("I2C%d: unknown operation\n", bus->num);
+			}
+			else {
+				bus->operation = SMB_READ_OPER;
+				npcm_smb_int_master_handler_write(bus);
+			}
+
 			break;
 		default:
 			dev_err(bus->dev, "i2c%d master sda err on state machine\n",
