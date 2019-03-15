@@ -20,7 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/jiffies.h>
 
-#define I2C_VERSION "0.0.14"
+#define I2C_VERSION "0.0.15"
 
 //#define _I2C_DEBUG_
 
@@ -576,7 +576,7 @@ static void npcm_smb_init_params(struct npcm_i2c *bus)
 	bus->slv_rd_ind = 0;
 	bus->slv_wr_ind = 0;
 	//bus->operation = SMB_NO_OPER;
-	bus->retry_count = SMB_RETRY_MAX_COUNT;
+	bus->retry_count = 1;  // SMB_RETRY_MAX_COUNT;
 	bus->int_cnt = 0;
 	bus->event_log_prev = bus->event_log;
 	bus->event_log = 0;
@@ -2158,7 +2158,7 @@ static irqreturn_t npcm_smb_int_master_handler(struct npcm_i2c *bus)
 			npcm_smb_master_abort(bus);
 		} else {
 			// Bus arbitration loss
-			if (bus->retry_count-- > 0) {
+			if (bus->retry_count-- > 1) {
 				// Perform a retry (generate a start condition)
 				// as soon as the SMBus is free
 				pdebug(bus, "retry-BER");
@@ -2611,7 +2611,7 @@ static bool npcm_smb_master_start_xmit(struct npcm_i2c *bus,
 	bus->rd_ind = 0;
 	bus->PEC_use = use_PEC;
 	bus->PEC_mask = 0;
-	bus->retry_count = SMB_RETRY_MAX_COUNT;
+	bus->retry_count = 0 ; // SMB_RETRY_MAX_COUNT;
 	bus->read_block_use = use_read_block;
 
 	if (nread > 0)
