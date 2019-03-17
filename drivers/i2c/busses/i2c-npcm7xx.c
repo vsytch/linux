@@ -20,7 +20,7 @@
 #include <linux/regmap.h>
 #include <linux/jiffies.h>
 
-#define I2C_VERSION "0.0.15"
+#define I2C_VERSION "0.0.16"
 
 //#define _I2C_DEBUG_
 
@@ -1312,6 +1312,70 @@ static int  npcm_smb_slave_ARP_enable(struct npcm_i2c *bus, bool enable)
 }
 #endif // TODO_MULTI_SA
 
+
+
+static int npcm_i2c_slave_get_wr_buf(struct npcm_i2c *bus)
+{
+	u8 value = 0;
+	int ret = bus->slv_wr_ind;
+	int i;
+
+	pdebug_lvl2(bus, "slv wr buf 1");
+
+	// fill a cyclic buffer
+	for (i = 0; i < SMBUS_FIFO_SIZE; i++){
+		if (bus->slv_wr_size >= SMBUS_FIFO_SIZE)
+			break;
+		i2c_slave_event(bus->slave, I2C_SLAVE_READ_REQUESTED, &value);
+		bus->slv_wr_buf[(bus->slv_wr_ind + bus->slv_wr_size) % SMBUS_FIFO_SIZE] = value;
+		bus->slv_wr_size++;
+		i2c_slave_event(bus->slave, I2C_SLAVE_READ_PROCESSED, &value);
+
+
+	}
+
+#ifdef _I2C_DEBUG_
+	printk("\nI2C%d get wr buf [%d / %d]\n\t  %x %x %x %x   %x %x %x %x    %x %x %x %x    %x %x %x %x\n",
+		bus->num, bus->slv_wr_ind, bus->slv_wr_size,
+		bus->slv_wr_buf[0], bus->slv_wr_buf[1], bus->slv_wr_buf[2], bus->slv_wr_buf[3],
+		bus->slv_wr_buf[4], bus->slv_wr_buf[5], bus->slv_wr_buf[6], bus->slv_wr_buf[7],
+		bus->slv_wr_buf[8], bus->slv_wr_buf[9], bus->slv_wr_buf[10], bus->slv_wr_buf[11],
+		bus->slv_wr_buf[12], bus->slv_wr_buf[13], bus->slv_wr_buf[14], bus->slv_wr_buf[15]);
+#endif
+
+	return SMBUS_FIFO_SIZE - ret;
+}
+
+
+static void npcm_i2c_slave_send_rd_buf(struct npcm_i2c *bus)
+{
+	int i;
+
+	for (i = 0; i < bus->slv_rd_ind; i++){
+#ifdef _I2C_DEBUG_
+		printk("->   send 0x%x\n", bus->slv_rd_buf[i]);
+#endif
+		i2c_slave_event(bus->slave, I2C_SLAVE_WRITE_RECEIVED, &bus->slv_rd_buf[i]);
+	}
+
+
+	// once we send bytes up, need to reset the counter of the wr buf
+	// got data from master (new offset in device), ignore wr fifo:
+	if (bus->slv_rd_ind) {
+		bus->slv_wr_size = 0;
+		bus->slv_wr_ind = 0;
+	}
+
+	bus->slv_rd_ind = 0;
+	bus->slv_rd_size = 32*1024;
+
+	npcm_smb_clear_rx_fifo(bus);
+
+
+}
+
+
+
 static bool npcm_smb_slave_start_receive(struct npcm_i2c *bus, u16 nread,
 					    u8 *read_data)
 {
@@ -1337,17 +1401,21 @@ static bool npcm_smb_slave_start_xmit(struct npcm_i2c *bus, u16 nwrite,
 {
 	pdebug_lvl2(bus, "slv xmt ");
 
-	// Allow only if bus is not busy
 	if (nwrite == 0)
 		return false;
 
 	bus->state = SMB_OPER_STARTED;
-	bus->operation	 = SMB_WRITE_OPER;
+	bus->operation = SMB_WRITE_OPER;
 
-		if (nwrite > 0) {
-			// Fill the FIFO with data
-			npcm_smb_write_to_fifo_slave(bus, nwrite);
-		}
+	// get the next buffer
+	npcm_i2c_slave_get_wr_buf(bus);
+
+	npcm_smb_clear_fifo_int(bus);
+
+	if (nwrite > 0) {
+		// Fill the FIFO with data
+		npcm_smb_write_to_fifo_slave(bus, nwrite);
+	}
 
 
 	return true;
@@ -1430,68 +1498,6 @@ static int npcm_i2c_slave_wr_buf_sync(struct npcm_i2c *bus)
 	return left_in_fifo;
 }
 
-static int npcm_i2c_slave_get_wr_buf(struct npcm_i2c *bus)
-{
-	u8 value = 0;
-	int ret = bus->slv_wr_ind;
-	int i;
-
-	pdebug_lvl2(bus, "slv wr buf 1");
-
-	// fill a cyclic buffer
-	for (i = 0; i < SMBUS_FIFO_SIZE; i++){
-		if (bus->slv_wr_size >= SMBUS_FIFO_SIZE)
-			break;
-		i2c_slave_event(bus->slave, I2C_SLAVE_READ_REQUESTED, &value);
-		bus->slv_wr_buf[(bus->slv_wr_ind + bus->slv_wr_size) % SMBUS_FIFO_SIZE] = value;
-		bus->slv_wr_size++;
-		i2c_slave_event(bus->slave, I2C_SLAVE_READ_PROCESSED, &value);
-
-
-	}
-
-#ifdef _I2C_DEBUG_
-	printk("\nI2C%d get wr buf [%d / %d]\n\t  %x %x %x %x   %x %x %x %x    %x %x %x %x    %x %x %x %x\n",
-		bus->num, bus->slv_wr_ind, bus->slv_wr_size,
-		bus->slv_wr_buf[0], bus->slv_wr_buf[1], bus->slv_wr_buf[2], bus->slv_wr_buf[3],
-		bus->slv_wr_buf[4], bus->slv_wr_buf[5], bus->slv_wr_buf[6], bus->slv_wr_buf[7],
-		bus->slv_wr_buf[8], bus->slv_wr_buf[9], bus->slv_wr_buf[10], bus->slv_wr_buf[11],
-		bus->slv_wr_buf[12], bus->slv_wr_buf[13], bus->slv_wr_buf[14], bus->slv_wr_buf[15]);
-#endif
-
-	return SMBUS_FIFO_SIZE - ret;
-}
-
-
-static void npcm_i2c_slave_send_rd_buf(struct npcm_i2c *bus)
-{
-	int i;
-
-	for (i = 0; i < bus->slv_rd_ind; i++){
-#ifdef _I2C_DEBUG_
-		printk("->   send 0x%x\n", bus->slv_rd_buf[i]);
-#endif
-		i2c_slave_event(bus->slave, I2C_SLAVE_WRITE_RECEIVED, &bus->slv_rd_buf[i]);
-	}
-
-
-	// once we send bytes up, need to reset the counter of the wr buf
-	// got data from master (new offset in device), ignore wr fifo:
-	if (bus->slv_rd_ind) {
-		bus->slv_wr_size = 0;
-		bus->slv_wr_ind = 0;
-	}
-
-	bus->slv_rd_ind = 0;
-	bus->slv_rd_size = 32*1024;
-
-	npcm_smb_clear_rx_fifo(bus);
-
-
-}
-
-
-
 
 static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 {
@@ -1554,9 +1560,7 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		if (bus->operation == SMB_READ_OPER) {
 			npcm_smb_read_from_fifo(bus, npcm_smb_get_fifo_fullness(bus));
 
-
-
-			// if PEC is not used or PEC is used and PEC is correct
+			// if PEC is used and PEC is correct
 			if ((bus->PEC_use == true) &&
 			    (npcm_smb_get_PEC(bus) != 0)){
 				bus->stop_ind = SMB_SLAVE_PEC_ERR_IND;
@@ -1620,9 +1624,6 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 
 		// Slave got an address match with direction bit set so it
 		//	should transmit data
-
-		npcm_i2c_slave_get_wr_buf(bus);
-
 		// Write till the master will NACK
 		npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
 
@@ -1709,17 +1710,10 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 
 		bus->state = SMB_SLAVE_MATCH;
 
-		if(bus->operation == SMB_WRITE_OPER) {
+		if (FIELD_GET(NPCM_SMBST_XMIT, ioread8(bus->reg + NPCM_SMBST))) {
 
 			// Slave got an address match with direction bit set so it
 			//	should transmit data
-
-			pdebug_lvl2(bus, "CB: slv xmit ind");
-
-			npcm_i2c_slave_get_wr_buf(bus);
-
-			npcm_smb_clear_fifo_int(bus);
-
 			// Write till the master will NACK
 			npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
 		} else {
@@ -1748,8 +1742,6 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		// state.
 		if (bus->state == SMB_SLAVE_MATCH) {
 			npcm_smb_slave_abort(bus);
-			//npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
-			//spin_unlock(&bus->lock);
 			return IRQ_HANDLED;
 		}
 
@@ -1762,9 +1754,6 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 			(bus->operation == SMB_WRITE_OPER
 			&& bus->stop_ind == SMB_SLAVE_RCV_IND)) {
 			npcm_smb_slave_abort(bus);
-
-			//npcm_smb_callback(bus, bus->stop_ind, npcm_smb_get_index(bus));
-			//spin_unlock(&bus->lock);
 			return IRQ_HANDLED;
 		}
 #endif
@@ -1804,15 +1793,6 @@ static irqreturn_t npcm_smb_int_slave_handler(struct npcm_i2c *bus)
 		else {
 			// Slave got an address match with direction bit set so it
 			//	should transmit data
-
-			pdebug_lvl2(bus, "CB: slv xmit ind");
-			bus->operation = SMB_WRITE_OPER;
-
-			// get the next buffer
-			npcm_i2c_slave_get_wr_buf(bus);
-
-			npcm_smb_clear_fifo_int(bus);
-
 			// Write till the master will NACK
 			npcm_smb_slave_start_xmit(bus, bus->adap.quirks->max_write_len, bus->slv_wr_buf);
 		}
