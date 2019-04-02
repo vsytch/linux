@@ -368,6 +368,30 @@ static void stmmac_eee_ctrl_timer(struct timer_list *t)
 }
 
 /**
+ * stmmac_fixup_eee_disable: Disable EEE if supported.
+ * @priv: driver private structure
+ * Description:
+ *  Disable EEE at phy level.
+ */
+int stmmac_fixup_eee_disable(struct stmmac_priv *priv)
+{
+	int ret = 0;
+	struct ethtool_eee edata;
+	struct net_device *ndev = priv->dev;
+
+	/* Check if the PHY supports EEE */
+	if (!phy_init_eee(ndev->phydev, 1)) {
+		ret = phy_ethtool_get_eee(ndev->phydev, &edata);
+		if (ret < 0)
+			return ret;
+		/* Disable eee advertise on PHY */
+		edata.advertised = 0;
+		ret = phy_ethtool_set_eee(ndev->phydev, &edata);
+	}
+	return ret;
+}
+
+/**
  * stmmac_eee_init - init EEE
  * @priv: driver private structure
  * Description:
@@ -398,6 +422,10 @@ bool stmmac_eee_init(struct stmmac_priv *priv)
 	/* MAC core supports the EEE feature. */
 	if (priv->dma_cap.eee) {
 		int tx_lpi_timer = priv->tx_lpi_timer;
+
+		/* Disable EEE at phy level when fixup is active */
+		if (priv->plat->eee_force_disable)
+			stmmac_fixup_eee_disable(priv);
 
 		/* Check if the PHY supports EEE */
 		if (phy_init_eee(ndev->phydev, 1)) {
