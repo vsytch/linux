@@ -899,14 +899,6 @@ static int npcm_fiu_probe(struct platform_device *pdev)
 	if (IS_ERR(host->clk))
 		return PTR_ERR(host->clk);
 
-	if (!of_property_read_u32(dev->of_node, "spi-max-frequency",
-				  &max_speed_hz)) {
-		pr_info("spi-max-frequency %d\n",max_speed_hz);
-		ret = clk_set_rate(host->clk, max_speed_hz);
-		if (ret < 0)
-			dev_warn(dev, "Failed setting new FIU3 max frequancy, return to BB FIU3 frequancy\n");
-	}
-
 	host->spix_mode = of_property_read_bool(dev->of_node, "spix-mode");
 
 	mutex_init(&host->lock);
