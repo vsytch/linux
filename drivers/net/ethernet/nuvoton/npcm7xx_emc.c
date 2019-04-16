@@ -269,6 +269,10 @@ struct  npcm7xx_ether {
 	char *dump_buf;
 	struct regmap *rst_regmap;
 
+	/* Scratch page to use when rx skb alloc fails */
+	void *rx_scratch;
+	dma_addr_t rx_scratch_dma;
+
 	/* debug counters */
 	unsigned int max_waiting_rx;
 	unsigned int rx_count_pool;
@@ -639,10 +643,6 @@ static void adjust_link(struct net_device *netdev)
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 	struct phy_device *phydev = ether->phy_dev;
 	bool status_change = false;
-	unsigned long flags;
-
-	/* clear GPIO interrupt status whihc indicates PHY statu change? */
-	spin_lock_irqsave(&ether->lock, flags);
 
 	if (phydev->link) {
 		if (ether->speed != phydev->speed ||
@@ -660,8 +660,6 @@ static void adjust_link(struct net_device *netdev)
 		ether->link = phydev->link;
 		status_change = true;
 	}
-
-	spin_unlock_irqrestore(&ether->lock, flags);
 
 	if (status_change)
 		npcm7xx_opmode(netdev, ether->speed, ether->duplex);
@@ -684,25 +682,88 @@ static void npcm7xx_write_cam(struct net_device *netdev,
 
 static struct sk_buff *get_new_skb(struct net_device *netdev, u32 i)
 {
+	__le32 buffer;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	struct sk_buff *skb = dev_alloc_skb(roundup(MAX_PACKET_SIZE_W_CRC, 4));
+	struct sk_buff *skb = netdev_alloc_skb(netdev, roundup(MAX_PACKET_SIZE_W_CRC, 4));
 
-	if (!skb)
-		return NULL;
-
-	/* Do not unmark the following skb_reserve() Receive Buffer Starting
-	 * Address must be aligned to 4 bytes and the following line
-	 * if unmarked will make it align to 2 and this likely will
-	 * hult the RX and crash the linux skb_reserve(skb, NET_IP_ALIGN);
-	 */
-	skb->dev = netdev;
-	(ether->rdesc + i)->buffer =
-		dma_map_single(&netdev->dev, skb->data,
-			       roundup(MAX_PACKET_SIZE_W_CRC, 4),
-			       DMA_FROM_DEVICE);
+	if (unlikely(!skb)) {
+		if (net_ratelimit())
+			netdev_warn(netdev, "failed to allocate rx skb\n");
+		buffer = ether->rx_scratch_dma;
+	} else {
+		/* Do not unmark the following skb_reserve() Receive Buffer Starting
+		 * Address must be aligned to 4 bytes and the following line
+		 * if unmarked will make it align to 2 and this likely will
+		 * hult the RX and crash the linux skb_reserve(skb, NET_IP_ALIGN);
+		 */
+		skb->dev = netdev;
+		buffer = dma_map_single(&netdev->dev, skb->data, roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					DMA_FROM_DEVICE);
+		if (unlikely(dma_mapping_error(&netdev->dev, buffer))) {
+			if (net_ratelimit())
+				netdev_err(netdev, "failed to map rx page\n");
+			dev_kfree_skb_any(skb);
+			buffer = ether->rx_scratch_dma;
+			skb = NULL;
+		}
+	}
 	ether->rx_skb[i] = skb;
+	ether->rdesc[i].buffer = buffer;
 
 	return skb;
+}
+
+/* This API must call with Tx/Rx stopped */
+static void npcm7xx_free_desc(struct net_device *netdev,
+			      bool free_also_descriptors)
+{
+	struct sk_buff *skb;
+	u32 i;
+	struct npcm7xx_ether *ether = netdev_priv(netdev);
+	struct platform_device *pdev = ether->pdev;
+
+	for (i = 0; i < TX_QUEUE_LEN; i++) {
+		skb = ether->tx_skb[i];
+		if (skb) {
+			dma_unmap_single(&netdev->dev, (dma_addr_t)(ether->tdesc[i].buffer),
+					 skb->len, DMA_TO_DEVICE);
+			dev_kfree_skb_any(skb);
+			ether->tx_skb[i] = NULL;
+		}
+	}
+
+	for (i = 0; i < RX_QUEUE_LEN; i++) {
+		skb = ether->rx_skb[i];
+		if (skb) {
+			dma_unmap_single(&netdev->dev, (dma_addr_t)(ether->rdesc[i].buffer),
+					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					 DMA_FROM_DEVICE);
+			dev_kfree_skb_any(skb);
+			ether->rx_skb[i] = NULL;
+		}
+	}
+
+	if (free_also_descriptors) {
+		if (ether->tdesc)
+			dma_free_coherent(&pdev->dev,
+					  sizeof(struct npcm7xx_txbd) *
+					  TX_QUEUE_LEN,
+					  ether->tdesc, ether->tdesc_phys);
+		ether->tdesc = NULL;
+
+		if (ether->rdesc)
+			dma_free_coherent(&pdev->dev,
+					  sizeof(struct npcm7xx_rxbd) *
+					  RX_QUEUE_LEN,
+					  ether->rdesc, ether->rdesc_phys);
+		ether->rdesc = NULL;
+
+		/* Free scratch packet buffer */
+		if (ether->rx_scratch)
+			dma_free_coherent(&pdev->dev, roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					  ether->rx_scratch, ether->rx_scratch_dma);
+		ether->rx_scratch = NULL;
+	}
 }
 
 static int npcm7xx_init_desc(struct net_device *netdev)
@@ -726,6 +787,7 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 
 		if (!ether->tdesc) {
 			dev_err(&pdev->dev, "Failed to allocate memory for tx desc\n");
+			npcm7xx_free_desc(netdev, true);
 			return -ENOMEM;
 		}
 	}
@@ -740,11 +802,7 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 
 		if (!ether->rdesc) {
 			dev_err(&pdev->dev, "Failed to allocate memory for rx desc\n");
-			dma_free_coherent(&pdev->dev,
-					  sizeof(struct npcm7xx_txbd) *
-					  TX_QUEUE_LEN, ether->tdesc,
-					  ether->tdesc_phys);
-			ether->tdesc = NULL;
+			npcm7xx_free_desc(netdev, true);
 			return -ENOMEM;
 		}
 	}
@@ -767,6 +825,19 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 
 	ether->start_tx_ptr = ether->tdesc_phys;
 
+	/* Allocate scratch packet buffer */
+	if (!ether->rx_scratch) {
+		ether->rx_scratch = dma_alloc_coherent(&pdev->dev,
+					      roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					      &ether->rx_scratch_dma,
+					      GFP_KERNEL);
+		if (!ether->rx_scratch){
+			dev_err(&pdev->dev, "Failed to allocate memory for rx_scratch\n");
+			npcm7xx_free_desc(netdev, true);
+			return -ENOMEM;
+		}
+	}
+
 	for (i = 0; i < RX_QUEUE_LEN; i++) {
 		unsigned int offset;
 
@@ -782,25 +853,7 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 
 		if (!get_new_skb(netdev, i)) {
 			dev_err(&pdev->dev, "get_new_skb() failed\n");
-
-			for (; i != 0; i--) {
-				dma_unmap_single(&netdev->dev, (dma_addr_t)
-						 ((ether->rdesc + i)->buffer),
-						 roundup(MAX_PACKET_SIZE_W_CRC,
-							 4), DMA_FROM_DEVICE);
-				dev_kfree_skb_any(ether->rx_skb[i]);
-				ether->rx_skb[i] = NULL;
-			}
-
-			dma_free_coherent(&pdev->dev,
-					  sizeof(struct npcm7xx_txbd) *
-					  TX_QUEUE_LEN,
-					  ether->tdesc, ether->tdesc_phys);
-			dma_free_coherent(&pdev->dev,
-					  sizeof(struct npcm7xx_rxbd) *
-					  RX_QUEUE_LEN,
-					  ether->rdesc, ether->rdesc_phys);
-
+			npcm7xx_free_desc(netdev, true);
 			return -ENOMEM;
 		}
 	}
@@ -811,55 +864,6 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 		ether->tx_skb[i] = NULL;
 
 	return 0;
-}
-
-/* This API must call with Tx/Rx stopped */
-static void npcm7xx_free_desc(struct net_device *netdev,
-			      bool free_also_descriptors)
-{
-	struct sk_buff *skb;
-	u32 i;
-	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	struct platform_device *pdev = ether->pdev;
-
-	for (i = 0; i < TX_QUEUE_LEN; i++) {
-		skb = ether->tx_skb[i];
-		if (skb) {
-			dma_unmap_single(&netdev->dev, (dma_addr_t)((ether->tdesc +
-								  i)->buffer),
-					 skb->len, DMA_TO_DEVICE);
-			dev_kfree_skb_any(skb);
-			ether->tx_skb[i] = NULL;
-		}
-	}
-
-	for (i = 0; i < RX_QUEUE_LEN; i++) {
-		skb = ether->rx_skb[i];
-		if (skb) {
-			dma_unmap_single(&netdev->dev, (dma_addr_t)((ether->rdesc +
-								   i)->buffer),
-					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
-					 DMA_FROM_DEVICE);
-			dev_kfree_skb_any(skb);
-			ether->rx_skb[i] = NULL;
-		}
-	}
-
-	if (free_also_descriptors) {
-		if (ether->tdesc)
-			dma_free_coherent(&pdev->dev,
-					  sizeof(struct npcm7xx_txbd) *
-					  TX_QUEUE_LEN,
-					  ether->tdesc, ether->tdesc_phys);
-		ether->tdesc = NULL;
-
-		if (ether->rdesc)
-			dma_free_coherent(&pdev->dev,
-					  sizeof(struct npcm7xx_rxbd) *
-					  RX_QUEUE_LEN,
-					  ether->rdesc, ether->rdesc_phys);
-		ether->rdesc = NULL;
-	}
 }
 
 static void npcm7xx_set_fifo_threshold(struct net_device *netdev)
@@ -1251,10 +1255,10 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 		txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE | MACTXINTEN;
 		wmb();
 
-		writel(MISTA_TDU, (ether->reg + REG_MISTA));
 		/* Clear TDU interrupt */
-		reg_mien = readl((ether->reg + REG_MIEN));
+		writel(MISTA_TDU, (ether->reg + REG_MISTA));
 
+		reg_mien = readl((ether->reg + REG_MIEN));
 		if (reg_mien != 0)
 			/* Enable TDU interrupt */
 			writel(reg_mien | ENTDU, (ether->reg + REG_MIEN));
@@ -1436,7 +1440,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 	struct npcm7xx_rxbd *rxbd;
 	struct net_device *netdev = ether->netdev;
 	struct platform_device *pdev = ether->pdev;
-	struct sk_buff *skb, *s;
+	struct sk_buff *s;
 	unsigned int length;
 	__le32 status;
 	unsigned long flags;
@@ -1502,26 +1506,9 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			ether->rx_count_pool++;
 
 			/* now we allocate new skb instead if the used one. */
-			skb = dev_alloc_skb(roundup(MAX_PACKET_SIZE_W_CRC, 4));
-			if (!skb) {
-				dev_err(&pdev->dev, "get skb buffer error\n");
+			if (!get_new_skb(netdev, ether->cur_rx)) {
 				ether->stats.rx_dropped++;
-				goto rx_out;
 			}
-
-			/* Do not unmark the following skb_reserve() Receive
-			 * Buffer Starting Address must be aligned
-			 * to 4 bytes and the following line if unmarked
-			 * will make it align to 2 and this likely
-			 * will hult the RX and crash the linux
-			 * skb_reserve(skb, NET_IP_ALIGN);
-			 */
-			skb->dev = netdev;
-
-			rxbd->buffer = dma_map_single(&netdev->dev, skb->data,
-						      roundup(MAX_PACKET_SIZE_W_CRC, 4),
-						      DMA_FROM_DEVICE);
-			ether->rx_skb[ether->cur_rx] = skb;
 		} else {
 			ether->rx_err_count++;
 			ether->stats.rx_errors++;
@@ -1592,7 +1579,6 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			/* we can restore accepting of packets */
 			writel(ether->camcmr, (ether->reg + REG_CAMCMR));
 	}
-rx_out:
 
 	/* trigger RX */
 	writel(ENSTART, (ether->reg + REG_RSDR));
@@ -1966,31 +1952,8 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 
 	get_mac_address(netdev);
 
-	ether->cur_tx = 0x0;
-	ether->cur_rx = 0x0;
-	ether->finish_tx = 0x0;
-	ether->pending_tx = 0x0;
-	ether->link = 0;
 	ether->speed = 100;
 	ether->duplex = DUPLEX_FULL;
-	ether->need_reset = 0;
-	ether->dump_buf = NULL;
-	ether->rx_berr = 0;
-	ether->rx_err = 0;
-	ether->rdu = 0;
-	ether->rxov = 0;
-	ether->rx_stuck = 0;
-	/* debug counters */
-	ether->max_waiting_rx = 0;
-	ether->rx_count_pool = 0;
-	ether->count_xmit = 0;
-	ether->rx_int_count = 0;
-	ether->rx_err_count = 0;
-	ether->tx_int_count = 0;
-	ether->count_finish = 0;
-	ether->tx_tdu = 0;
-	ether->tx_tdu_i = 0;
-	ether->tx_cp_i = 0;
 
 	spin_lock_init(&ether->lock);
 
