@@ -83,6 +83,12 @@
 		};
 	};
 
+ 	iio-hwmon {
+		compatible = "iio-hwmon";
+		io-channels = <&adc 0>, <&adc 1>, <&adc 2>, <&adc 3>,
+			<&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
+	};
+
 	leds {
 		compatible = "gpio-leds";
 
@@ -317,6 +323,7 @@
 			adc: adc@c000 {
 				/* enable external vref */
 				/*vref-supply = <&reg_vref1_2>;*/
+				#io-channel-cells = <1>;
 				status = "okay";
 			};
 
