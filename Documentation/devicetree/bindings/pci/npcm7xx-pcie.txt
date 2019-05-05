@@ -13,6 +13,7 @@ Required properties:
  - bus-range: PCI bus numbers covered.
  - ranges: describes the translation of addresses for root ports and
 			standard PCIe regions.
+ - resets: phandle to the reset control for this device.
 
 Example
 	pci_rc: axi-pcie@e1000000 {
@@ -28,5 +29,6 @@ Example
 		rst-ep-pci = <&gpio0 29 1>;
 		ranges = <0x02000000 0 0xea000000
 			0xea000000 0 0x02000000>;
+		resets = <&rstc 175>;
 	};
 
