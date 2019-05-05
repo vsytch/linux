@@ -26,6 +26,7 @@
 #include <linux/irqdomain.h>
 #include <linux/regmap.h>
 #include <linux/mfd/syscon.h>
+#include <linux/reset.h>
 
 #ifdef CONFIG_OF
 #include <linux/of.h>
@@ -158,9 +159,6 @@ int pcie_rc_irq;
 
 #define I2CSEGSEL		0xE0
 
-#define IPSRST3			0x34
-#define IPSRST3_PCIERC_BIT	BIT(15)
-
 #define LINK_UP_FIELD		(0x3F << 20)
 #define LINK_RETRAIN_BIT	BIT(27)
 
@@ -187,7 +185,7 @@ struct npcm750_pcie_port {
 	struct irq_domain *irq_domain;
 	struct resource bus_range;
 	struct list_head resources;
-	struct regmap *rst_regmap;
+	struct reset_control *reset;
 	struct regmap *gcr_regmap;
 	unsigned rst_ep_gpio;
 	unsigned rst_rc_gpio;
@@ -714,8 +712,7 @@ static void npcm7xx_initialize_as_root_complex(struct npcm750_pcie_port *port)
 	regmap_write_bits(port->gcr_regmap, INTCR3, INTCR3_RCCORER_BIT, 0x0);
 		
 	/* put RC to reset (write 1 to enter reset and 0 to enable module) */
-	regmap_write_bits(port->rst_regmap, INTCR3,
-			  IPSRST3_PCIERC_BIT, IPSRST3_PCIERC_BIT);
+	reset_control_assert(port->reset);
 		
 	/* enable rootport access */
 	regmap_write_bits(port->gcr_regmap, MFSEL3,
@@ -726,7 +723,7 @@ static void npcm7xx_initialize_as_root_complex(struct npcm750_pcie_port *port)
 			  INTCR3_RCCORER_BIT, INTCR3_RCCORER_BIT);
 	       
 	/* enable RC */
-	regmap_write_bits(port->rst_regmap, IPSRST3, IPSRST3_PCIERC_BIT, 0x0);
+	reset_control_deassert(port->reset);
 
 	PCIE_DBG(KERN_DEBUG_PCIE "npcm7xx_initialize_as_root_complex - End\n");
 }
@@ -940,11 +937,9 @@ static int npcm7xx_pcie_rc_probe(struct platform_device *pdev)
 		goto failed;
 	}
 
-	port->rst_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-rst");
-	if (IS_ERR(port->rst_regmap)) {
-		dev_err(&pdev->dev, "Failed to find nuvoton,npcm750-rst\n");
-		return PTR_ERR(port->rst_regmap);
-	}
+	port->reset = devm_reset_control_get(&pdev->dev, NULL);
+	if (IS_ERR(port->reset))
+		return PTR_ERR(port->reset);
 
 	port->gcr_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
 	if (IS_ERR(port->gcr_regmap)) {
