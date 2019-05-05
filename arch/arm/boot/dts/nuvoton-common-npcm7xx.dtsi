@@ -364,6 +364,7 @@
 				interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clk NPCM7XX_CLK_APB5>;
 				clock-names = "clk_apb5";
+				resets = <&rstc 54>;
 				status = "disabled";
 			};
 
@@ -377,6 +378,7 @@
 				interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clk NPCM7XX_CLK_APB5>;
 				clock-names = "clk_apb5";
+				resets = <&rstc 55>;
 				status = "disabled";
 			};
 
