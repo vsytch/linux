@@ -43,23 +43,6 @@ static struct regmap *gcr_regmap;
 #define  INTCR3_OFFSET 0x9C
 #define  NPCM_INTCR3_USBPHYSW	GENMASK(13, 12)
 
-#define  USB1PHYCTL_OFFSET 0x140
-#define  USB2PHYCTL_OFFSET 0x144
-
-static struct regmap *rst_regmap;
-
-#define  IPSRST1_OFFSET 0x20
-#define  IPSRST2_OFFSET 0x24
-#define  IPSRST3_OFFSET 0x34
-
-//#include <mach/map.h>
-//#include <mach/irqs.h>
-//#include <mach/hal.h>
-//#include <mach/module_init.h>
-
-//#include <mach/regs_npcm750_gcr.h>
-//#include <mach/regs_npcm750_clk.h>
-
 #include "npcm_udc.h"
 
 #define MINIMUM_NPCM_UDC_EPQ_DTD_SIZE                0x800
@@ -2663,7 +2646,6 @@ static int npcm_udc_probe(struct platform_device *pdev)
     struct npcm_udc *udc_controller;
     struct usb_dr_device *dr_regs;
 	struct resource *res = NULL;
-	static int first_init = 1;
 
 #ifdef CONFIG_OF
 	pdev->id = of_alias_get_id(np, "udc");
@@ -2690,89 +2672,6 @@ static int npcm_udc_probe(struct platform_device *pdev)
 	}
 
 	udc_controller->id = pdev->id;
-
-	if (gcr_regmap == NULL) {
-		gcr_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
-		if (IS_ERR(gcr_regmap)) {
-			pr_err("%s: failed to find nuvoton,npcm750-gcr\n", __func__);
-			return IS_ERR(gcr_regmap);
-	    }
-	}
-
-	if (rst_regmap == NULL) {
-		rst_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-rst");
-		if (IS_ERR(rst_regmap)) {
-			pr_err("%s: failed to find nuvoton,npcm750-rst\n", __func__);
-			return IS_ERR(rst_regmap);
-	    }
-	}
-
-	if (first_init == 1)
-	{
-	     printk(KERN_INFO "usb phy init\n");
-	     ret = regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 24),(0x1 << 24));
-	     regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 23), (0x1 << 23));
-	     regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 22), (0x1 << 22));
-	     regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 25), (0x1 << 25));
-	     regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 8), (0x1 << 8));
-	     regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 5), (0x1 << 5));
-
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 8), (0x1 << 8));
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 7), (0x1 << 7));
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 6), (0x1 << 6));
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 5), (0x1 << 5));
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 4), (0x1 << 4));
-
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 24), (0x1 << 24));
-	     regmap_update_bits(gcr_regmap, USB1PHYCTL_OFFSET, (0x1 << 28), 0);
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 24), 0);
-
-	     udelay(50); // enable phy
-
-	     regmap_update_bits(gcr_regmap, USB1PHYCTL_OFFSET, (0x1 << 28), (0x1 << 28));
-	     regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 8), 0);
-	     first_init = 0;
-	}
-
-	// enable devices
-	switch(udc_controller->id)
-	{
-	 case 0:
-		 regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 4), 0);
-		 break;
-	 case 1:
-		 regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 5), 0);
-		 break;
-	 case 2:
-		 regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 8), 0);
-		 break;
-	 case 3:
-		 regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 25), 0);
-		 break;
-	 case 4:
-		 regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 22), 0);
-		 break;
-	 case 5:
-		 regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 23), 0);
-		 break;
-	 case 6:
-		 regmap_update_bits(rst_regmap, IPSRST1_OFFSET, (0x1 << 24), 0);
-		 break;
-	 case 7:
-		 regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 5), 0);
-		 break;
-	 case 8:
-		 regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 6), 0);
-		 break;
-	 case 9:
-		 regmap_update_bits(gcr_regmap, INTCR3_OFFSET, NPCM_INTCR3_USBPHYSW, NPCM_INTCR3_USBPHYSW);
-		 regmap_update_bits(rst_regmap, IPSRST3_OFFSET, (0x1 << 7), 0);
-		 break;
-	 default :
-		 ret = -ENODEV;
-		 pr_err("npcm_udc_enable_devices failed\n");
-		 goto err_iounmap;
-	}
 
 #ifdef CONFIG_OF
   	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -2856,6 +2755,18 @@ static int npcm_udc_probe(struct platform_device *pdev)
 		NPCM_USB_ERR("cannot request irq %d err %d\n",
 				udc_controller->irq, ret);
 		goto err_iounmap;
+	}
+
+	if (udc_controller->id == 9) {
+		if (gcr_regmap == NULL) {
+			gcr_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
+			if (IS_ERR(gcr_regmap)) {
+				pr_err("%s: failed to find nuvoton,npcm750-gcr\n", __func__);
+				return IS_ERR(gcr_regmap);
+		    }
+		}
+		regmap_update_bits(gcr_regmap, INTCR3_OFFSET, 
+				   NPCM_INTCR3_USBPHYSW, NPCM_INTCR3_USBPHYSW);
 	}
 
 	/* Initialize the udc structure including QH member and other member */
