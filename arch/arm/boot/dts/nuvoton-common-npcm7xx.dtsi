@@ -462,6 +462,7 @@
 				reg = <0xc000 0x8>;
 				interrupts = <GIC_SPI 0 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clk NPCM7XX_CLK_ADC>;
+				resets = <&rstc 27>;
 				status = "disabled";
 			};
 
