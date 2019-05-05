@@ -109,6 +109,12 @@
 		interrupt-parent = <&gic>;
 		ranges;
 
+		rstc: rstc@f0801000 {
+			#reset-cells = <1>;
+			compatible = "nuvoton,npcm750-reset";
+			reg = <0xf0801000 0x70>;
+		};
+
 		clk: clock-controller@f0801000 {
 			compatible = "nuvoton,npcm750-clk", "syscon";
 			#clock-cells = <1>;
