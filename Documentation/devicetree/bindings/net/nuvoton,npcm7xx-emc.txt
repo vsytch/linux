@@ -12,6 +12,7 @@ Required properties:
                     second interrupt dedicated to Rxirq
 - phy-mode        : Should be "rmii" (see ethernet.txt in the same directory)
 - clocks          : phandle of emc reference clock.
+- resets          : phandle to the reset control for this device.
 - use-ncsi        : Use the NC-SI stack instead of an MDIO PHY
 
 Example:
@@ -28,6 +29,7 @@ emc0: eth@f0825000 {
 	#use-ncsi; /* add this to support ncsi */
 
 	clock-names = "clk_emc";
+	resets = <&rstc 6>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&r1_pins
 	             &r1err_pins
