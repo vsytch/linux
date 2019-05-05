@@ -67,6 +67,7 @@
 					<GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clk NPCM7XX_CLK_AHB>;
 			clock-names = "clk_emc";
+			resets = <&rstc 21>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&r2_pins
 					&r2md_pins>;
