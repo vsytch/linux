@@ -20,6 +20,7 @@
 #include <linux/spinlock.h>
 #include <linux/ctype.h>
 #include <linux/debugfs.h>
+#include <linux/reset.h>
 
 #include <linux/clk.h>
 
@@ -267,7 +268,7 @@ struct  npcm7xx_ether {
 	int duplex;
 	int need_reset;
 	char *dump_buf;
-	struct regmap *rst_regmap;
+	struct reset_control *reset;
 
 	/* Scratch page to use when rx skb alloc fails */
 	void *rx_scratch;
@@ -1877,26 +1878,14 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 
 	ether = netdev_priv(netdev);
 
-	ether->rst_regmap =
-		syscon_regmap_lookup_by_compatible("nuvoton,npcm750-rst");
-	if (IS_ERR(ether->rst_regmap)) {
-		dev_err(&pdev->dev, "%s: failed to find nuvoton,npcm750-rst\n", __func__);
-		return IS_ERR(ether->rst_regmap);
-	}
+	ether->reset = devm_reset_control_get(&pdev->dev, NULL);
+	if (IS_ERR(ether->reset))
+		return PTR_ERR(ether->reset);
 
 	/* Reset EMC module */
-	if (pdev->id == 0) {
-		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET,
-				   (0x1 << 6), (0x1 << 6));
-		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET,
-				   (0x1 << 6), 0);
-	}
-	if (pdev->id == 1) {
-		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET,
-				   (0x1 << 21), (0x1 << 21));
-		regmap_update_bits(ether->rst_regmap, IPSRST1_OFFSET,
-				   (0x1 << 21), 0);
-	}
+	reset_control_assert(ether->reset);
+	udelay(5);
+	reset_control_deassert(ether->reset);
 
 	ether->res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!ether->res) {
