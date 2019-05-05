@@ -1,0 +1,92 @@
+Nuvoton NPCM Reset controller
+
+In the NPCM Reset controller boot the USB PHY, USB host 
+and USB device initialize.
+
+Required properties:
+- compatible : "nuvoton,npcm750-reset" for NPCM7XX BMC
+- reg : specifies physical base address and size of the register.
+- #reset-cells: must be set to 1
+
+Example:
+	rstc: rstc@f0801000 {
+		compatible = "nuvoton,npcm750-reset";
+		reg = <0xf0801000 0x70>;
+		#reset-cells = <1>;
+	};
+
+Reset outputs:
+ 1  : FIU3 reset
+ 5  : UDC1 reset
+ 6  : EMC1 reset
+ 7  : UART 2-3 reset
+ 8  : UDC2 reset
+ 9  : PECI reset
+ 10 : AES reset
+ 11 : UART 0-1 reset
+ 12 : MC reset
+ 13 : SMB2 reset
+ 14 : SMB3 reset
+ 15 : SMB4 reset
+ 16 : SMB5 reset
+ 18 : PWM M0 reset
+ 19 : TIMER 0-4 reset
+ 20 : TIMER 5-9 reset
+ 21 : EMC2 reset
+ 22 : UDC4 reset
+ 23 : UDC5 reset
+ 24 : UDC6 reset
+ 25 : UDC3 reset
+ 26 : ADC reset
+ 28 : SMB6 reset
+ 29 : SMB7 reset
+ 30 : SMB0 reset
+ 31 : SMB1 reset
+ 32 : MFT0 reset
+ 33 : MFT1 reset
+ 34 : MFT2 reset
+ 35 : MFT3 reset
+ 36 : MFT4 reset
+ 37 : MFT5 reset
+ 38 : MFT6 reset
+ 39 : MFT7 reset
+ 40 : MMC reset
+ 41 : SDHC reset
+ 42 : GFX_SYS reset
+ 43 : AHB_PCIBRG reset
+ 44 : VDMA reset
+ 45 : ECE reset
+ 46 : VCD reset
+ 48 : OTP reset
+ 50 : SIOX1 reset
+ 51 : SIOX2 reset
+ 53 : 3DES reset
+ 54 : PSPI1 reset
+ 55 : PSPI2 reset
+ 57 : GMAC2 reset
+ 58 : USB host reset
+ 60 : GMAC1 reset
+ 63 : CP reset
+ 160: PWM M1 reset
+ 161: SMB12 reset
+ 162: SPIX reset
+ 163: SMB13 reset
+ 164: UDC0 reset
+ 165: UDC7 reset
+ 166: UDC8 reset
+ 167: UDC9 reset
+ 169: PCI mail box reset
+ 172: SMB14 reset
+ 173: SHA reset
+ 174: SEC ECC reset
+ 175: PCIe root complex reset
+ 176: Timer 10-14 reset
+ 177: RNG reset
+ 178: SMB15 reset
+ 179: SMB8 reset
+ 180: SMB9 reset
+ 181: SMB10 reset
+ 182: SMB11 reset
+ 183: ESPI reset
+ 183: USB PHY 1 reset
+ 184: USB PHY 2 reset
