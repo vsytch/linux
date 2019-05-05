@@ -6,6 +6,7 @@ Required properties:
 - compatible: "nuvoton,npcm750-adc" for the NPCM7XX BMC.
 - reg: specifies physical base address and size of the registers.
 - interrupts: Contain the ADC interrupt with flags for falling edge.
+- resets : phandle to the reset control for this device.
 
 Optional properties:
 - clocks: phandle of ADC reference clock, in case the clock is not
@@ -14,11 +15,6 @@ Optional properties:
 			   vref-supply is not added the ADC will use internal voltage
 			   reference.
 
-Required Node in the NPCM7xx BMC:
-An additional register is present in the NPCM7xx SOC which is
-assumed to be in the same device tree, with and marked as
-compatible with "nuvoton,npcm750-rst".
-
 Example:
 
 adc: adc@f000c000 {
@@ -26,10 +22,5 @@ adc: adc@f000c000 {
 	reg = <0xf000c000 0x8>;
 	interrupts = <GIC_SPI 0 IRQ_TYPE_LEVEL_HIGH>;
 	clocks = <&clk NPCM7XX_CLK_ADC>;
-};
-
-rst: rst@f0801000 {
-	compatible = "nuvoton,npcm750-rst", "syscon",
-	"simple-mfd";
-	reg = <0xf0801000 0x6C>;
+	resets = <&rstc 27>;	
 };
