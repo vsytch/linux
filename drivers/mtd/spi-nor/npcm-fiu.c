@@ -280,12 +280,21 @@ static int npcm_fiu_direct_read(struct mtd_info *mtd, loff_t from, size_t len,
 static int npcm_fiu_direct_write(struct mtd_info *mtd, loff_t to, size_t len,
 				 size_t *retlen, const u_char *buf)
 {
+	int cnt_w, cnt_b;
+	const u8 *buf_ptr;
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
 
-	memcpy_toio(chip->flash_region_mapped_ptr + to, buf, len);
+	for (cnt_w = 0; cnt_w < (len / 4); cnt_w++) {
+		buf_ptr = buf + (cnt_w * 4);
+		iowrite32(*((u32*)buf_ptr), chip->flash_region_mapped_ptr + to + (cnt_w * 4));
+	}
+	for (cnt_b = 0; cnt_b < (len % 4); cnt_b++) {
+		buf_ptr = buf + (cnt_w * 4) + cnt_b;
+		iowrite8(*(buf_ptr), chip->flash_region_mapped_ptr + to + (cnt_w * 4) + cnt_b);
+	}
 
-	*retlen = len;
+	*retlen = cnt_b + (cnt_w * 4);
 	return 0;
 }
 
