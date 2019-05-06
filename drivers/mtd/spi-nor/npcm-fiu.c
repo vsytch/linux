@@ -259,12 +259,21 @@ static const struct regmap_config npcm_mtd_regmap_config = {
 static int npcm_fiu_direct_read(struct mtd_info *mtd, loff_t from, size_t len,
 				size_t *retlen, u_char *buf)
 {
+	u8 *buf_ptr;
+	int cnt_w, cnt_b;
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
 
-	memcpy_fromio(buf, chip->flash_region_mapped_ptr + from, len);
+	for (cnt_w = 0; cnt_w < (len / 4); cnt_w++) {
+		buf_ptr = buf + (cnt_w * 4);
+		*((u32*)buf_ptr)= ioread32(chip->flash_region_mapped_ptr + from + (cnt_w * 4));
+	}
+	for (cnt_b = 0; cnt_b < (len % 4); cnt_b++) {
+		buf_ptr = buf + (cnt_w * 4) + cnt_b;
+		*(buf_ptr)= ioread8(chip->flash_region_mapped_ptr + from + (cnt_w * 4) + cnt_b);
+	}
 
-	*retlen = len;
+	*retlen = cnt_b + (cnt_w * 4);
 	return 0;
 }
 
@@ -507,7 +516,6 @@ static ssize_t npcm_fiu_read(struct spi_nor *nor, loff_t from, size_t len,
 	int i, readlen, currlen;
 	struct mtd_info *mtd;
 	size_t retlen = 0;
-	int cnt_w, cnt_b;
 	u8 *buf_ptr;
 	u32 addr;
 	int ret;
@@ -520,15 +528,7 @@ static ssize_t npcm_fiu_read(struct spi_nor *nor, loff_t from, size_t len,
 			npcm_fiu_set_drd(nor, host);
 			host->direct_rd_proto = chip->direct_rd_proto;
 		}
-		for (cnt_w=0; cnt_w < (len / 4); cnt_w++) {		
-			buf_ptr = read_buf + (cnt_w*4);
-			*((u32*)buf_ptr)= ioread32(chip->flash_region_mapped_ptr + from + (cnt_w*4));
-		}
-		for (cnt_b=0; cnt_b < (len % 4); cnt_b++) {
-			buf_ptr = read_buf + (cnt_w*4) + cnt_b;
-			*(buf_ptr)= ioread8(chip->flash_region_mapped_ptr + from + (cnt_w*4) + cnt_b);
-		}
-		retlen = cnt_b + (cnt_w*4);
+		npcm_fiu_direct_read(mtd, from, len, &retlen, read_buf);
 	} else {
 		i = 0;
 		currlen = (int)len;
