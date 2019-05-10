@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.5"
+#define VCD_VERSION "0.0.6"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -227,6 +227,7 @@
 
 #define DISPST	0
 #define  DISPST_MGAMODE BIT(7)
+#define  DISPST_HSCROFF BIT(1)
 
 #define HVCNTL	0x10
 #define  HVCNTL_MASK	0xff
@@ -683,11 +684,15 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 		npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 
 		if (npcm750_vcd_hres(vcd) && npcm750_vcd_vres(vcd)) {
+			struct regmap *gfxi = vcd->gfx_regmap;
+			u32 dispst;
 			/* wait for valid and stable resolution */
 			do {
 				mdelay(500);
+				regmap_read(gfxi, DISPST, &dispst);
 			} while (npcm750_vcd_vres(vcd) < 100 ||
-					npcm750_vcd_pclk(vcd) == 0);
+					npcm750_vcd_pclk(vcd) == 0 ||
+					(dispst & DISPST_HSCROFF));
 		}
 
 		/* setup resolution change detect register*/
