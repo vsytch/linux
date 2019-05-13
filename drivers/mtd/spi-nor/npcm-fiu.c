@@ -670,14 +670,6 @@ static int npcm_mtd_ram_register(struct device_node *np,
 	regmap_update_bits(host->regmap, NPCM_FIU_DRD_CFG,
 			   NPCM_FIU_DRD_CFG_DBW,
 			   rx_dummy << NPCM_FIU_DRD_DBW_SHIFT);
-	regmap_write(host->regmap, NPCM_FIU_DWR_CFG,
-		     NPCM_FIU_DWR_16_BYTE_BURST);
-	regmap_update_bits(host->regmap, NPCM_FIU_DWR_CFG,
-			   NPCM_FIU_DWR_CFG_ABPCK,
-			   DWR_ABPCK_4_BIT_PER_CLK << NPCM_FIU_DWR_ABPCK_SHIFT);
-	regmap_update_bits(host->regmap, NPCM_FIU_DWR_CFG,
-			   NPCM_FIU_DWR_CFG_DBPCK,
-			   DWR_DBPCK_4_BIT_PER_CLK << NPCM_FIU_DWR_DBPCK_SHIFT);
 
 	ret = mtd_device_parse_register(mtd, NULL, NULL, NULL, 0);
 	if (ret)
