@@ -259,29 +259,58 @@ static const struct regmap_config npcm_mtd_regmap_config = {
 static int npcm_fiu_direct_read(struct mtd_info *mtd, loff_t from, size_t len,
 				size_t *retlen, u_char *buf)
 {
-	u8 *buf_ptr;
-	int cnt_w, cnt_b;
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
+	void __iomem *src = chip->flash_region_mapped_ptr + from;
+	size_t offset = 0;
 
-	for (cnt_w = 0; cnt_w < (len / 4); cnt_w++) {
-		buf_ptr = buf + (cnt_w * 4);
-		*((u32*)buf_ptr)= ioread32(chip->flash_region_mapped_ptr + from + (cnt_w * 4));
-	}
-	for (cnt_b = 0; cnt_b < (len % 4); cnt_b++) {
-		buf_ptr = buf + (cnt_w * 4) + cnt_b;
-		*(buf_ptr)= ioread8(chip->flash_region_mapped_ptr + from + (cnt_w * 4) + cnt_b);
+	if (!(chip->host->spix_mode) &&
+	    IS_ALIGNED((uintptr_t)src, sizeof(uintptr_t)) &&
+	    IS_ALIGNED((uintptr_t)buf, sizeof(uintptr_t)) &&
+	    (len &~0x03)) {
+		memcpy_fromio(buf, src, len &~0x03);
+		offset = len &~0x03;
 	}
 
-	*retlen = cnt_b + (cnt_w * 4);
+	while(offset < len ) {
+		*(buf+offset)= ioread8(src + offset);
+		offset++;
+	}
+
+	*retlen = offset;
 	return 0;
 }
 
 static int npcm_fiu_direct_write(struct mtd_info *mtd, loff_t to, size_t len,
 				 size_t *retlen, const u_char *buf)
 {
-	int cnt_w, cnt_b;
-	const u8 *buf_ptr;
+	struct spi_nor *nor = mtd->priv;
+	struct npcm_chip *chip = nor->priv;
+	void __iomem *dst = chip->flash_region_mapped_ptr + to;
+	size_t offset = 0;
+
+	if (!(chip->host->spix_mode) &&
+	    IS_ALIGNED((uintptr_t)dst, sizeof(uintptr_t)) &&
+	    IS_ALIGNED((uintptr_t)buf, sizeof(uintptr_t)) &&
+	    (len &~0x03)) {
+		memcpy_toio(dst, buf, len &~0x03);
+		offset = len &~0x03;
+	}
+
+	while(offset < len ) {
+		iowrite8(*(buf+offset), dst + offset);
+		offset++;
+	}
+
+	*retlen = offset;
+	return 0;
+}
+
+#if 0
+static int npcm_fiu_direct_read(struct mtd_info *mtd, loff_t from, size_t len,
+				size_t *retlen, u_char *buf)
+{
+	#if 0
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
 
