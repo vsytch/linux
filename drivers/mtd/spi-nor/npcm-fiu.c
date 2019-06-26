@@ -21,9 +21,14 @@
 #include <linux/log2.h>
 #include <linux/mod_devicetable.h>
 #include <linux/of_device.h>
+#include <linux/mfd/syscon.h>
 
 #include <asm/sizes.h>
 #include <mtd/mtd-abi.h>
+
+/* NPCM7xx GCR module */
+#define NPCM7XX_INTCR3_OFFSET		0x9C
+#define NPCM7XX_INTCR3_FIU_FIX		BIT(6)
 
 /* Flash Interface Unit (FIU) Registers */
 #define NPCM_FIU_DRD_CFG		0x00
@@ -261,23 +266,10 @@ static int npcm_fiu_direct_read(struct mtd_info *mtd, loff_t from, size_t len,
 {
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
-	void __iomem *src = chip->flash_region_mapped_ptr + from;
-	size_t offset = 0;
 
-	if (!(chip->host->spix_mode) &&
-	    IS_ALIGNED((uintptr_t)src, sizeof(uintptr_t)) &&
-	    IS_ALIGNED((uintptr_t)buf, sizeof(uintptr_t)) &&
-	    (len &~0x03)) {
-		memcpy_fromio(buf, src, len &~0x03);
-		offset = len &~0x03;
-	}
+	memcpy_fromio(buf, chip->flash_region_mapped_ptr + from, len);
 
-	while(offset < len ) {
-		*(buf+offset)= ioread8(src + offset);
-		offset++;
-	}
-
-	*retlen = offset;
+	*retlen = len;
 	return 0;
 }
 
@@ -286,23 +278,10 @@ static int npcm_fiu_direct_write(struct mtd_info *mtd, loff_t to, size_t len,
 {
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
-	void __iomem *dst = chip->flash_region_mapped_ptr + to;
-	size_t offset = 0;
 
-	if (!(chip->host->spix_mode) &&
-	    IS_ALIGNED((uintptr_t)dst, sizeof(uintptr_t)) &&
-	    IS_ALIGNED((uintptr_t)buf, sizeof(uintptr_t)) &&
-	    (len &~0x03)) {
-		memcpy_toio(dst, buf, len &~0x03);
-		offset = len &~0x03;
-	}
+	memcpy_toio(chip->flash_region_mapped_ptr + to, buf, len);
 
-	while(offset < len ) {
-		iowrite8(*(buf+offset), dst + offset);
-		offset++;
-	}
-
-	*retlen = offset;
+	*retlen = len;
 	return 0;
 }
 
@@ -693,6 +672,7 @@ static void npcm_fiu_enable_direct_rd(struct spi_nor *nor,
 				      struct npcm_chip *chip)
 {
 	struct device *dev = host->dev;
+	struct regmap *gcr_regmap;
 	u32 flashsize;
 
 	if (!host->res_mem) {
@@ -724,6 +704,17 @@ static void npcm_fiu_enable_direct_rd(struct spi_nor *nor,
 		return;
 	}
 
+	if (of_device_is_compatible(dev->of_node, "nuvoton,npcm750-fiu")) {
+		gcr_regmap = 
+			syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
+		if (IS_ERR(gcr_regmap)) {
+			dev_warn(dev, "Didn't find nuvoton,npcm750-gcr, direct read disabled\n");
+			return;
+		}
+		regmap_update_bits(gcr_regmap, NPCM7XX_INTCR3_OFFSET,
+				   NPCM7XX_INTCR3_FIU_FIX,
+				   NPCM7XX_INTCR3_FIU_FIX);
+	}
 	npcm_fiu_set_drd(nor, host);
 
 	host->direct_rd_proto = nor->read_proto;
