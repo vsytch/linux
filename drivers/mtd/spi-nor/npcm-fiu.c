@@ -266,8 +266,17 @@ static int npcm_fiu_direct_read(struct mtd_info *mtd, loff_t from, size_t len,
 {
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
+	void __iomem *src = chip->flash_region_mapped_ptr + from;
+	size_t offset = 0;
 
-	memcpy_fromio(buf, chip->flash_region_mapped_ptr + from, len);
+	if (chip->host->spix_mode) {
+		while(offset < len) {
+			*(buf + offset) = ioread8(src + offset);
+			offset++;
+		}
+	} else {
+		memcpy_fromio(buf, src, len);
+	}
 
 	*retlen = len;
 	return 0;
@@ -278,8 +287,17 @@ static int npcm_fiu_direct_write(struct mtd_info *mtd, loff_t to, size_t len,
 {
 	struct spi_nor *nor = mtd->priv;
 	struct npcm_chip *chip = nor->priv;
+	void __iomem *dst = chip->flash_region_mapped_ptr + to;
+	size_t offset = 0;
 
-	memcpy_toio(chip->flash_region_mapped_ptr + to, buf, len);
+	if (chip->host->spix_mode) {
+		while(offset < len) {
+			iowrite8(*(buf + offset), dst + offset);
+			offset++;
+		}
+	} else {
+		memcpy_toio(dst, buf, len);
+	}
 
 	*retlen = len;
 	return 0;
