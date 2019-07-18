@@ -395,11 +395,11 @@
 					compatible = "ti,tmp421";
 					reg = <0x4c>;
 				};
-        /* P12V Quarter Brick DC/DC Power Module Q54SH12050 @58 */
-        power-brick@58 {
-          compatible = "delta,dps800";
-          reg = <0x58>;
-        };
+				/* P12V Quarter Brick DC/DC Power Module Q54SH12050 @58 */
+				power-brick@58 {
+					compatible = "delta,dps800";
+					reg = <0x58>;
+				};
 			};
 
 			i2c3: i2c@83000 {
@@ -425,11 +425,11 @@
 				#size-cells = <0>;
 				bus-frequency = <100000>;
 				status = "okay";
-        slave_mqueue: i2c-slave-mqueue {
-          compatible = "i2c-slave-mqueue";
-          reg = <0x40000010>;
-          status = "okay";
-        };
+				slave_mqueue: i2c-slave-mqueue {
+					compatible = "i2c-slave-mqueue";
+					reg = <0x40000010>;
+					status = "okay";
+				};
 			};
 
 			i2c6: i2c@86000 {
@@ -500,12 +500,6 @@
 					compatible = "ti,tmp421";
 					reg = <0x4c>;
 				};
-
-				adc128d818@1d {
-					compatible = "ti,adc128d818";
-					reg = <0x1d>;
-					ti,mode = <1>;
-				};
 			};
 
 			i2c8: i2c@88000 {
@@ -516,12 +510,6 @@
 				adm1278@11 {
 					compatible = "adm1278";
 					reg = <0x11>;
-					Rsense = <500>;
-				};
-
-				adm1278@12 {
-					compatible = "adm1278";
-					reg = <0x12>;
 					Rsense = <500>;
 				};
 			};
@@ -543,86 +531,6 @@
 					reg = <0x27>;
 					gpio-controller;
 					#gpio-cells = <2>;
-					P0_0 {
-						gpios = <0 0>;
-						output-low;
-						line-name = "LED_POSTCODE_0_R";
-					};
-					P0_1 {
-						gpios = <1 0>;
-						output-low;
-						line-name = "LED_POSTCODE_1_R";
-					};
-					P0_2 {
-						gpios = <2 0>;
-						output-low;
-						line-name = "LED_POSTCODE_2_R";
-					};
-					P0_3 {
-						gpios = <3 0>;
-						output-low;
-						line-name = "LED_POSTCODE_3_R";
-					};
-					P0_4 {
-						gpios = <4 0>;
-						output-low;
-						line-name = "LED_POSTCODE_4_R";
-					};
-					P0_5 {
-						gpios = <5 0>;
-						output-low;
-						line-name = "LED_POSTCODE_5_R";
-					};
-					P0_6 {
-						gpios = <6 0>;
-						output-low;
-						line-name = "LED_POSTCODE_6_R";
-					};
-					P0_7 {
-						gpios = <7 0>;
-						output-low;
-						line-name = "LED_POSTCODE_7_R";
-					};
-					P1_0 {
-						gpios = <8 0>;
-						output-high;
-						line-name = "FM_DEBUG_RST_BTN_N";
-					};
-					P1_1 {
-						gpios = <9 0>;
-						output-high;
-						line-name = "FM_DEBUG_PWR_BTN_N";
-					};
-					P1_2 {
-						gpios = <10 0>;
-						input;
-						line-name = "PWRGD_SYS_PWROK";
-					};
-					P1_3 {
-						gpios = <11 0>;
-						input;
-						line-name = "RST_PLTRST_N";
-					};
-					P1_4 {
-						gpios = <12 0>;
-						input;
-						line-name = "PWRGD_DSW_PWROK";
-					};
-					P1_5 {
-						gpios = <13 0>;
-						input;
-						line-name = "FM_CPU_CATERR_MSMI_LVT3_N";
-					};
-					P1_6 {
-						gpios = <14 0>;
-						input;
-						line-name = "FM_SLPS3_N";
-					};
-					P1_7 {
-						gpios = <15 0>;
-						input;
-						line-name = "FM_UART_SWITCH_N";
-					};
 				};
 			};
 
