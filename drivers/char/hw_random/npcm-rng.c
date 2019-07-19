@@ -98,6 +98,7 @@ static int npcm_rng_probe(struct platform_device *pdev)
 {
 	struct npcm_rng *priv;
 	struct resource *res;
+	u32 quality;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -116,7 +117,10 @@ static int npcm_rng_probe(struct platform_device *pdev)
 #endif
 	priv->rng.read = npcm_rng_read;
 	priv->rng.priv = (unsigned long)&pdev->dev;
-	priv->rng.quality = 1024;
+	if (of_property_read_u32(pdev->dev.of_node, "quality", &quality))
+		priv->rng.quality = 1000;
+	else
+		priv->rng.quality = quality;
 
 	writel(NPCM_RNG_M1ROSEL, priv->base + NPCM_RNGMODE_REG);
 #ifndef CONFIG_PM
