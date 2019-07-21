@@ -28,7 +28,7 @@
 
 /* NPCM7xx Reset registers */
 #define NPCM_SWRSTR		0x14
-#define NPCM_SWRST1		BIT(3)
+#define NPCM_SWRST		BIT(2)
 
 #define NPCM_IPSRST1		0x20
 #define NPCM_IPSRST1_USBD1	BIT(5)
@@ -56,25 +56,24 @@ struct npcm_rc_data {
 	struct notifier_block restart_nb;
 	void __iomem *base;
 	spinlock_t lock;
+	u32 sw_reset_number;
 };
 
 #define to_rc_data(p) container_of(p, struct npcm_rc_data, rcdev)
 
-#ifdef ENABLE_SW_RESET
 static int npcm_rc_restart(struct notifier_block *nb, unsigned long mode, 
 			   void *cmd)
 {
 	struct npcm_rc_data *rc = container_of(nb, struct npcm_rc_data, 
 					       restart_nb);
 
-	writel(NPCM_SWRST1, rc->base + NPCM_SWRSTR);
+	writel(NPCM_SWRST << rc->sw_reset_number, rc->base + NPCM_SWRSTR);
 	mdelay(1000);
 
 	pr_emerg("%s: unable to restart system\n", __func__);
 
 	return NOTIFY_DONE;
 }
-#endif
 
 static int npcm_rc_setclear_reset(struct reset_controller_dev *rcdev,
 				  unsigned long id, bool set)
@@ -243,13 +242,16 @@ static int npcm_rc_probe(struct platform_device *pdev)
 	if (npcm_usb_reset(pdev, rc))
 		dev_warn(&pdev->dev, "NPCM USB reset failed, can cause issues with UDC and USB host\n");
 
-#ifdef ENABLE_SW_RESET
-	rc->restart_nb.priority = 192,
-	rc->restart_nb.notifier_call = npcm_rc_restart,
-	ret = register_restart_handler(&rc->restart_nb);
-	if (ret)
-		dev_warn(&pdev->dev, "failed to register restart handler\n");
-#endif
+	if (!of_property_read_u32(pdev->dev.of_node, "nuvoton,sw-reset-number",
+				  &rc->sw_reset_number)) {
+		if ((rc->sw_reset_number) && (rc->sw_reset_number < 5)) {
+			rc->restart_nb.priority = 192,
+			rc->restart_nb.notifier_call = npcm_rc_restart,
+			ret = register_restart_handler(&rc->restart_nb);
+			if (ret)
+				dev_warn(&pdev->dev, "failed to register restart handler\n");
+		}
+	}
 
 	pr_info("NPCM RESET driver probed\n");
 	return ret;
