@@ -1015,6 +1015,11 @@
 					reg = <0x30>;
 					status = "okay";
 				};
+				intel-peci-dimmtemp@31 {
+					compatible = "intel,peci-client";
+					reg = <0x31>;
+					status = "okay";
+				};
 			};
 
 			spi0: spi@200000 {
