@@ -295,7 +295,7 @@ struct  npcm7xx_ether {
 
 #if defined CONFIG_NPCM7XX_EMC_ETH_DEBUG || defined CONFIG_DEBUG_FS
 #define REG_PRINT(reg_name) {t = scnprintf(next, size, "%-10s = %08X\n", \
-	#reg_name, readl(ether->reg + reg_name)); size -= t;	next += t; }
+	#reg_name, readl(ether->reg + (reg_name))); size -= t;	next += t; }
 #define DUMP_PRINT(f, x...) {t = scnprintf(next, size, f, ## x); size -= t; \
 	next += t; }
 
@@ -476,30 +476,29 @@ static void npcm7xx_info_print(struct net_device *netdev)
 	int count;
 	struct npcm7xx_ether *ether;
 	struct platform_device *pdev;
+	char c;
+	char *tmp_buf;
 	const size_t print_size = 5 * PAGE_SIZE;
 
 	ether = netdev_priv(netdev);
 	pdev = ether->pdev;
 
 	emc_dump_buf = kmalloc(print_size, GFP_KERNEL);
-	if (!emc_dump_buf) {
-		dev_err(&pdev->dev, "kmalloc failed\n");
-	} else {
-		char c;
-		char *tmp_buf = emc_dump_buf;
+	if (!emc_dump_buf)
+		return;
 
-		count = npcm7xx_info_dump(emc_dump_buf, print_size, netdev);
-		while (count > 512) {
-			c = tmp_buf[512];
-			tmp_buf[512] = 0;
-			dev_info(&pdev->dev, "%s", tmp_buf);
-			tmp_buf += 512;
-			tmp_buf[0] = c;
-			count -= 512;
-		}
+	tmp_buf = emc_dump_buf;
+	count = npcm7xx_info_dump(emc_dump_buf, print_size, netdev);
+	while (count > 512) {
+		c = tmp_buf[512];
+		tmp_buf[512] = 0;
 		dev_info(&pdev->dev, "%s", tmp_buf);
-		kfree(emc_dump_buf);
-	}
+		tmp_buf += 512;
+		tmp_buf[0] = c;
+		count -= 512;
+
+	dev_info(&pdev->dev, "%s", tmp_buf);
+	kfree(emc_dump_buf);
 }
 #endif
 
@@ -576,7 +575,8 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether)
 		npcm7xx_fs_dir = debugfs_create_dir(DRV_MODULE_NAME, NULL);
 
 		if (!npcm7xx_fs_dir || IS_ERR(npcm7xx_fs_dir)) {
-			dev_err(&ether->pdev->dev, "ERROR %s, debugfs create directory failed\n",
+			dev_err(&ether->pdev->dev,
+				"ERROR %s, debugfs create directory failed\n",
 				DRV_MODULE_NAME);
 			return -ENOMEM;
 		}
@@ -586,7 +586,9 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether)
 	ether->dbgfs_dir = debugfs_create_dir(ether->netdev->name,
 					      npcm7xx_fs_dir);
 	if (!ether->dbgfs_dir || IS_ERR(ether->dbgfs_dir)) {
-		dev_err(&ether->pdev->dev, "ERROR failed to create %s directory\n", ether->netdev->name);
+		dev_err(&ether->pdev->dev,
+			"ERROR failed to create %s directory\n",
+			ether->netdev->name);
 		return -ENOMEM;
 	}
 
@@ -597,7 +599,8 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether)
 				    &npcm7xx_debug_show_fops);
 
 	if (!ether->dbgfs_status || IS_ERR(ether->dbgfs_status)) {
-		dev_err(&ether->pdev->dev, "ERROR creating \'status\' debugfs file\n");
+		dev_err(&ether->pdev->dev,
+			"ERROR creating \'status\' debugfs file\n");
 		debugfs_remove_recursive(ether->dbgfs_dir);
 
 		return -ENOMEM;
@@ -610,7 +613,8 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether)
 						   &npcm7xx_debug_reset_fops);
 
 	if (!ether->dbgfs_dma_cap || IS_ERR(ether->dbgfs_dma_cap)) {
-		dev_err(&ether->pdev->dev, "ERROR creating stmmac \'do_reset\' debugfs file\n");
+		dev_err(&ether->pdev->dev,
+			"ERROR creating stmmac \'do_reset\' debugfs file\n");
 		debugfs_remove_recursive(ether->dbgfs_dir);
 
 		return -ENOMEM;
@@ -678,27 +682,32 @@ static void npcm7xx_write_cam(struct net_device *netdev,
 
 	writel(lsw, (ether->reg + REG_CAML_BASE) + x * CAM_ENTRY_SIZE);
 	writel(msw, (ether->reg + REG_CAMM_BASE) + x * CAM_ENTRY_SIZE);
-	dev_dbg(&ether->pdev->dev, "REG_CAML_BASE = 0x%08X REG_CAMM_BASE = 0x%08X", lsw, msw);
+	dev_dbg(&ether->pdev->dev,
+		"REG_CAML_BASE = 0x%08X REG_CAMM_BASE = 0x%08X", lsw, msw);
 }
 
 static struct sk_buff *get_new_skb(struct net_device *netdev, u32 i)
 {
 	__le32 buffer;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	struct sk_buff *skb = netdev_alloc_skb(netdev, roundup(MAX_PACKET_SIZE_W_CRC, 4));
+	struct sk_buff *skb = netdev_alloc_skb(netdev,
+		roundup(MAX_PACKET_SIZE_W_CRC, 4));
 
 	if (unlikely(!skb)) {
 		if (net_ratelimit())
 			netdev_warn(netdev, "failed to allocate rx skb\n");
 		buffer = ether->rx_scratch_dma;
 	} else {
-		/* Do not unmark the following skb_reserve() Receive Buffer Starting
-		 * Address must be aligned to 4 bytes and the following line
-		 * if unmarked will make it align to 2 and this likely will
-		 * hult the RX and crash the linux skb_reserve(skb, NET_IP_ALIGN);
+		/* Do not unmark the following skb_reserve() Receive Buffer
+		 * Starting Address must be aligned to 4 bytes and the following
+		 * line if unmarked will make it align to 2 and this likely will
+		 * hult the RX and crash the linux
+		 * skb_reserve(skb, NET_IP_ALIGN);
 		 */
 		skb->dev = netdev;
-		buffer = dma_map_single(&netdev->dev, skb->data, roundup(MAX_PACKET_SIZE_W_CRC, 4),
+		buffer = dma_map_single(&netdev->dev,
+					skb->data,
+					roundup(MAX_PACKET_SIZE_W_CRC, 4),
 					DMA_FROM_DEVICE);
 		if (unlikely(dma_mapping_error(&netdev->dev, buffer))) {
 			if (net_ratelimit())
@@ -726,7 +735,8 @@ static void npcm7xx_free_desc(struct net_device *netdev,
 	for (i = 0; i < TX_QUEUE_LEN; i++) {
 		skb = ether->tx_skb[i];
 		if (skb) {
-			dma_unmap_single(&netdev->dev, (dma_addr_t)(ether->tdesc[i].buffer),
+			dma_unmap_single(&netdev->dev,
+					 (dma_addr_t)(ether->tdesc[i].buffer),
 					 skb->len, DMA_TO_DEVICE);
 			dev_kfree_skb_any(skb);
 			ether->tx_skb[i] = NULL;
@@ -736,7 +746,8 @@ static void npcm7xx_free_desc(struct net_device *netdev,
 	for (i = 0; i < RX_QUEUE_LEN; i++) {
 		skb = ether->rx_skb[i];
 		if (skb) {
-			dma_unmap_single(&netdev->dev, (dma_addr_t)(ether->rdesc[i].buffer),
+			dma_unmap_single(&netdev->dev,
+					 (dma_addr_t)(ether->rdesc[i].buffer),
 					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
 					 DMA_FROM_DEVICE);
 			dev_kfree_skb_any(skb);
@@ -761,8 +772,10 @@ static void npcm7xx_free_desc(struct net_device *netdev,
 
 		/* Free scratch packet buffer */
 		if (ether->rx_scratch)
-			dma_free_coherent(&pdev->dev, roundup(MAX_PACKET_SIZE_W_CRC, 4),
-					  ether->rx_scratch, ether->rx_scratch_dma);
+			dma_free_coherent(&pdev->dev,
+					  roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					  ether->rx_scratch,
+					  ether->rx_scratch_dma);
 		ether->rx_scratch = NULL;
 	}
 }
@@ -787,7 +800,8 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 						   GFP_KERNEL);
 
 		if (!ether->tdesc) {
-			dev_err(&pdev->dev, "Failed to allocate memory for tx desc\n");
+			dev_err(&pdev->dev,
+				"Failed to allocate memory for tx desc\n");
 			npcm7xx_free_desc(netdev, true);
 			return -ENOMEM;
 		}
@@ -802,7 +816,8 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 						   GFP_KERNEL);
 
 		if (!ether->rdesc) {
-			dev_err(&pdev->dev, "Failed to allocate memory for rx desc\n");
+			dev_err(&pdev->dev,
+				"Failed to allocate memory for rx desc\n");
 			npcm7xx_free_desc(netdev, true);
 			return -ENOMEM;
 		}
@@ -828,12 +843,13 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 
 	/* Allocate scratch packet buffer */
 	if (!ether->rx_scratch) {
-		ether->rx_scratch = dma_alloc_coherent(&pdev->dev,
-					      roundup(MAX_PACKET_SIZE_W_CRC, 4),
-					      &ether->rx_scratch_dma,
-					      GFP_KERNEL);
-		if (!ether->rx_scratch){
-			dev_err(&pdev->dev, "Failed to allocate memory for rx_scratch\n");
+		ether->rx_scratch =
+			dma_alloc_coherent(&pdev->dev,
+					   roundup(MAX_PACKET_SIZE_W_CRC, 4),
+					   &ether->rx_scratch_dma, GFP_KERNEL);
+		if (!ether->rx_scratch) {
+			dev_err(&pdev->dev,
+				"Failed to allocate memory for rx_scratch\n");
 			npcm7xx_free_desc(netdev, true);
 			return -ENOMEM;
 		}
@@ -860,7 +876,6 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 	}
 
 	ether->start_rx_ptr = ether->rdesc_phys;
-	wmb();
 	for (i = 0; i < TX_QUEUE_LEN; i++)
 		ether->tx_skb[i] = NULL;
 
@@ -897,8 +912,7 @@ static void npcm7xx_return_default_idle(struct net_device *netdev)
 		val = readl((ether->reg + REG_FFTCR));
 	} while (val == 0);
 
-	/*
-	 * Now we can verify if (ether->reg + REG_MCMDR).SWR became
+	/* Now we can verify if (ether->reg + REG_MCMDR).SWR became
 	 * 0 (probably it will be 0 on the first read).
 	 */
 	do {
@@ -914,28 +928,28 @@ static void npcm7xx_enable_mac_interrupt(struct net_device *netdev)
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 	__le32 val;
 
-	val = ENRXINTR |  /* Start of RX interrupts */
-		ENCRCE   |
-		EMRXOV   |
-		(ENPTLE * (!IS_VLAN)) | /* If we don't support VLAN we want interrupt on long packets */
-		ENRXGD   |
-		ENALIE   |
-		ENRP     |
-		ENMMP    |
-		ENDFO    |
-		/*   ENDENI   |  */  /* We don't need interrupt on DMA Early Notification */
-		ENRDU    |    /* We don't need interrupt on Receive Descriptor Unavailable Interrupt */
-		ENRXBERR |
-		/*   ENCFR    |  */
-		ENTXINTR |  /* Start of TX interrupts */
-		ENTXEMP  |
-		ENTXCP   |
-		ENTXDEF  |
-		ENNCS    |
-		ENTXABT  |
-		ENLC     |
-		/* ENTDU    |  */  /* We don't need interrupt on Transmit Descriptor Unavailable at start of operation */
-		ENTXBERR;
+	val = ENRXINTR |    /* Start of RX interrupts */
+	      ENCRCE   |
+	      EMRXOV   |
+	     (ENPTLE * !IS_VLAN)  |    /* If we don't support VLAN we want interrupt on long packets */
+	      ENRXGD   |
+	      ENALIE   |
+	      ENRP     |
+	      ENMMP    |
+	      ENDFO    |
+	   /* ENDENI   | */ /* We don't need interrupt on DMA Early Notification */
+	      ENRDU    |    /* We don't need interrupt on Receive Descriptor Unavailable Interrupt */
+	      ENRXBERR |
+	   /* ENCFR    | */
+	      ENTXINTR |    /* Start of TX interrupts */
+	      ENTXEMP  |
+	      ENTXCP   |
+	      ENTXDEF  |
+	      ENNCS    |
+	      ENTXABT  |
+	      ENLC     |
+	   /* ENTDU    | */ /* We don't need interrupt on Transmit Descriptor Unavailable at start of operation */
+	      ENTXBERR;
 	writel(val, (ether->reg + REG_MIEN));
 }
 
@@ -957,8 +971,7 @@ static void npcm7xx_set_global_maccmd(struct net_device *netdev)
 
 	val |= MCMDR_SPCRC | MCMDR_ENMDC | MCMDR_ACP | MCMDR_NDEF;
 	if (IS_VLAN) {
-		/*
-		 * we set ALP accept long packets since VLAN packets
+		/* we set ALP accept long packets since VLAN packets
 		 * are 4 bytes longer than 1518
 		 */
 		val |= MCMDR_ALP;
@@ -1065,9 +1078,10 @@ static int npcm7xx_mdio_write(struct mii_bus *bus, int phy_id, int regnum,
 	/* Wait for completion */
 	while (readl((ether->reg + REG_MIIDA)) & PHYBUSY) {
 		if (time_after(jiffies, timeout)) {
-			dev_dbg(&ether->pdev->dev, "mdio read timed out\n ether->reg = 0x%x phy_id=0x%x REG_MIIDA=0x%x\n",
-				(unsigned int)ether->reg, phy_id
-				, readl((ether->reg + REG_MIIDA)));
+			dev_dbg(&ether->pdev->dev,
+				"mdio read timed out\n ether->reg = 0x%x phy_id=0x%x REG_MIIDA=0x%x\n",
+				(unsigned int)ether->reg, phy_id,
+				readl((ether->reg + REG_MIIDA)));
 			return -ETIMEDOUT;
 		}
 		cpu_relax();
@@ -1086,7 +1100,8 @@ static int npcm7xx_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	/* Wait for completion */
 	while (readl((ether->reg + REG_MIIDA)) & PHYBUSY) {
 		if (time_after(jiffies, timeout)) {
-			dev_dbg(&ether->pdev->dev, "mdio read timed out\n ether->reg = 0x%x phy_id=0x%x REG_MIIDA=0x%x\n",
+			dev_dbg(&ether->pdev->dev,
+				"mdio read timed out\n ether->reg = 0x%x phy_id=0x%x REG_MIIDA=0x%x\n",
 				(unsigned int)ether->reg, phy_id
 				, readl((ether->reg + REG_MIIDA)));
 			return -ETIMEDOUT;
@@ -1224,13 +1239,16 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 				      DMA_TO_DEVICE);
 	ether->tx_skb[ether->cur_tx]  = skb;
 	if (skb->len > MAX_PACKET_SIZE)
-		dev_err(&ether->pdev->dev, "skb->len (= %d) > MAX_PACKET_SIZE (= %d)\n",
+		dev_err(&ether->pdev->dev,
+			"skb->len (= %d) > MAX_PACKET_SIZE (= %d)\n",
 			skb->len, MAX_PACKET_SIZE);
 
 	txbd->sl = skb->len > MAX_PACKET_SIZE ? MAX_PACKET_SIZE : skb->len;
 	dma_wmb();
 
 	txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE;
+
+	/* make sure that data is in memory before we trigger TX */
 	wmb();
 
 	/* trigger TX */
@@ -1242,6 +1260,9 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 	spin_lock_irqsave(&ether->lock, flags);
 	ether->pending_tx++;
 
+	/* sometimes we miss the tx interrupt due to HW issue, so NAPI will not
+	 * clean the pending tx, so we clean it also here
+	 */
 	npcm7xx_clean_tx(netdev, true);
 
 	if (ether->pending_tx >= TX_QUEUE_LEN - 1) {
@@ -1254,11 +1275,17 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 
 		txbd = (ether->tdesc + index_to_wake);
 		txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE | MACTXINTEN;
+
+		/* make sure that data is in memory before we trigger TX */
 		wmb();
 
 		/* Clear TDU interrupt */
 		writel(MISTA_TDU, (ether->reg + REG_MISTA));
 
+		/* due to HW issue somtimes, we miss the TX interrupt we just
+		 * set (MACTXINTEN), so we also set TDU for Transmit
+		 * Descriptor Unavailable interrupt
+		 */
 		reg_mien = readl((ether->reg + REG_MIEN));
 		if (reg_mien != 0)
 			/* Enable TDU interrupt */
@@ -1360,8 +1387,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 	}
 
 	if (unlikely(status & (MISTA_RXOV | MISTA_RDU))) {
-		/*
-		 * filter out all received packets until we have
+		/* filter out all received packets until we have
 		 * enough available buffer descriptors
 		 */
 		writel(0, (ether->reg + REG_CAMCMR));
@@ -1371,8 +1397,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 		if (status & (MISTA_RDU))
 			ether->rdu++;
 
-		/*
-		 * workaround Errata 1.36: EMC Hangs on receiving 253-256
+		/* workaround Errata 1.36: EMC Hangs on receiving 253-256
 		 * byte packet
 		 */
 		rxfsm = readl((ether->reg + REG_RXFSM));
@@ -1395,28 +1420,32 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 				spin_unlock_irqrestore(&ether->lock, flags);
 				ether->need_reset = 1;
 				    napi_schedule(&ether->napi);
-				dev_err(&pdev->dev, "stuck on REG_RXFSM = 0x%08X status=%08X doing reset!\n", rxfsm, status);
+				dev_err(&pdev->dev,
+					"stuck on REG_RXFSM = 0x%08X status=%08X doing reset!\n",
+					rxfsm, status);
 				return IRQ_HANDLED;
 			}
 		}
 	}
 
-	/* echo MISTA status on unexpected flags although we don't do anithing with them */
+	/* echo MISTA status on unexpected flags although we don't do anithing
+	 * with them
+	 */
 	if (unlikely(status &
-		     (/* MISTA_RXINTR | */ /* Receive - all RX interrupt set this */
-			       MISTA_CRCE   |    /* CRC Error */
-			    /* MISTA_RXOV   | */ /* Receive FIFO Overflow - we alread handled it */
-			       (MISTA_PTLE * !IS_VLAN) | /* Packet Too Long is needed if VLAN is not supported */
-			    /* MISTA_RXGD   | */ /* Receive Good - this is the common good case */
-			       MISTA_ALIE   |    /* Alignment Error */
-			       MISTA_RP     |    /* Runt Packet */
-			       MISTA_MMP    |    /* More Missed Packet */
-			       MISTA_DFOI   |    /* Maximum Frame Length */
-			    /* MISTA_DENI   | */ /* DMA Early Notification - every packet get this */
-			    /* MISTA_RDU    | */ /* Receive Descriptor Unavailable */
-			    /* MISTA_RXBERR | */ /* Receive Bus Error Interrupt - we alread handled it */
-			    /* MISTA_CFR    | */ /* Control Frame Receive - not an error */
-				0))) {
+		(/* MISTA_RXINTR | */ /* Receive - all RX interrupt set this */
+		    MISTA_CRCE   |    /* CRC Error */
+		 /* MISTA_RXOV   | */ /* Receive FIFO Overflow - we alread handled it */
+	(!IS_VLAN * MISTA_PTLE)  |    /* Packet Too Long is needed if VLAN is not supported */
+		 /* MISTA_RXGD   | */ /* Receive Good - this is the common good case */
+		    MISTA_ALIE   |    /* Alignment Error */
+		    MISTA_RP     |    /* Runt Packet */
+		    MISTA_MMP    |    /* More Missed Packet */
+		    MISTA_DFOI   |    /* Maximum Frame Length */
+		 /* MISTA_DENI   | */ /* DMA Early Notification - every packet get this */
+		 /* MISTA_RDU    | */ /* Receive Descriptor Unavailable */
+		 /* MISTA_RXBERR | */ /* Receive Bus Error Interrupt - we alread handled it */
+		 /* MISTA_CFR    | */ /* Control Frame Receive - not an error */
+			0))) {
 		dev_dbg(&pdev->dev, "emc rx MISTA status=0x%08X\n", status);
 		any_err = 1;
 		ether->rx_err++;
@@ -1458,8 +1487,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		ether->max_waiting_rx = local_count;
 
 	if (local_count > (4 * RX_POLL_SIZE))
-		/*
-		 * we are porbably in a storm of short packets and we don't
+		/* we are porbably in a storm of short packets and we don't
 		 * want to get into RDU since short packets in RDU cause
 		 * many RXOV which may cause EMC halt, so we filter out all
 		 * coming packets
@@ -1487,8 +1515,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		s = ether->rx_skb[ether->cur_rx];
 		length = status & 0xFFFF;
 
-		/*
-		 * If VLAN is not supporte RXDS_PTLE (packet too long) is also
+		/* If VLAN is not supporte RXDS_PTLE (packet too long) is also
 		 * an error
 		 */
 		if (likely((status & (RXDS_RXGD | RXDS_CRCE | RXDS_ALIE |
@@ -1507,9 +1534,8 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			ether->rx_count_pool++;
 
 			/* now we allocate new skb instead if the used one. */
-			if (!get_new_skb(netdev, ether->cur_rx)) {
+			if (!get_new_skb(netdev, ether->cur_rx))
 				ether->stats.rx_dropped++;
-			}
 		} else {
 			ether->rx_err_count++;
 			ether->stats.rx_errors++;
@@ -1536,8 +1562,11 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			}
 		}
 
+		/* make sure other values are set before we set owner */
 		wmb();
+
 		rxbd->sl = RX_OWN_DMA;
+		/* make sure that data is in memory before we trigger RX */
 		wmb();
 
 		if (++ether->cur_rx >= RX_QUEUE_LEN)
@@ -1569,8 +1598,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			ether->max_waiting_rx = local_count;
 
 		if (local_count > (3 * RX_POLL_SIZE))
-			/*
-			 * we are porbably in a storm of short packets and
+			/* we are porbably in a storm of short packets and
 			 * we don't want to get into RDU since short packets in
 			 * RDU cause many RXOV which may cause
 			 * EMC halt, so we filter out all coming packets
@@ -1748,7 +1776,8 @@ static void get_mac_address(struct net_device *netdev)
 			 pdev->name, netdev->dev_addr);
 	} else {
 		eth_hw_addr_random(netdev);
-		dev_info(&pdev->dev, "%s: device MAC address (random generator) %pM\n",
+		dev_info(&pdev->dev,
+			 "%s: device MAC address (random generator) %pM\n",
 			 netdev->name, netdev->dev_addr);
 	}
 }
@@ -1957,7 +1986,8 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 		}
 		dev_info(&pdev->dev, "Using NCSI interface\n");
 		ether->use_ncsi = true;
-		ether->ncsidev = ncsi_register_dev(netdev, npcm7xx_ncsi_handler);
+		ether->ncsidev = ncsi_register_dev(netdev,
+						   npcm7xx_ncsi_handler);
 		if (!ether->ncsidev) {
 			error = -ENODEV;
 			goto failed_free_napi;
