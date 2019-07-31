@@ -1,11 +1,11 @@
 Nuvoton NPCM7XX 10/100 Ethernet MAC Controller (EMC)
 
-The NPCM750x provides two identical Ethernet MAC Controllers
+The NPCM7XX provides one or two Ethernet MAC RMII Controllers
 for WAN/LAN applications
 
 Required properties:
 - device_type     : Should be "network"
-- compatible      : "nuvoton,npcm750-emc" for Poleg NPCM750.
+- compatible      : "nuvoton,npcm750-emc" for Poleg NPCM7XX.
 - reg             : Offset and length of the register set for the device.
 - interrupts      : Contain the emc interrupts with flags for falling edge.
                     first interrupt dedicated to Txirq
