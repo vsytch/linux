@@ -48,7 +48,7 @@ static struct dentry *npcm7xx_fs_dir;
 #define  IPSRST1_OFFSET 0x020
 
 #define DRV_MODULE_NAME		"npcm7xx-emc"
-#define DRV_MODULE_VERSION	"3.90"
+#define DRV_MODULE_VERSION	"3.91"
 
 /* Ethernet MAC Registers */
 #define REG_CAMCMR	0x00
@@ -98,14 +98,14 @@ static struct dentry *npcm7xx_fs_dir;
 #define MCMDR_OPMOD		BIT(20)
 #define SWR			BIT(24)
 
-/* cam command regiser */
+/* cam command register */
 #define CAMCMR_AUP		BIT(0)
 #define CAMCMR_AMP		BIT(1)
 #define CAMCMR_ABP		BIT(2)
 #define CAMCMR_CCAM		BIT(3)
 #define CAMCMR_ECMP		BIT(4)
 
-/* cam enable regiser */
+/* cam enable register */
 #define CAM0EN			BIT(0)
 
 /* mac mii controller bit */
@@ -204,8 +204,8 @@ static struct dentry *npcm7xx_fs_dir;
 #define IS_VLAN 0
 #endif
 
-#define MAX_PACKET_SIZE           (1514 + (IS_VLAN * 4))
-#define MAX_PACKET_SIZE_W_CRC     (MAX_PACKET_SIZE + 4) /* 1518 */
+#define MAX_PACKET_SIZE           (ETH_FRAME_LEN + (IS_VLAN * VLAN_HLEN))
+#define MAX_PACKET_SIZE_W_CRC     (MAX_PACKET_SIZE + ETH_FCS_LEN) /* 1518 */
 
 #define MHZ (1000 * 1000)
 #define MII_TIMEOUT	100
@@ -496,7 +496,7 @@ static void npcm7xx_info_print(struct net_device *netdev)
 		tmp_buf += 512;
 		tmp_buf[0] = c;
 		count -= 512;
-
+	}
 	dev_info(&pdev->dev, "%s", tmp_buf);
 	kfree(emc_dump_buf);
 }
@@ -509,7 +509,7 @@ static int npcm7xx_debug_show(struct seq_file *sf, void *v)
 {
 	struct net_device *netdev = (struct net_device *)sf->private;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	const size_t print_size = 5 * PAGE_SIZE;
+	const size_t print_size = 0x5000; /* maximum print size needed */
 
 	if (!ether->dump_buf) {
 		ether->dump_buf = kmalloc(print_size, GFP_KERNEL);
@@ -614,7 +614,7 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether)
 
 	if (!ether->dbgfs_dma_cap || IS_ERR(ether->dbgfs_dma_cap)) {
 		dev_err(&ether->pdev->dev,
-			"ERROR creating stmmac \'do_reset\' debugfs file\n");
+			"ERROR creating \'do_reset\' debugfs file\n");
 		debugfs_remove_recursive(ether->dbgfs_dir);
 
 		return -ENOMEM;
@@ -701,7 +701,7 @@ static struct sk_buff *get_new_skb(struct net_device *netdev, u32 i)
 		/* Do not unmark the following skb_reserve() Receive Buffer
 		 * Starting Address must be aligned to 4 bytes and the following
 		 * line if unmarked will make it align to 2 and this likely will
-		 * hult the RX and crash the linux
+		 * halt the RX and crash the linux
 		 * skb_reserve(skb, NET_IP_ALIGN);
 		 */
 		skb->dev = netdev;
@@ -1282,7 +1282,7 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 		/* Clear TDU interrupt */
 		writel(MISTA_TDU, (ether->reg + REG_MISTA));
 
-		/* due to HW issue somtimes, we miss the TX interrupt we just
+		/* due to HW issue sometimes, we miss the TX interrupt we just
 		 * set (MACTXINTEN), so we also set TDU for Transmit
 		 * Descriptor Unavailable interrupt
 		 */
@@ -1297,7 +1297,7 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 
 	spin_unlock_irqrestore(&ether->lock, flags);
 
-	return 0;
+	return NETDEV_TX_OK;
 }
 
 static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
@@ -1333,7 +1333,9 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 		dev_err(&pdev->dev, "emc other error interrupt status=0x%08X\n",
 			status);
 
-    /* if we got MISTA_TXCP | MISTA_TDU remove those interrupt and call napi */
+	/* if we got MISTA_TXCP | MISTA_TDU remove those interrupt and call
+	 * napi
+	 */
 	if (status & (MISTA_TXCP | MISTA_TDU) &
 	    readl((ether->reg + REG_MIEN))) {
 		__le32 reg_mien;
@@ -1428,13 +1430,13 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 		}
 	}
 
-	/* echo MISTA status on unexpected flags although we don't do anithing
+	/* echo MISTA status on unexpected flags although we don't do anything
 	 * with them
 	 */
 	if (unlikely(status &
 		(/* MISTA_RXINTR | */ /* Receive - all RX interrupt set this */
 		    MISTA_CRCE   |    /* CRC Error */
-		 /* MISTA_RXOV   | */ /* Receive FIFO Overflow - we alread handled it */
+		 /* MISTA_RXOV   | */ /* Receive FIFO Overflow - we already handled it */
 	(!IS_VLAN * MISTA_PTLE)  |    /* Packet Too Long is needed if VLAN is not supported */
 		 /* MISTA_RXGD   | */ /* Receive Good - this is the common good case */
 		    MISTA_ALIE   |    /* Alignment Error */
@@ -1443,7 +1445,7 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 		    MISTA_DFOI   |    /* Maximum Frame Length */
 		 /* MISTA_DENI   | */ /* DMA Early Notification - every packet get this */
 		 /* MISTA_RDU    | */ /* Receive Descriptor Unavailable */
-		 /* MISTA_RXBERR | */ /* Receive Bus Error Interrupt - we alread handled it */
+		 /* MISTA_RXBERR | */ /* Receive Bus Error Interrupt - we already handled it */
 		 /* MISTA_CFR    | */ /* Control Frame Receive - not an error */
 			0))) {
 		dev_dbg(&pdev->dev, "emc rx MISTA status=0x%08X\n", status);
@@ -1487,7 +1489,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		ether->max_waiting_rx = local_count;
 
 	if (local_count > (4 * RX_POLL_SIZE))
-		/* we are porbably in a storm of short packets and we don't
+		/* we are probably in a storm of short packets and we don't
 		 * want to get into RDU since short packets in RDU cause
 		 * many RXOV which may cause EMC halt, so we filter out all
 		 * coming packets
@@ -1510,12 +1512,12 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			complete = 1;
 			break;
 		}
-		/* for debug puposes we save the previous value */
+		/* for debug purposes we save the previous value */
 		rxbd->reserved = status;
 		s = ether->rx_skb[ether->cur_rx];
 		length = status & 0xFFFF;
 
-		/* If VLAN is not supporte RXDS_PTLE (packet too long) is also
+		/* If VLAN is not supported RXDS_PTLE (packet too long) is also
 		 * an error
 		 */
 		if (likely((status & (RXDS_RXGD | RXDS_CRCE | RXDS_ALIE |
@@ -1598,7 +1600,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 			ether->max_waiting_rx = local_count;
 
 		if (local_count > (3 * RX_POLL_SIZE))
-			/* we are porbably in a storm of short packets and
+			/* we are probably in a storm of short packets and
 			 * we don't want to get into RDU since short packets in
 			 * RDU cause many RXOV which may cause
 			 * EMC halt, so we filter out all coming packets
