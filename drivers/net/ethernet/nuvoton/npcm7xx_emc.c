@@ -48,7 +48,7 @@ static struct dentry *npcm7xx_fs_dir;
 #define  IPSRST1_OFFSET 0x020
 
 #define DRV_MODULE_NAME		"npcm7xx-emc"
-#define DRV_MODULE_VERSION	"3.91"
+#define DRV_MODULE_VERSION	"3.92"
 
 /* Ethernet MAC Registers */
 #define REG_CAMCMR	0x00
@@ -255,13 +255,13 @@ struct  npcm7xx_ether {
 	unsigned int cur_rx;
 	unsigned int finish_tx;
 	unsigned int pending_tx;
-	__le32 start_tx_ptr;
-	__le32 start_rx_ptr;
+	u32 start_tx_ptr;
+	u32 start_rx_ptr;
 	unsigned int rx_berr;
 	unsigned int rx_err;
 	unsigned int rdu;
 	unsigned int rxov;
-	__le32 camcmr;
+	u32 camcmr;
 	unsigned int rx_stuck;
 	int link;
 	int speed;
@@ -416,8 +416,12 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *netdev)
 			cur = (cur + 1) % TX_QUEUE_LEN;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("finish %3d txbd mode %08X buffer %08X sl %08X next %08X tx_skb %p\n",
-				   cur, txbd->mode, txbd->buffer,
-				   txbd->sl, txbd->next, ether->tx_skb[cur]);
+				   cur,
+				   le32_to_cpu(txbd->mode),
+				   le32_to_cpu(txbd->buffer),
+				   le32_to_cpu(txbd->sl),
+				   le32_to_cpu(txbd->next),
+				   ether->tx_skb[cur]);
 		}
 		DUMP_PRINT("\n");
 
@@ -426,8 +430,11 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *netdev)
 			cur = (cur + 1) % TX_QUEUE_LEN;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("txd_of %3d txbd mode %08X buffer %08X sl %08X next %08X\n",
-				   cur, txbd->mode, txbd->buffer,
-				   txbd->sl, txbd->next);
+				   cur,
+				   le32_to_cpu(txbd->mode),
+				   le32_to_cpu(txbd->buffer),
+				   le32_to_cpu(txbd->sl),
+				   le32_to_cpu(txbd->next));
 		}
 		DUMP_PRINT("\n");
 
@@ -436,8 +443,11 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *netdev)
 			cur = (cur + 1) % TX_QUEUE_LEN;
 			txbd = (ether->tdesc + cur);
 			DUMP_PRINT("cur_tx %3d txbd mode %08X buffer %08X sl %08X next %08X\n",
-				   cur, txbd->mode, txbd->buffer,
-				   txbd->sl, txbd->next);
+				   cur,
+				   le32_to_cpu(txbd->mode),
+				   le32_to_cpu(txbd->buffer),
+				   le32_to_cpu(txbd->sl),
+				   le32_to_cpu(txbd->next));
 		}
 		DUMP_PRINT("\n");
 
@@ -446,8 +456,11 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *netdev)
 			cur = (cur + 1) % RX_QUEUE_LEN;
 			rxbd = (ether->rdesc + cur);
 			DUMP_PRINT("cur_rx %3d rxbd sl   %08X buffer %08X sl %08X next %08X\n",
-				   cur, rxbd->sl, rxbd->buffer,
-				   rxbd->reserved, rxbd->next);
+				   cur,
+				   le32_to_cpu(rxbd->sl),
+				   le32_to_cpu(rxbd->buffer),
+				   le32_to_cpu(rxbd->reserved),
+				   le32_to_cpu(rxbd->next));
 		}
 		DUMP_PRINT("\n");
 
@@ -456,8 +469,11 @@ static int npcm7xx_info_dump(char *buf, int count, struct net_device *netdev)
 			cur = (cur + 1) % RX_QUEUE_LEN;
 			rxbd = (ether->rdesc + cur);
 			DUMP_PRINT("rxd_of %3d rxbd sl %08X buffer %08X sl %08X next %08X\n",
-				   cur, rxbd->sl, rxbd->buffer,
-				   rxbd->reserved, rxbd->next);
+				   cur,
+				   le32_to_cpu(rxbd->sl),
+				   le32_to_cpu(rxbd->buffer),
+				   le32_to_cpu(rxbd->reserved),
+				   le32_to_cpu(rxbd->next));
 		}
 		DUMP_PRINT("\n");
 	}
@@ -626,7 +642,7 @@ static int npcm7xx_debug_fs(struct npcm7xx_ether *ether)
 
 static void npcm7xx_opmode(struct net_device *netdev, int speed, int duplex)
 {
-	__le32 val;
+	u32 val;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 
 	val = readl((ether->reg + REG_MCMDR));
@@ -674,7 +690,7 @@ static void npcm7xx_write_cam(struct net_device *netdev,
 			      unsigned int x, unsigned char *pval)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	__le32 msw, lsw;
+	u32 msw, lsw;
 
 	msw = (pval[0] << 24) | (pval[1] << 16) | (pval[2] << 8) | pval[3];
 
@@ -688,7 +704,7 @@ static void npcm7xx_write_cam(struct net_device *netdev,
 
 static struct sk_buff *get_new_skb(struct net_device *netdev, u32 i)
 {
-	__le32 buffer;
+	dma_addr_t buffer;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 	struct sk_buff *skb = netdev_alloc_skb(netdev,
 		roundup(MAX_PACKET_SIZE_W_CRC, 4));
@@ -718,7 +734,7 @@ static struct sk_buff *get_new_skb(struct net_device *netdev, u32 i)
 		}
 	}
 	ether->rx_skb[i] = skb;
-	ether->rdesc[i].buffer = buffer;
+	ether->rdesc[i].buffer = cpu_to_le32(buffer);
 
 	return skb;
 }
@@ -729,15 +745,16 @@ static void npcm7xx_free_desc(struct net_device *netdev,
 {
 	struct sk_buff *skb;
 	u32 i;
+	dma_addr_t addr;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 	struct platform_device *pdev = ether->pdev;
 
 	for (i = 0; i < TX_QUEUE_LEN; i++) {
 		skb = ether->tx_skb[i];
 		if (skb) {
-			dma_unmap_single(&netdev->dev,
-					 (dma_addr_t)(ether->tdesc[i].buffer),
-					 skb->len, DMA_TO_DEVICE);
+			addr = (dma_addr_t)le32_to_cpu(ether->tdesc[i].buffer);
+			dma_unmap_single(&netdev->dev, addr, skb->len,
+					 DMA_TO_DEVICE);
 			dev_kfree_skb_any(skb);
 			ether->tx_skb[i] = NULL;
 		}
@@ -746,8 +763,8 @@ static void npcm7xx_free_desc(struct net_device *netdev,
 	for (i = 0; i < RX_QUEUE_LEN; i++) {
 		skb = ether->rx_skb[i];
 		if (skb) {
-			dma_unmap_single(&netdev->dev,
-					 (dma_addr_t)(ether->rdesc[i].buffer),
+			addr = (dma_addr_t)le32_to_cpu(ether->rdesc[i].buffer);
+			dma_unmap_single(&netdev->dev, addr,
 					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
 					 DMA_FROM_DEVICE);
 			dev_kfree_skb_any(skb);
@@ -833,8 +850,8 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 		else
 			offset = sizeof(struct npcm7xx_txbd) * (i + 1);
 
-		tdesc->next = ether->tdesc_phys + offset;
-		tdesc->buffer = (__le32)NULL;
+		tdesc->next = cpu_to_le32(ether->tdesc_phys + offset);
+		tdesc->buffer = cpu_to_le32(NULL);
 		tdesc->sl = 0;
 		tdesc->mode = 0;
 	}
@@ -865,8 +882,8 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 		else
 			offset = sizeof(struct npcm7xx_rxbd) * (i + 1);
 
-		rdesc->next = ether->rdesc_phys + offset;
-		rdesc->sl = RX_OWN_DMA;
+		rdesc->next = cpu_to_le32(ether->rdesc_phys + offset);
+		rdesc->sl = cpu_to_le32(RX_OWN_DMA);
 
 		if (!get_new_skb(netdev, i)) {
 			dev_err(&pdev->dev, "get_new_skb() failed\n");
@@ -885,7 +902,7 @@ static int npcm7xx_init_desc(struct net_device *netdev)
 static void npcm7xx_set_fifo_threshold(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	__le32 val;
+	u32 val;
 
 	val = RXTHD | TXTHD | BLENGTH;
 	writel(val, (ether->reg + REG_FFTCR));
@@ -894,8 +911,8 @@ static void npcm7xx_set_fifo_threshold(struct net_device *netdev)
 static void npcm7xx_return_default_idle(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	__le32 val;
-	__le32 saved_bits;
+	u32 val;
+	u32 saved_bits;
 
 	val = readl((ether->reg + REG_MCMDR));
 	saved_bits = val & (MCMDR_FDUP | MCMDR_OPMOD);
@@ -926,7 +943,7 @@ static void npcm7xx_return_default_idle(struct net_device *netdev)
 static void npcm7xx_enable_mac_interrupt(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	__le32 val;
+	u32 val;
 
 	val = ENRXINTR |    /* Start of RX interrupts */
 	      ENCRCE   |
@@ -954,7 +971,7 @@ static void npcm7xx_enable_mac_interrupt(struct net_device *netdev)
 }
 
 static void npcm7xx_get_and_clear_int(struct net_device *netdev,
-				      __le32 *val, __le32 mask)
+				      u32 *val, u32 mask)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 
@@ -965,7 +982,7 @@ static void npcm7xx_get_and_clear_int(struct net_device *netdev,
 static void npcm7xx_set_global_maccmd(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	__le32 val;
+	u32 val;
 
 	val = readl((ether->reg + REG_MCMDR));
 
@@ -984,7 +1001,7 @@ static void npcm7xx_set_global_maccmd(struct net_device *netdev)
 static void npcm7xx_enable_cam(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
-	__le32 val;
+	u32 val;
 
 	npcm7xx_write_cam(netdev, CAM0, netdev->dev_addr);
 
@@ -1004,7 +1021,7 @@ static void npcm7xx_set_curdest(struct net_device *netdev)
 static void npcm7xx_ether_set_rx_mode(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether;
-	__le32 rx_mode;
+	u32 rx_mode;
 
 	ether = netdev_priv(netdev);
 
@@ -1135,20 +1152,20 @@ static int npcm7xx_ether_close(struct net_device *netdev)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 
-	npcm7xx_return_default_idle(netdev);
-
 	if (ether->phy_dev)
 		phy_stop(ether->phy_dev);
 	else if (ether->use_ncsi)
 		ncsi_stop_dev(ether->ncsidev);
 
+	napi_disable(&ether->napi);
+	netif_stop_queue(netdev);
+
+	npcm7xx_return_default_idle(netdev);
+
 	msleep(20);
 
 	free_irq(ether->txirq, netdev);
 	free_irq(ether->rxirq, netdev);
-
-	netif_stop_queue(netdev);
-	napi_disable(&ether->napi);
 
 	npcm7xx_free_desc(netdev, true);
 
@@ -1172,7 +1189,7 @@ static int npcm7xx_clean_tx(struct net_device *netdev, bool from_xmit)
 	struct npcm7xx_txbd *txbd;
 	struct sk_buff *s;
 	dma_addr_t cur_entry, entry;
-	__le32 sl;
+	u32 sl;
 
 	if (ether->pending_tx == 0)
 		return (0);
@@ -1191,7 +1208,8 @@ static int npcm7xx_clean_tx(struct net_device *netdev, bool from_xmit)
 
 		ether->count_finish++;
 
-		dma_unmap_single(&netdev->dev, txbd->buffer, s->len,
+		dma_unmap_single(&netdev->dev,
+				 (dma_addr_t)le32_to_cpu(txbd->buffer), s->len,
 				 DMA_TO_DEVICE);
 		consume_skb(s);
 		ether->tx_skb[ether->finish_tx] = NULL;
@@ -1200,7 +1218,7 @@ static int npcm7xx_clean_tx(struct net_device *netdev, bool from_xmit)
 			ether->finish_tx = 0;
 		ether->pending_tx--;
 
-		sl = txbd->sl;
+		sl = le32_to_cpu(txbd->sl);
 		if (sl & TXDS_TXCP) {
 			ether->stats.tx_packets++;
 			ether->stats.tx_bytes += (sl & 0xFFFF);
@@ -1231,22 +1249,29 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 	struct npcm7xx_txbd *txbd;
 	unsigned long flags;
 
+	if (skb->len > MAX_PACKET_SIZE) {
+		if (net_ratelimit())
+			netdev_warn(netdev,
+				    "skb->len = %d > MAX_PACKET_SIZE = %d\n",
+				    skb->len, MAX_PACKET_SIZE);
+		/* Drop the packet */
+		dev_kfree_skb_any(skb);
+		netdev->stats.tx_dropped++;
+		return NETDEV_TX_OK;
+	}
+
 	ether->count_xmit++;
 
 	/* Insert new buffer */
 	txbd = (ether->tdesc + ether->cur_tx);
-	txbd->buffer = dma_map_single(&netdev->dev, skb->data, skb->len,
-				      DMA_TO_DEVICE);
+	txbd->buffer = cpu_to_le32(dma_map_single(&netdev->dev, skb->data,
+						  skb->len, DMA_TO_DEVICE));
 	ether->tx_skb[ether->cur_tx]  = skb;
-	if (skb->len > MAX_PACKET_SIZE)
-		dev_err(&ether->pdev->dev,
-			"skb->len (= %d) > MAX_PACKET_SIZE (= %d)\n",
-			skb->len, MAX_PACKET_SIZE);
 
-	txbd->sl = skb->len > MAX_PACKET_SIZE ? MAX_PACKET_SIZE : skb->len;
+	txbd->sl = cpu_to_le32(skb->len);
 	dma_wmb();
 
-	txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE;
+	txbd->mode = cpu_to_le32(TX_OWN_DMA | PADDINGMODE | CRCMODE);
 
 	/* make sure that data is in memory before we trigger TX */
 	wmb();
@@ -1266,7 +1291,7 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 	npcm7xx_clean_tx(netdev, true);
 
 	if (ether->pending_tx >= TX_QUEUE_LEN - 1) {
-		__le32 reg_mien;
+		u32 reg_mien;
 		unsigned int index_to_wake = ether->cur_tx +
 			((TX_QUEUE_LEN * 3) / 4);
 
@@ -1274,7 +1299,8 @@ static int npcm7xx_ether_start_xmit(struct sk_buff *skb, struct net_device *netd
 			index_to_wake -= TX_QUEUE_LEN;
 
 		txbd = (ether->tdesc + index_to_wake);
-		txbd->mode = TX_OWN_DMA | PADDINGMODE | CRCMODE | MACTXINTEN;
+		txbd->mode = cpu_to_le32(TX_OWN_DMA | PADDINGMODE | CRCMODE |
+					 MACTXINTEN);
 
 		/* make sure that data is in memory before we trigger TX */
 		wmb();
@@ -1305,7 +1331,7 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 	struct npcm7xx_ether *ether;
 	struct platform_device *pdev;
 	struct net_device *netdev;
-	__le32 status;
+	u32 status;
 	unsigned long flags;
 
 	netdev = dev_id;
@@ -1338,7 +1364,7 @@ static irqreturn_t npcm7xx_tx_interrupt(int irq, void *dev_id)
 	 */
 	if (status & (MISTA_TXCP | MISTA_TDU) &
 	    readl((ether->reg + REG_MIEN))) {
-		__le32 reg_mien;
+		u32 reg_mien;
 
 		spin_lock_irqsave(&ether->lock, flags);
 		reg_mien = readl((ether->reg + REG_MIEN));
@@ -1366,10 +1392,10 @@ static irqreturn_t npcm7xx_rx_interrupt(int irq, void *dev_id)
 	struct net_device *netdev = (struct net_device *)dev_id;
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
 	struct platform_device *pdev = ether->pdev;
-	__le32 status;
+	u32 status;
 	unsigned long flags;
 	unsigned int any_err = 0;
-	__le32 rxfsm;
+	u32 rxfsm;
 
 	npcm7xx_get_and_clear_int(netdev, &status, 0xFFFF);
 	ether->rx_int_count++;
@@ -1474,7 +1500,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 	struct platform_device *pdev = ether->pdev;
 	struct sk_buff *s;
 	unsigned int length;
-	__le32 status;
+	u32 status;
 	unsigned long flags;
 	int rx_cnt = 0;
 	int complete = 0;
@@ -1507,13 +1533,13 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 	rxbd = (ether->rdesc + ether->cur_rx);
 
 	while (rx_cnt < budget) {
-		status = rxbd->sl;
+		status = le32_to_cpu(rxbd->sl);
 		if ((status & RX_OWN_DMA) == RX_OWN_DMA) {
 			complete = 1;
 			break;
 		}
 		/* for debug purposes we save the previous value */
-		rxbd->reserved = status;
+		rxbd->reserved = cpu_to_le32(status);
 		s = ether->rx_skb[ether->cur_rx];
 		length = status & 0xFFFF;
 
@@ -1523,7 +1549,8 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		if (likely((status & (RXDS_RXGD | RXDS_CRCE | RXDS_ALIE |
 				      RXDS_RP | (IS_VLAN ? 0 : RXDS_PTLE))) ==
 			   RXDS_RXGD) && likely(length <= MAX_PACKET_SIZE)) {
-			dma_unmap_single(&netdev->dev, (dma_addr_t)rxbd->buffer,
+			dma_unmap_single(&netdev->dev,
+					 (dma_addr_t)le32_to_cpu(rxbd->buffer),
 					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
 					 DMA_FROM_DEVICE);
 
@@ -1567,7 +1594,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		/* make sure other values are set before we set owner */
 		wmb();
 
-		rxbd->sl = RX_OWN_DMA;
+		rxbd->sl = cpu_to_le32(RX_OWN_DMA);
 		/* make sure that data is in memory before we trigger RX */
 		wmb();
 
@@ -1910,8 +1937,10 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 	ether = netdev_priv(netdev);
 
 	ether->reset = devm_reset_control_get(&pdev->dev, NULL);
-	if (IS_ERR(ether->reset))
-		return PTR_ERR(ether->reset);
+	if (IS_ERR(ether->reset)) {
+		error = PTR_ERR(ether->reset);
+		goto failed_free;
+	}
 
 	/* Reset EMC module */
 	reset_control_assert(ether->reset);
@@ -2037,6 +2066,7 @@ static int npcm7xx_ether_remove(struct platform_device *pdev)
 #ifdef CONFIG_DEBUG_FS
 	debugfs_remove_recursive(ether->dbgfs_dir);
 #endif
+	netif_napi_del(&ether->napi);
 
 	unregister_netdev(netdev);
 
@@ -2051,7 +2081,8 @@ static int npcm7xx_ether_remove(struct platform_device *pdev)
 	mdiobus_free(ether->mii_bus);
 
 	platform_set_drvdata(pdev, NULL);
-
+	iounmap(ether->reg);
+	release_mem_region(ether->res->start, resource_size(ether->res));
 	free_netdev(netdev);
 	return 0;
 }
