@@ -395,8 +395,7 @@
 					compatible = "ti,tmp421";
 					reg = <0x4c>;
 				};
-				/* P12V Quarter Brick DC/DC Power Module Q54SH12050 @58 */
-				power-brick@58 {
+				power-supply@58 {
 					compatible = "delta,dps800";
 					reg = <0x58>;
 				};
