@@ -28,7 +28,7 @@
 #include <linux/dma-mapping.h>
 #include <asm/fb.h>
 
-#define ECE_VERSION "0.0.2"
+#define ECE_VERSION "0.0.3"
 
 /* ECE Register */
 #define DDA_CTRL	0x0000
@@ -88,7 +88,7 @@
 #define ECE_RESET _IO(ECE_IOC_MAGIC, 7)
 #define ECE_IOC_MAXNR 7
 
-#define ECE_OP_TIMEOUT msecs_to_jiffies(500)
+#define ECE_OP_TIMEOUT msecs_to_jiffies(100)
 
 static const char ece_name[] = "NPCM750 ECE";
 
@@ -301,9 +301,6 @@ static int npcm750_ece_init(struct npcm750_ece *ece)
 
 	npcm750_ece_set_enc_dba(ece, ece->comp_start);
 
-	npcm750_ece_update_bits(ece,
-		DDA_CTRL, DDA_CTRL_INTEN, DDA_CTRL_INTEN);
-
 	ece->lin_pitch = DEFAULT_LP;
 
 	return 0;
@@ -351,18 +348,20 @@ static int npcm750_ece_open(struct inode *inode, struct file *file)
 
 	file->private_data = ece;
 
-	atomic_inc_return(&ece->clients);
+	if (atomic_inc_return(&ece->clients) == 1)
+		npcm750_ece_init(ece);
 
 	dev_dbg(ece->dev, "open: client %d\n", atomic_read(&ece->clients));
 
 	return 0;
 }
 
-static int npcm750_ece_release(struct inode *inode, struct file *file)
+static int npcm750_ece_close(struct inode *inode, struct file *file)
 {
 	struct npcm750_ece *ece = file->private_data;
 
-	atomic_dec_return(&ece->clients);
+	if (atomic_dec_return(&ece->clients) == 0)
+		npcm750_ece_stop(ece);
 
 	dev_dbg(ece->dev, "close: client %d\n", atomic_read(&ece->clients));
 	return 0;
@@ -395,10 +394,8 @@ long npcm750_ece_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 
 		err = copy_from_user(&data, (int __user *)args, sizeof(data))
 			? -EFAULT : 0;
-		if (err) {
-			mutex_unlock(&ece->mlock);
-			return err;
-		}
+		if (err)
+			break;
 
 		if (!(data.lp % ECE_MIN_LP) && data.lp <= ECE_MAX_LP)
 			npcm750_ece_set_lp(ece, data.lp);
@@ -411,10 +408,8 @@ long npcm750_ece_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 
 		err = copy_from_user(&data, (int __user *)args, sizeof(data))
 			? -EFAULT : 0;
-		if (err) {
-			mutex_unlock(&ece->mlock);
-			return err;
-		}
+		if (err)
+			break;
 
 		if (!data.framebuf) {
 			err = -EFAULT;
@@ -432,17 +427,24 @@ long npcm750_ece_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 
 		err = copy_from_user(&data, (int __user *)args, sizeof(data))
 			? -EFAULT : 0;
-		if (err) {
-			mutex_unlock(&ece->mlock);
-			return err;
-		}
+		if (err)
+			break;
 
 		offset = npcm750_ece_read_rect_offset(ece);
+
+		npcm750_ece_update_bits(ece,
+			DDA_CTRL, DDA_CTRL_INTEN, DDA_CTRL_INTEN);
+
 		npcm750_ece_enc_rect(ece, data.x, data.y, data.w, data.h);
+
 		ed_size = npcm750_ece_get_ed_size(ece, offset);
+
+		npcm750_ece_update_bits(ece,
+			DDA_CTRL, DDA_CTRL_INTEN, ~DDA_CTRL_INTEN);
+
 		if (ed_size == 0) {
-			mutex_unlock(&ece->mlock);
-			return -EFAULT;
+			err = -EFAULT;
+			break;
 		}
 
 		data.gap_len = ece->enc_gap;
@@ -451,7 +453,7 @@ long npcm750_ece_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 			? -EFAULT : 0;
 		break;
 	}
-	case  ECE_IOCENCADDR_RESET:
+	case ECE_IOCENCADDR_RESET:
 	{
 		npcm750_ece_clear_rect_offset(ece);
 		npcm750_ece_set_enc_dba(ece, ece->comp_start);
@@ -506,8 +508,9 @@ static irqreturn_t npcm750_ece_irq_handler(int irq, void *dev_instance)
 
 	npcm750_ece_write(ece, DDA_STS, status_ack);
 
-	complete(&ece->complete);
 	spin_unlock(&ece->lock);
+
+	complete(&ece->complete);
 
 	return IRQ_HANDLED;
 }
@@ -515,7 +518,7 @@ static irqreturn_t npcm750_ece_irq_handler(int irq, void *dev_instance)
 struct file_operations const npcm750_ece_fops = {
 	.unlocked_ioctl = npcm750_ece_ioctl,
 	.open = npcm750_ece_open,
-	.release = npcm750_ece_release,
+	.release = npcm750_ece_close,
 	.mmap = npcm750_ece_mmap,
 };
 
@@ -605,8 +608,6 @@ static int npcm750_ece_probe(struct platform_device *pdev)
 		ret = PTR_ERR(ece->base);
 		goto err;
 	}
-
-	npcm750_ece_init(ece);
 
 	ece->dev_p = &pdev->dev;
 
