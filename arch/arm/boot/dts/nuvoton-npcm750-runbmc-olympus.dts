@@ -4,10 +4,10 @@
 
 /dts-v1/;
 #include "nuvoton-npcm750.dtsi"
-#include "nuvoton-npcm750-runbmc-gpio.dtsi"
+#include "nuvoton-npcm750-runbmc-olympus-pincfg.dtsi"
 
 / {
-	model = "Nuvoton npcm750 RunBMC Module";
+	model = "Nuvoton npcm750 RunBMC Olympus";
 	compatible = "nuvoton,npcm750";
 
 	aliases {
@@ -424,7 +424,7 @@
 				#size-cells = <0>;
 				bus-frequency = <100000>;
 				status = "okay";
-				slave_mqueue: i2c-slave-mqueue {
+				slave_mqueue: i2c-slave-mqueue@40000010 {
 					compatible = "i2c-slave-mqueue";
 					reg = <0x40000010>;
 					status = "okay";
@@ -525,7 +525,7 @@
 				#size-cells = <0>;
 				bus-frequency = <100000>;
 				status = "okay";
-				gpio: pca9555@4e {
+				gpio: pca9555@27 {
 					compatible = "nxp,pca9555";
 					reg = <0x27>;
 					gpio-controller;
@@ -1046,7 +1046,7 @@
 				&gpio13ol_pins
 				&gpio14ol_pins
 				&gpio15ol_pins
-				&gpio37ol_pins
+				&gpio37o_pins
 				&gpio38_pins
 				&gpio39_pins
 				&gpio94ol_pins

@@ -108,20 +108,20 @@
 			bias-disable;
 			input-enable;
 		};
-		gpio30_pins: gpio27-pins {
+		gpio30_pins: gpio30-pins {
 			pins = "GPIO30/SMB3SDA";
 			bias-disable;
 			input-enable;
 		};
-		gpio31_pins: gpio27-pins {
+		gpio31_pins: gpio31-pins {
 			pins = "GPIO31/SMB3SCL";
 			bias-disable;
 			input-enable;
 		};
-		gpio37ol_pins: gpio37ol-pins {
+		gpio37o_pins: gpio37o-pins {
 			pins = "GPIO37/SMB3CSDA";
 			bias-disable;
-			output-low;
+			output-high;
 		};
 		gpio38_pins: gpio38-pins {
 			pins = "GPIO38/SMB3CSCL";
