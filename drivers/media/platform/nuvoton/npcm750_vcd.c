@@ -44,7 +44,8 @@
 #define VCD_IOCRESET	_IO(VCD_IOC_MAGIC, 7)
 #define VCD_GETREG	_IOR(VCD_IOC_MAGIC, 8, struct vcd_info)
 #define VCD_SETREG	_IOW(VCD_IOC_MAGIC, 9, struct vcd_info)
-#define VCD_IOC_MAXNR     9
+#define VCD_SHORT_RESET _IO(VCD_IOC_MAGIC, 10)
+#define VCD_IOC_MAXNR     10
 
 #define VCD_OP_TIMEOUT msecs_to_jiffies(100)
 
@@ -158,6 +159,7 @@
 #define VCD_HOR_CYC_TIM_NEW	BIT(31)
 #define VCD_HOR_CYC_TIM_HCT_DIF	BIT(30)
 #define VCD_HOR_CYC_TIM_VALUE	GENMASK(11, 0)
+#define VCD_HOR_AC_TIM_MASK     0x3fff
 
 #define VCD_HOR_CYC_LAST	0x8030
 #define VCD_HOR_CYC_LAST_VALUE	GENMASK(11, 0)
@@ -348,6 +350,7 @@ struct npcm750_vcd {
 	int de_mode;
 	int irq;
 	struct completion complete;
+	u32 hortact;
 };
 
 static void npcm750_vcd_update(struct npcm750_vcd *vcd, u32 reg,
@@ -526,6 +529,18 @@ npcm750_vcd_capres(struct npcm750_vcd *vcd, u32 width, u32 height)
 
 	return 0;
 }
+static void
+npcm750_short_vcd_reset(struct npcm750_vcd *vcd)
+{
+	npcm750_vcd_write(vcd, VCD_INTE, 0);
+	npcm750_vcd_update(vcd, VCD_CMD, VCD_CMD_RST, VCD_CMD_RST);
+
+	while (!(npcm750_vcd_read(vcd, VCD_STAT) & VCD_STAT_DONE))
+		continue;
+
+	npcm750_vcd_write(vcd, VCD_STAT,0xffffffff);
+	npcm750_vcd_write(vcd, VCD_INTE, VCD_INTE_VAL);
+}
 
 static int npcm750_vcd_reset(struct npcm750_vcd *vcd)
 {
@@ -615,6 +630,9 @@ static void npcm750_vcd_detect_video_mode(struct npcm750_vcd *vcd)
 	if (vcd->info.vdisp > VCD_MAX_HIGHT)
 		vcd->info.vdisp = VCD_MAX_HIGHT;
 
+	vcd->hortact = ((npcm750_vcd_read(vcd,VCD_HOR_AC_TIM)) &
+		(VCD_HOR_AC_TIM_MASK));
+
 	npcm750_vcd_capres(vcd, vcd->info.hdisp, vcd->info.vdisp);
 
 	npcm750_vcd_set_linepitch(
@@ -674,11 +692,15 @@ static int npcm750_vcd_command(struct npcm750_vcd *vcd, u32 value)
 
 static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 {
+	u32 hortact = (npcm750_vcd_read(vcd,VCD_HOR_AC_TIM)
+		& VCD_HOR_AC_TIM_MASK);
+
 	/* check with GFX registers if resolution changed from last time */
 	if ((vcd->info.hdisp != npcm750_vcd_hres(vcd)) ||
 		(vcd->info.vdisp != npcm750_vcd_vres(vcd)) ||
 		(vcd->info.pixelclk != npcm750_vcd_pclk(vcd)) ||
-		(vcd->info.mode != npcm750_vcd_is_mga(vcd))) {
+		(vcd->info.mode != npcm750_vcd_is_mga(vcd)) ||
+		(vcd->hortact != hortact)) {
 
 		npcm750_vcd_write(vcd, VCD_INTE, 0);
 		npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
@@ -1221,6 +1243,11 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 
 		if (!ret && vcd->info.reg <= VCD_FIFO)
 			writel(vcd->info.reg_val, vcd->base + vcd->info.reg);
+		break;
+	}
+	case VCD_SHORT_RESET:
+	{
+		npcm750_short_vcd_reset(vcd);
 		break;
 	}
 
