@@ -28,7 +28,7 @@
 #include <linux/dma-mapping.h>
 #include <asm/fb.h>
 
-#define ECE_VERSION "0.0.3"
+#define ECE_VERSION "0.0.4"
 
 /* ECE Register */
 #define DDA_CTRL	0x0000
@@ -431,6 +431,15 @@ long npcm750_ece_ioctl(struct file *filp, unsigned int cmd, unsigned long args)
 			break;
 
 		offset = npcm750_ece_read_rect_offset(ece);
+
+		if ((offset + (data.w * data.h * 2) + 12) >= ece->comp_len) {
+			err = -EFAULT;
+			dev_dbg(ece->dev, "ece may reach beyond memory region\n");
+			break;
+		}
+
+		npcm750_ece_write(ece, DDA_STS,
+			DDA_STS_CDREADY | DDA_STS_ACDRDY);
 
 		npcm750_ece_update_bits(ece,
 			DDA_CTRL, DDA_CTRL_INTEN, DDA_CTRL_INTEN);
