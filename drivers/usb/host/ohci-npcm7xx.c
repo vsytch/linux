@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2019 Nuvoton Technologies,
  * Tomer Maimon <tomer.maimon@nuvoton.com> <tmaimon77@gmail.com>
+ * Joseph Liu <kwliun@nuvoton.com>
  *
  */
 
@@ -23,9 +24,9 @@
 #define DRIVER_DESC "OHCI NPCM7XX driver"
 
 static const char hcd_name[] = "ohci-npcm7xx";
-static struct hc_driver __read_mostly ohci_npcmx50_driver;
+static struct hc_driver __read_mostly ohci_npcm7xx_driver;
 
-static int ohci_hcd_npcmx50_probe(struct platform_device *pdev)
+static int ohci_hcd_npcm7xx_probe(struct platform_device *pdev)
 {
 	struct resource *res = NULL;
 	struct usb_hcd *hcd = NULL;
@@ -56,7 +57,7 @@ static int ohci_hcd_npcmx50_probe(struct platform_device *pdev)
 #endif
 
 	/* initialize hcd */
-	hcd = usb_create_hcd(&ohci_npcmx50_driver, &pdev->dev, (char *)hcd_name);
+	hcd = usb_create_hcd(&ohci_npcm7xx_driver, &pdev->dev, (char *)hcd_name);
 	if (!hcd) {
 		pr_err("Failed to create hcd");
 		return -ENOMEM;
@@ -96,7 +97,7 @@ static int ohci_hcd_npcmx50_probe(struct platform_device *pdev)
 
 }
 
-static int ohci_hcd_npcmx50_remove(struct platform_device *pdev)
+static int ohci_hcd_npcm7xx_remove(struct platform_device *pdev)
 {
 	struct usb_hcd *hcd = platform_get_drvdata(pdev);
 
@@ -107,7 +108,7 @@ static int ohci_hcd_npcmx50_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-static int npcm7xx_ohci_suspend(struct device *dev)
+static int ohci_npcm7xx_suspend(struct device *dev)
 {
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	bool do_wakeup = device_may_wakeup(dev);
@@ -119,7 +120,7 @@ static int npcm7xx_ohci_suspend(struct device *dev)
 	return 0;
 }
 
-static int npcm7xx_ohci_resume(struct device *dev)
+static int ohci_npcm7xx_resume(struct device *dev)
 {
 	struct usb_hcd *hcd			= dev_get_drvdata(dev);
 
@@ -128,8 +129,8 @@ static int npcm7xx_ohci_resume(struct device *dev)
 	return 0;
 }
 #else
-#define npcm7xx_ohci_suspend	NULL
-#define npcm7xx_ohci_resume	NULL
+#define ohci_npcm7xx_suspend	NULL
+#define ohci_npcm7xx_resume	NULL
 #endif
 
 
@@ -142,16 +143,16 @@ MODULE_DEVICE_TABLE(of, npcm750_ohci_match);
 #endif
 
 static const struct dev_pm_ops npcm7xx_ohci_pm_ops = {
-	.suspend	= npcm7xx_ohci_suspend,
-	.resume		= npcm7xx_ohci_resume,
+	.suspend	= ohci_npcm7xx_suspend,
+	.resume		= ohci_npcm7xx_resume,
 };
 
-static struct platform_driver ohci_hcd_npcmx50_driver = {
-	.probe		= ohci_hcd_npcmx50_probe,
-	.remove		= ohci_hcd_npcmx50_remove,
+static struct platform_driver ohci_hcd_npcm7xx_driver = {
+	.probe		= ohci_hcd_npcm7xx_probe,
+	.remove		= ohci_hcd_npcm7xx_remove,
 	.shutdown	= usb_hcd_platform_shutdown,
 	.driver		= {
-		.name	= "npcmx50-ohci",
+		.name	= "npcm7xx-ohci",
 		.pm	= &npcm7xx_ohci_pm_ops,
 		.of_match_table = of_match_ptr(npcm750_ohci_match),
 	},
@@ -163,17 +164,18 @@ static int __init ohci_npcm7xx_init(void)
 		return -ENODEV;
 
 	pr_info("%s: " DRIVER_DESC "\n", hcd_name);
-	ohci_init_driver(&ohci_npcmx50_driver, NULL);
-	return platform_driver_register(&ohci_hcd_npcmx50_driver);
+	ohci_init_driver(&ohci_npcm7xx_driver, NULL);
+	return platform_driver_register(&ohci_hcd_npcm7xx_driver);
 }
 module_init(ohci_npcm7xx_init);
 
 static void __exit ohci_npcm7xx_cleanup(void)
 {
-	platform_driver_unregister(&ohci_hcd_npcmx50_driver);
+	platform_driver_unregister(&ohci_hcd_npcm7xx_driver);
 }
 module_exit(ohci_npcm7xx_cleanup);
 
-MODULE_ALIAS("platform:npcmx50_ohci");
+MODULE_ALIAS("platform:npcm7xx_ohci");
 MODULE_AUTHOR("Tomer Maimon <tomer.maimon@nuvoton.com>");
+MODULE_AUTHOR("Joseph Liu<kwliun@nuvoton.com>");
 MODULE_LICENSE("GPL v2");
