@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.6"
+#define VCD_VERSION "0.0.8"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -352,6 +352,48 @@ struct npcm750_vcd {
 	struct completion complete;
 	u32 hortact;
 };
+
+typedef struct
+{
+	char* name;
+	int hdisp;	// displayed pixels i.e. width
+	int vdisp;	// displayed lines i.e. height
+} res_tlb;
+
+static const res_tlb res_tlbs[] = {
+	{"320 x 200", 320, 200},
+	{"320 x 240", 320, 240},
+	{"640 x 480", 640, 480},
+	{"720 x 400", 720, 400},
+	{"768 x 576", 768, 576},
+	{"800 x 480", 800, 480},
+	{"800 x 600", 800, 600},
+	{"832 x 624", 832, 624},
+	{"854 x 480", 854, 480},
+	{"1024 x 600", 1024, 600},
+	{"1024 x 768", 1024, 768},
+	{"1152 x 768", 1152, 768},
+	{"1152 x 864", 1152, 864},
+	{"1152 x 870", 1152, 870},
+	{"1152 x 900", 1152, 900},
+	{"1280 x 720", 1280, 720},
+	{"1280 x 768", 1280, 768},
+	{"1280 x 800", 1280, 800},
+	{"1280 x 854", 1280, 854},
+	{"1280 x 960", 1280, 960},
+	{"1280 x 1024", 1280, 1024},
+	{"1366 x 768", 1366, 768},
+	{"1400 x 900", 1400, 900},
+	{"1400 x 960", 1400, 960},
+	{"1400 x 1050", 1400, 1050},
+	{"1600 x 1050", 1600, 1050},
+	{"1600 x 1200", 1600, 1200},
+	{"1680 x 1050", 1680, 1050},
+	{"1920 x 1080", 1920, 1080},
+	{"1920 x 1200", 1920, 1200},
+};
+
+static const int restlb_cnt = sizeof(res_tlbs) / sizeof(res_tlb);
 
 static void npcm750_vcd_update(struct npcm750_vcd *vcd, u32 reg,
 			       unsigned long mask, u32 bits)
@@ -692,6 +734,9 @@ static int npcm750_vcd_command(struct npcm750_vcd *vcd, u32 value)
 
 static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 {
+	int i;
+	u8 retry = 3;
+	u8 vaild = 0;
 	u32 hortact = (npcm750_vcd_read(vcd,VCD_HOR_AC_TIM)
 		& VCD_HOR_AC_TIM_MASK);
 
@@ -712,9 +757,30 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 			do {
 				mdelay(500);
 				regmap_read(gfxi, DISPST, &dispst);
+				cond_resched();
 			} while (npcm750_vcd_vres(vcd) < 100 ||
 					npcm750_vcd_pclk(vcd) == 0 ||
 					(dispst & DISPST_HSCROFF));
+		}
+
+		while (retry--) {
+			for (i = 0 ; i < restlb_cnt ; i++) {
+				if ((res_tlbs[i].hdisp == npcm750_vcd_hres(vcd)) &&
+					(res_tlbs[i].vdisp == npcm750_vcd_vres(vcd))) {
+					vaild = 1;
+					break;
+				}
+			}
+			if (vaild)
+				break;
+			else
+				mdelay(100);
+		}
+
+		if (!vaild) {
+			dev_err(vcd->dev, "invaild resolution %d x %d\n",
+				npcm750_vcd_hres(vcd), npcm750_vcd_vres(vcd));
+			return -1;
 		}
 
 		/* setup resolution change detect register*/
@@ -1152,6 +1218,11 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 	case VCD_IOCCHKRES:
 	{
 		int changed = npcm750_vcd_get_resolution(vcd);
+
+		if (changed < 0) {
+			ret = -EFAULT;
+			break;
+		}
 
 		ret = copy_to_user(argp, &changed, sizeof(changed))
 			? -EFAULT : 0;
