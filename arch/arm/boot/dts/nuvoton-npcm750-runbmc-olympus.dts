@@ -1045,7 +1045,7 @@
 			};
 
 			spi1: spi@201000 {
-				status = "okay";
+				status = "disabled";
 			};
 		};
 	};
@@ -1141,6 +1141,7 @@
 				&gpio169o_pins
 				&gpio188o_pins
 				&gpio189_pins
+				&gpio192o_pins
 				&gpio196_pins
 				&gpio197_pins
 				&gpio198o_pins
