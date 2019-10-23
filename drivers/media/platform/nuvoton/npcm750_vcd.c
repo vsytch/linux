@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.8"
+#define VCD_VERSION "0.0.9"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -735,7 +735,8 @@ static int npcm750_vcd_command(struct npcm750_vcd *vcd, u32 value)
 static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 {
 	int i;
-	u8 retry = 3;
+	u8 res_retry = 3;
+	u8 vaild_retry = 3;
 	u8 vaild = 0;
 	u32 hortact = (npcm750_vcd_read(vcd,VCD_HOR_AC_TIM)
 		& VCD_HOR_AC_TIM_MASK);
@@ -753,17 +754,22 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 		if (npcm750_vcd_hres(vcd) && npcm750_vcd_vres(vcd)) {
 			struct regmap *gfxi = vcd->gfx_regmap;
 			u32 dispst;
-			/* wait for valid and stable resolution */
+
+			/* wait for resolution is available,
+			   and it is also captured by host */
 			do {
-				mdelay(500);
+				if (res_retry == 0)
+					return -1;
+				mdelay(300);
 				regmap_read(gfxi, DISPST, &dispst);
-				cond_resched();
+				res_retry--;
 			} while (npcm750_vcd_vres(vcd) < 100 ||
 					npcm750_vcd_pclk(vcd) == 0 ||
 					(dispst & DISPST_HSCROFF));
 		}
 
-		while (retry--) {
+		/* wait for valid resolution */
+		while (vaild_retry--) {
 			for (i = 0 ; i < restlb_cnt ; i++) {
 				if ((res_tlbs[i].hdisp == npcm750_vcd_hres(vcd)) &&
 					(res_tlbs[i].vdisp == npcm750_vcd_vres(vcd))) {
