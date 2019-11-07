@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.9"
+#define VCD_VERSION "0.0.10"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -383,9 +383,10 @@ static const res_tlb res_tlbs[] = {
 	{"1280 x 960", 1280, 960},
 	{"1280 x 1024", 1280, 1024},
 	{"1366 x 768", 1366, 768},
-	{"1400 x 900", 1400, 900},
-	{"1400 x 960", 1400, 960},
-	{"1400 x 1050", 1400, 1050},
+	{"1440 x 900", 1440, 900},
+	{"1440 x 960", 1440, 960},
+	{"1440 x 1050", 1440, 1050},
+	{"1440 x 1080", 1440, 1080},
 	{"1600 x 1050", 1600, 1050},
 	{"1600 x 1200", 1600, 1200},
 	{"1680 x 1050", 1680, 1050},
@@ -784,7 +785,7 @@ static int npcm750_vcd_get_resolution(struct npcm750_vcd *vcd)
 		}
 
 		if (!vaild) {
-			dev_err(vcd->dev, "invaild resolution %d x %d\n",
+			dev_err(vcd->dev, "invalid resolution %d x %d\n",
 				npcm750_vcd_hres(vcd), npcm750_vcd_vres(vcd));
 			return -1;
 		}
