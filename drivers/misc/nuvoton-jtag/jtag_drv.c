@@ -106,6 +106,7 @@ struct jtag_info {
 	struct regmap		*gcr_regmap;
 	u32 freq;
 	u32 controller; /* PSPI controller */
+	u32 dev_num;
 	u8 tms_level;
 	u8 tapstate;
 	bool is_open;
@@ -1048,7 +1049,6 @@ const struct file_operations npcm_jtag_fops = {
 static int jtag_register_device(struct jtag_info *jtag)
 {
 	struct device *dev = jtag->dev;
-	static int dev_num = 0;
 	int err;
 
 	if (!dev)
@@ -1058,7 +1058,7 @@ static int jtag_register_device(struct jtag_info *jtag)
 	jtag->miscdev.parent = dev;
 	jtag->miscdev.fops =  &npcm_jtag_fops;
 	jtag->miscdev.minor = MISC_DYNAMIC_MINOR;
-	jtag->miscdev.name = kasprintf(GFP_KERNEL, "jtag%d", dev_num++);
+	jtag->miscdev.name = kasprintf(GFP_KERNEL, "jtag%d", jtag->dev_num);
 	if (!jtag->miscdev.name)
 		return -ENOMEM;
 
@@ -1203,6 +1203,16 @@ static int npcm_jtag_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev,
 				"Could not read pspi index\n");
 	npcm_jtag->controller = value;
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+			"dev-num", &value);
+	if (ret < 0) {
+		dev_err(&pdev->dev,
+				"Could not read dev_num\n");
+		value = 0;
+	}
+	npcm_jtag->dev_num = value;
+
 	npcm_jtag_pspi_probe(pdev, &npcm_jtag->pspi);
 
 	npcm_jtag_init(npcm_jtag);

@@ -106,6 +106,7 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
+		dev-num = <0>;
 		pspi-controller = <1>; /* pspi1 */
 		reg = <0xf0200000 0x1000>;
 		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
