@@ -747,6 +747,8 @@
 					gpio-controller;
 					#gpio-cells = <2>;
 					reset-gpios = <&gpio5 28 GPIO_ACTIVE_LOW>;
+					gpio-line-names="","","","POWER_OUT","RESET_OUT","","","",
+									"","","","","","","","";
 					G2A_P0_0 {
 						gpio-hog;
 						gpios = <0 0>;
@@ -764,18 +766,6 @@
 						gpios = <2 0>;
 						input;
 						line-name = "RST_BMC_RTCRST";
-					};
-					G2A_P0_3 {
-						gpio-hog;
-						gpios = <3 0>;
-						output-high;
-						line-name = "FM_BMC_PWRBTN_OUT_N";
-					};
-					G2A_P0_4 {
-						gpio-hog;
-						gpios = <4 0>;
-						output-high;
-						line-name = "RST_BMC_SYSRST_BTN_OUT_N";
 					};
 					G2A_P0_5 {
 						gpio-hog;
