@@ -165,6 +165,7 @@
 			status = "okay";
 			spi-nor@0 {
 				compatible = "jedec,spi-nor";
+				spi-max-frequency = <5000000>;
 				#address-cells = <1>;
 				#size-cells = <1>;
 				spi-rx-bus-width = <2>;
@@ -225,6 +226,7 @@
 			status = "okay";
 			spi-nor@0 {
 				compatible = "jedec,spi-nor";
+				spi-max-frequency = <5000000>;
 				#address-cells = <1>;
 				#size-cells = <1>;
 				spi-rx-bus-width = <2>;
