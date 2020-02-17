@@ -43,6 +43,8 @@ Optional property for each child node:
 - cooling-levels: PWM duty cycle values in a range from 0 to 255
                   which correspond to thermal cooling states.
 
+- fan_filter_en : specify the Fan group filter status, boolean parameter.
+
 Examples:
 
 pwm_fan:pwm-fan-controller@103000 {
