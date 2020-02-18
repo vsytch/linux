@@ -455,9 +455,7 @@
 
 			rng: rng@b000 {
 				compatible = "nuvoton,npcm750-rng";
-				reg = <0xb000 0x1000>;
-				clocks = <&clk NPCM7XX_CLK_APB1>;
-				clock-names = "clk_apb1";
+				reg = <0xb000 0x8>;
 				status = "disabled";
 			};
 
