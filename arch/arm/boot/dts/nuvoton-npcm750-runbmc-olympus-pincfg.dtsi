@@ -388,6 +388,11 @@
 			bias-disable;
 			input-enable;
 		};
+		gpio192o_pins: gpio192o-pins {
+			pins = "GPIO192";
+			bias-disable;
+			output-high;
+		};
 		gpio196_pins: gpio196-pins {
 			pins = "GPIO196/SMB0CSCL";
 			bias-disable;
