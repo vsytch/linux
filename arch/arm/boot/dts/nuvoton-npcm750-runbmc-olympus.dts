@@ -210,13 +210,9 @@
 					compatible = "fixed-partitions";
 					#address-cells = <1>;
 					#size-cells = <1>;
-					system1@0 {
-						label = "spi3-system1";
-						reg = <0x0 0x800000>;
-					};
-					system2@800000 {
-						label = "spi3-system2";
-						reg = <0x800000 0x0>;
+					bios@0 {
+						label = "bios";
+						reg = <0x0 0x2000000>;
 					};
 				};
 			};
