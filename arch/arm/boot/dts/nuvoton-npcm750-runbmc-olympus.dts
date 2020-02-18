@@ -394,7 +394,7 @@
 					reg = <0x4c>;
 				};
 				power-supply@58 {
-					compatible = "delta,dps800";
+					compatible = "pmbus";
 					reg = <0x58>;
 				};
 			};
