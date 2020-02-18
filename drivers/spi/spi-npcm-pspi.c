@@ -296,7 +296,6 @@ static void npcm_pspi_reset_hw(struct npcm_pspi *priv)
 static irqreturn_t npcm_pspi_handler(int irq, void *dev_id)
 {
 	struct npcm_pspi *priv = dev_id;
-	u16 val;
 	u8 stat;
 
 	stat = ioread8(priv->base + NPCM_PSPI_STAT);
@@ -306,7 +305,7 @@ static irqreturn_t npcm_pspi_handler(int irq, void *dev_id)
 
 	if (priv->tx_buf) {
 		if (stat & NPCM_PSPI_STAT_RBF) {
-			val = ioread8(NPCM_PSPI_DATA + priv->base);
+			ioread8(NPCM_PSPI_DATA + priv->base);
 			if (priv->tx_bytes == 0) {
 				npcm_pspi_disable(priv);
 				complete(&priv->xfer_done);
@@ -364,7 +363,6 @@ static int npcm_pspi_probe(struct platform_device *pdev)
 	priv = spi_master_get_devdata(master);
 	priv->master = master;
 	priv->is_save_param = false;
-	priv->id = pdev->id;
 
 	priv->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(priv->base)) {
@@ -413,7 +411,7 @@ static int npcm_pspi_probe(struct platform_device *pdev)
 	master->min_speed_hz = DIV_ROUND_UP(clk_hz, NPCM_PSPI_MAX_CLK_DIVIDER);
 	master->mode_bits = SPI_CPHA | SPI_CPOL;
 	master->dev.of_node = pdev->dev.of_node;
-	master->bus_num = pdev->id;
+	master->bus_num = -1;
 	master->bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(16);
 	master->transfer_one = npcm_pspi_transfer_one;
 	master->prepare_transfer_hardware =
@@ -446,7 +444,7 @@ static int npcm_pspi_probe(struct platform_device *pdev)
 	if (ret)
 		goto out_disable_clk;
 
-	dev_info(&pdev->dev,"NPCM Peripheral SPI probed\n");
+	pr_info("NPCM Peripheral SPI %d probed\n", master->bus_num);
 
 	return 0;
 
