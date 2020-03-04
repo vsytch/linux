@@ -287,7 +287,7 @@
 		pcimbox: pcimbox@f0848000 {
 			compatible = "nuvoton,npcm750-pci-mbox",
 					"simple-mfd", "syscon";
-			reg = <0xf084C000 0x8
+			reg = <0xf084C000 0xC
 				0xf0848000 0x3F00>;
 			interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>;
 		};
