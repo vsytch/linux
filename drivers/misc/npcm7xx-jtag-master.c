@@ -1050,6 +1050,10 @@ static long jtag_ioctl(struct file *file,
 			priv->pspi.enable_irq = true;
 		break;
 	case JTAG_SLAVECONTLR:
+		if (arg)
+			npcm_jtag_config_pins(priv, 0);
+		else
+			npcm_jtag_config_pins(priv, 1);
 		break;
 	default:
 		return -ENOTTY;
