@@ -1,0 +1,16 @@
+NPCM SoC Vendor Defined Message via VDMA
+
+Required properties:
+- compatible  : "nuvoton,npcm750-vdm" for the NPCM7XX BMC.
+- reg         : Specifies VDM physical base address and size of the registers.
+				and VDMA physical base address and size of the registers.
+- interrupts : contain VDMA interrupt.
+				
+
+Example:
+vdma: vdma@e0800000 {
+	compatible = "nuvoton,npcm750-vdm";
+	reg = <0xe0800000 0x1000
+		   0xf0822000 0x1000>;
+	interrupts = <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
+};
