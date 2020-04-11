@@ -61,4 +61,5 @@ obj-$(CONFIG_OCXL)		+= ocxl/
 obj-$(CONFIG_MISC_RTSX)		+= cardreader/
 obj-$(CONFIG_NPCM7XX_LPC_BPC)	+= npcm7xx-lpc-bpc.o
 obj-$(CONFIG_NPCM7XX_PCI_MBOX)	+= npcm7xx-pci-mbox.o
+obj-$(CONFIG_NPCM_VDM)		+= npcm-vdm/
 obj-$(CONFIG_NUVOTON_JTAG)      += nuvoton-jtag/
