@@ -61,7 +61,7 @@ ENTRY(__loop_delay_l)
 		retls	lr
 		subs	r0, r0, #1
 #endif
-		bhi	__loop_delay
+		bhi	__loop_delay_l
 		ret	lr
 ENDPROC(__loop_nanodelay)
 ENDPROC(__loop_const_nanodelay)
