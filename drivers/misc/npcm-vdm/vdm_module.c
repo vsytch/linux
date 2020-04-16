@@ -38,8 +38,6 @@ struct regmap *gcr_regmap;
 void __iomem *vdm_virt_addr;
 void __iomem *vdma_virt_addr;
 
-int vdma_interrupt;
-int irq_number;
 
 static const struct of_device_id vdm_dt_npcm750_match[] = {
        { .compatible = "nuvoton,npcm750-vdm" },
@@ -1033,6 +1031,7 @@ static struct platform_driver vdm_driver =
 static int vdm_init(void) 
 {
 	int ret = 0;
+	int vdma_interrupt;
 	
 #ifdef CONFIG_OF
 	struct device_node *np = NULL;
@@ -1200,7 +1199,7 @@ device_create_failed:
 	class_destroy(vdm_class);
 class_create_failed:
 #ifndef _USE_VDMA_POLLING
-    free_irq(irq_number,(void *) &dummy_vdma_dev);
+    free_irq(vdma_interrupt,(void *) &dummy_vdma_dev);
 #endif
 request_irq_failed :
 	_vdm_close();
@@ -1242,11 +1241,6 @@ static void vdm_exit(void)
 	flush_workqueue(my_workqueue);	/* wait till all "old ones" finished */
 	destroy_workqueue(my_workqueue);
 #endif
-	spin_lock_irqsave(&lock,   flags);
-	//	free_irq(MCTP_INT, (void *)&dummy_vdma_dev);
-#ifndef _USE_VDMA_POLLING
-	free_irq(irq_number,(void *) &dummy_vdma_dev);
-#endif
 	_vdm_close();
 	// clear list of vdm_instances
 	list_for_each(pList, &vdm_instances_list)
@@ -1268,9 +1262,6 @@ static void vdm_exit(void)
 	unregister_chrdev_region(vdm_dev, 1);
 	platform_device_unregister(&vdm_device);
 	platform_driver_unregister(&vdm_driver);
-
-	spin_unlock_irqrestore(&lock,   flags);
-
 	//pr_debug("<1> vdm module exit\n");
 }
 
