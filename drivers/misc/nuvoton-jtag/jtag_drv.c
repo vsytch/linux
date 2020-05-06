@@ -481,7 +481,7 @@ static int npcm_jtag_set_tapstate(struct jtag_info *jtag,
 
 	if (to == JtagTLR) {
 		for (i = 0; i < 9; i++)
-			TCK_Cycle(jtag, 1, 1, 0);
+			TCK_Cycle(jtag, 1, 1, 1);
 		jtag->tapstate = JtagTLR;
 		return 0;
 	}
@@ -493,7 +493,7 @@ static int npcm_jtag_set_tapstate(struct jtag_info *jtag,
 		return 0;
 
 	for (i = 0; i < count; i++) {
-		TCK_Cycle(jtag, 1, (tmsbits & 1), 0);
+		TCK_Cycle(jtag, 1, (tmsbits & 1), 1);
 		tmsbits >>= 1;
 	}
 	JTAG_DBUG("jtag: change state %d -> %d\n",
@@ -793,7 +793,7 @@ static int npcm_jtag_runtest(struct jtag_info *jtag,
 
 	if (jtag->mode != MODE_PSPI) {
 		for (i = 0; i < tcks; i++) {
-			TCK_Cycle(jtag, 0, 0, 0);
+			TCK_Cycle(jtag, 0, 0, 1);
 			cond_resched();
 		}
 		return 0;
@@ -801,7 +801,7 @@ static int npcm_jtag_runtest(struct jtag_info *jtag,
 
 	if (units == 0) {
 		for (i = 0; i < remain_bits; i++)
-			TCK_Cycle(jtag, 0, 0, 0);
+			TCK_Cycle(jtag, 0, 0, 1);
 		return 0;
 	}
 
@@ -860,7 +860,7 @@ static int npcm_jtag_runtest(struct jtag_info *jtag,
 
 	if (remain_bits) {
 		for (i = 0; i < remain_bits; i++)
-			TCK_Cycle(jtag, 0, 0, 0);
+			TCK_Cycle(jtag, 0, 0, 1);
 	}
 	return 0;
 
@@ -1002,10 +1002,6 @@ static long jtag_ioctl(struct file *file,
 			priv->pspi.enable_irq = true;
 		break;
 	case JTAG_SLAVECONTLR:
-		if (arg)
-			npcm_jtag_config_pins(priv, 0);
-		else
-			npcm_jtag_config_pins(priv, 1);
 		break;
 	default:
 		return -ENOTTY;
@@ -1245,6 +1241,7 @@ static int npcm_jtag_remove(struct platform_device *pdev)
 	misc_deregister(&jtag->miscdev);
 	kfree(jtag->miscdev.name);
 	for (i = 0; i < pin_NUM; i++) {
+		gpiod_direction_input(jtag->pins[i].gpiod);
 		iounmap(jtag->pins[i].reg_base);
 		gpiod_put(jtag->pins[i].gpiod);
 	}
