@@ -443,10 +443,10 @@
 				#size-cells = <0>;
 				bus-frequency = <100000>;
 				status = "okay";
-				slave_mqueue: i2c-slave-mqueue@40000010 {
-					compatible = "i2c-slave-mqueue";
+				ipmb@40000010 {
+					compatible = "ipmb-dev";
 					reg = <0x40000010>;
-					status = "okay";
+					i2c-protocol;
 				};
 			};
 
