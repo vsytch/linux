@@ -91,6 +91,10 @@
 			cache-level = <2>;
 			clocks = <&clk NPCM7XX_CLK_AXI>;
 			arm,shared-override;
+			arm,prefetch-data = <1>;
+			arm,prefetch-instr = <1>;
+			arm,tag-latency = <1 1 1>;
+			arm,data-latency = <1 1 1>;
 		};
 
 		gic: interrupt-controller@3ff000 {
