@@ -48,7 +48,7 @@ static struct dentry *npcm7xx_fs_dir;
 #define  IPSRST1_OFFSET 0x020
 
 #define DRV_MODULE_NAME		"npcm7xx-emc"
-#define DRV_MODULE_VERSION	"3.92"
+#define DRV_MODULE_VERSION	"3.94"
 
 /* Ethernet MAC Registers */
 #define REG_CAMCMR	0x00
@@ -1037,6 +1037,15 @@ static void npcm7xx_ether_set_rx_mode(struct net_device *netdev)
 	ether->camcmr = rx_mode;
 }
 
+static void npcm7xx_rx_enable(struct net_device *netdev)
+{
+	struct npcm7xx_ether *ether = netdev_priv(netdev);
+
+	/* enable RX */
+	writel(readl((ether->reg + REG_MCMDR)) | MCMDR_RXON,
+	       (ether->reg + REG_MCMDR));
+}
+
 static void npcm7xx_reset_mac(struct net_device *netdev, int need_free)
 {
 	struct npcm7xx_ether *ether = netdev_priv(netdev);
@@ -1069,12 +1078,9 @@ static void npcm7xx_reset_mac(struct net_device *netdev, int need_free)
 	npcm7xx_enable_mac_interrupt(netdev);
 	npcm7xx_set_global_maccmd(netdev);
 
-	/* enable RX and TX */
-	writel(readl((ether->reg + REG_MCMDR)) | MCMDR_TXON | MCMDR_RXON,
+	/* enable TX */
+	writel(readl((ether->reg + REG_MCMDR)) | MCMDR_TXON,
 	       (ether->reg + REG_MCMDR));
-
-	/* trigger RX */
-	writel(ENSTART, (ether->reg + REG_RSDR));
 
 	ether->need_reset = 0;
 
@@ -1169,8 +1175,10 @@ static int npcm7xx_ether_close(struct net_device *netdev)
 
 	npcm7xx_free_desc(netdev, true);
 
-	kfree(ether->dump_buf);
-	ether->dump_buf = NULL;
+	if (ether->dump_buf) {
+		kfree(ether->dump_buf);
+		ether->dump_buf = NULL;
+	}
 
 	return 0;
 }
@@ -1610,6 +1618,7 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		if (ether->need_reset) {
 			dev_dbg(&pdev->dev, "Reset\n");
 			npcm7xx_reset_mac(netdev, 1);
+			npcm7xx_rx_enable(netdev);
 		}
 
 		spin_lock_irqsave(&ether->lock, flags);
@@ -1680,8 +1689,7 @@ static int npcm7xx_ether_open(struct net_device *netdev)
 	netif_start_queue(netdev);
 	napi_enable(&ether->napi);
 
-	/* trigger RX */
-	writel(ENSTART, (ether->reg + REG_RSDR));
+	npcm7xx_rx_enable(netdev);
 
 	/* Start the NCSI device */
 	if (ether->use_ncsi) {
