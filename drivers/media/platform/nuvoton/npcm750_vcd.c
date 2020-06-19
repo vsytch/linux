@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.11"
+#define VCD_VERSION "0.0.12"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -210,9 +210,11 @@
 /* GCR  Register */
 #define INTCR 0x3c
 #define  INTCR_GFXIFDIS	(BIT(8) | BIT(9))
+#define  INTCR_GIRST	BIT(17)
 #define  INTCR_LDDRB	BIT(18)
 #define  INTCR_DACOFF	BIT(15)
 #define  INTCR_DEHS	BIT(27)
+#define  INTCR_KVMSI	BIT(28)
 
 #define INTCR2 0x60
 #define  INTCR2_GIRST2	BIT(2)
@@ -964,6 +966,9 @@ static int npcm750_vcd_init(struct npcm750_vcd *vcd)
 	/* Enable display of KVM GFX and access to memory */
 	regmap_update_bits(gcr, INTCR, INTCR_GFXIFDIS, ~INTCR_GFXIFDIS);
 
+	/* KVM in progress */
+	regmap_update_bits(gcr, INTCR, INTCR_KVMSI, INTCR_KVMSI);
+
 	/* Set vrstenw and hrstenw */
 	regmap_update_bits(gcr, INTCR2,
 			   INTCR2_GIHCRST | INTCR2_GIVCRST,
@@ -994,8 +999,7 @@ static int npcm750_vcd_init(struct npcm750_vcd *vcd)
 
 	/* Set vcd mode */
 	npcm750_vcd_update(vcd, VCD_MODE, 0xFFFFFFFF,
-			   VCD_MODE_VCDE | VCD_MODE_CM_565 |
-			   VCD_MODE_IDBC | VCD_MODE_KVM_BW_SET);
+			    VCD_MODE_CM_565 | VCD_MODE_KVM_BW_SET);
 
 	/* Set DVDE/DVHSYNC */
 	npcm750_vcd_dehs(vcd, vcd->de_mode);
@@ -1030,6 +1034,14 @@ static int npcm750_vcd_init(struct npcm750_vcd *vcd)
 
 static void npcm750_vcd_stop(struct npcm750_vcd *vcd)
 {
+	struct regmap *gcr = vcd->gcr_regmap;
+
+	/* Disable display of KVM GFX and access to memory */
+	regmap_update_bits(gcr, INTCR, INTCR_GFXIFDIS, INTCR_GFXIFDIS);
+
+	/* KVM is not in progress */
+	regmap_update_bits(gcr, INTCR, INTCR_KVMSI, ~INTCR_KVMSI);
+
 	npcm750_vcd_write(vcd, VCD_INTE, 0);
 	npcm750_vcd_write(vcd, VCD_STAT, VCD_STAT_CLEAR);
 	npcm750_vcd_write(vcd, VCD_MODE, 0);
@@ -1052,10 +1064,6 @@ static irqreturn_t npcm750_vcd_irq_handler(int irq, void *dev_instance)
 	if (status & VCD_STAT_IRQ) {
 		if (status & VCD_STAT_DONE) {
 			dev_dbg(vcd->dev, "VCD_STAT_DONE\n");
-			if (vcd->cmd != VCD_CMD_OP_CAPTURE) {
-				npcm750_vcd_free_diff_table(vcd);
-				npcm750_vcd_get_diff_table(vcd);
-			}
 			status_ack |= VCD_STAT_DONE;
 		}
 
@@ -1166,7 +1174,13 @@ npcm750_vcd_open(struct inode *inode, struct file *file)
 
 	file->private_data = vcd;
 
-	atomic_inc_return(&vcd->clients);
+	if (atomic_inc_return(&vcd->clients) == 1) {
+		if (npcm750_vcd_init(vcd)) {
+			dev_err(vcd->dev, "%s: failed to init vcd module\n",
+				__func__);
+			return -EBUSY;
+		}
+	}
 
 	dev_dbg(vcd->dev, "open: client %d\n", atomic_read(&vcd->clients));
 	return 0;
@@ -1177,7 +1191,8 @@ npcm750_vcd_release(struct inode *inode, struct file *file)
 {
 	struct npcm750_vcd *vcd = file->private_data;
 
-	atomic_dec_return(&vcd->clients);
+	if (atomic_dec_return(&vcd->clients) == 0)
+		npcm750_vcd_stop(vcd);
 
 	dev_dbg(vcd->dev, "close: client %d\n", atomic_read(&vcd->clients));
 	return 0;
@@ -1206,10 +1221,19 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 			vcd->status = 0;
 			reinit_completion(&vcd->complete);
 
+			npcm750_vcd_free_diff_table(vcd);
+
+			if (vcd_cmd != VCD_CMD_OP_CAPTURE)
+				npcm750_vcd_update(vcd, VCD_MODE, VCD_MODE_IDBC,
+					VCD_MODE_IDBC);
+
+			npcm750_vcd_update(vcd, VCD_MODE, VCD_MODE_VCDE,
+				VCD_MODE_VCDE);
+
 			npcm750_vcd_command(vcd, vcd_cmd);
 			timeout = wait_for_completion_interruptible_timeout(&vcd->complete,
 			    VCD_OP_TIMEOUT);
-			if (!timeout || !npcm750_vcd_op_done(vcd)) {
+			if (timeout <= 0 || !npcm750_vcd_op_done(vcd)) {
 				dev_dbg(vcd->dev, "VCD_OP_BUSY\n");
 
 				if (vcd->status == 0)
@@ -1218,8 +1242,16 @@ npcm750_do_vcd_ioctl(struct npcm750_vcd *vcd, unsigned int cmd,
 				npcm750_vcd_io_reset(vcd);
 				ret = copy_to_user(argp, &vcd->status, sizeof(vcd->status))
 					? -EFAULT : 0;
-				if (!ret)
-					ret = -EBUSY;
+			}
+
+			npcm750_vcd_update(vcd, VCD_MODE, VCD_MODE_VCDE,
+				~VCD_MODE_VCDE);
+
+			if (vcd_cmd != VCD_CMD_OP_CAPTURE && timeout > 0) {
+				npcm750_vcd_update(vcd, VCD_MODE, VCD_MODE_IDBC,
+					~VCD_MODE_IDBC);
+				npcm750_short_vcd_reset(vcd);
+				npcm750_vcd_get_diff_table(vcd);
 			}
 		}
 		break;
@@ -1461,13 +1493,6 @@ static int npcm750_vcd_probe(struct platform_device *pdev)
 			     "de-mode", &vcd->de_mode);
 	if (ret)
 		vcd->de_mode = 1;
-
-	ret = npcm750_vcd_init(vcd);
-	if (ret) {
-		dev_err(&pdev->dev, "%s: failed to init vcd module\n",
-			__func__);
-		goto err;
-	}
 
 	vcd->dev_p = &pdev->dev;
 
