@@ -538,6 +538,7 @@ struct npcm_ep {
 
 	char name[14];
 	unsigned stopped:1;
+	unsigned desc_invalid:1;
 };
 
 #define EP_DIR_IN	1

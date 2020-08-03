@@ -576,7 +576,7 @@ static int npcm_ep_enable(struct usb_ep *_ep,
 	ep = container_of(_ep, struct npcm_ep, ep);
 
 	/* catch various bogus parameters */
-	if (!_ep || !desc
+	if (!_ep || !desc 
 			|| (desc->bDescriptorType != USB_DT_ENDPOINT))
 		return -EINVAL;
 
@@ -616,6 +616,7 @@ static int npcm_ep_enable(struct usb_ep *_ep,
 	ep->ep.maxpacket = max;
 	ep->ep.desc = desc;
 	ep->stopped = 0;
+	ep->desc_invalid = 0;
 
 	/* Controller related setup */
 	/* Init EPx Queue Head (Ep Capabilites field in QH
@@ -659,7 +660,7 @@ static int npcm_ep_disable(struct usb_ep *_ep)
     struct usb_dr_device *dr_regs;
 
 	ep = container_of(_ep, struct npcm_ep, ep);
-	if (!_ep || !ep->ep.desc) {
+	if (!_ep || !ep->ep.desc || ep->desc_invalid) {
 		VDBG("%s not enabled", _ep ? ep->ep.name : NULL);
 		return -EINVAL;
 	}
@@ -690,7 +691,8 @@ static int npcm_ep_disable(struct usb_ep *_ep)
 	/* nuke all pending requests (does flush) */
 	nuke(ep, -ESHUTDOWN);
 
-	ep->ep.desc = NULL;
+	//ep->ep.desc = NULL;
+	ep->desc_invalid = 1;
 	ep->stopped = 1;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
@@ -970,7 +972,7 @@ npcm_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 	int ret;
 
 	if (!_req)
-	{
+	{  
 		pr_info("%s(): usb_request NULL\n", __func__);
 		return -EINVAL;
 	}
@@ -984,7 +986,7 @@ npcm_ep_queue(struct usb_ep *_ep, struct usb_request *_req, gfp_t gfp_flags)
 		pr_info("%s(): bad params\n", __func__);
 		return -EINVAL;
 	}
-	if (unlikely(!_ep || !ep->ep.desc)) {
+	if (unlikely(!_ep || !ep->ep.desc || ep->desc_invalid)) {
 		pr_info("%s(): bad ep\n", __func__);
 		return -EINVAL;
 	}
@@ -1051,7 +1053,7 @@ static int npcm_ep_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 
 	ep = container_of(_ep, struct npcm_ep, ep);
 
-    if (!ep->ep.desc)
+    if (!ep->ep.desc || ep->desc_invalid)
         return -EINVAL;
 
   /* before here, make sure dr_regs has been initialized */
@@ -1140,7 +1142,7 @@ static int npcm_ep_set_halt(struct usb_ep *_ep, int value)
 
 	ep = container_of(_ep, struct npcm_ep, ep);
 	udc = ep->udc;
-	if (!_ep || !ep->ep.desc) {
+	if (!_ep || !ep->ep.desc || ep->desc_invalid) {
 		status = -EINVAL;
 		goto out;
 	}
@@ -1190,9 +1192,10 @@ static int npcm_ep_fifo_status(struct usb_ep *_ep)
 
 	ep = container_of(_ep, struct npcm_ep, ep);
 
-	if (!ep->ep.desc && ep_index(ep) != 0)
+	if (!ep->ep.desc  ||  ep_index(ep) != 0 || ep->desc_invalid)
 		return -ENODEV;
-
+	
+	
   /* before here, make sure dr_regs has been initialized */
     if (!ep->udc)
         return -ENODEV;
@@ -1228,10 +1231,12 @@ static void npcm_ep_fifo_flush(struct usb_ep *_ep)
 
 #define NPCM_UDC_FLUSH_TIMEOUT 1000
 
-	if ((!_ep)||(!_ep->desc)) {
+	if ((!_ep)||(!_ep->desc)){
 		return;
 	} else {
 		ep = container_of(_ep, struct npcm_ep, ep);
+		if (ep->desc_invalid)
+			return;
 	}
 	
 	udc = (struct npcm_udc *)ep->udc;
@@ -1526,7 +1531,7 @@ static void ch9getstatus(struct npcm_udc *udc, u8 request_type, u16 value,
 		target_ep = get_ep_by_pipe(udc, get_pipe_by_windex(index));
 
 		/* stall if endpoint doesn't exist */
-		if (!target_ep->ep.desc)
+		if (!target_ep->ep.desc || target_ep->desc_invalid)
 			goto stall;
 		tmp = dr_ep_get_stall(udc, ep_index(target_ep), ep_is_in(target_ep))
 				<< USB_ENDPOINT_HALT;
@@ -2516,6 +2521,7 @@ static int struct_udc_setup(struct npcm_udc *udc,
 	udc->phy_mode = pdata->phy_mode;
 
 	udc->eps = kcalloc(udc->max_ep, sizeof(struct npcm_ep), GFP_KERNEL);
+		
 	if (!udc->eps) {
 		NPCM_USB_ERR("malloc npcm_ep failed\n");
 		return -1;
@@ -2599,6 +2605,7 @@ static int struct_ep_setup(struct npcm_udc *udc, unsigned char index,
 
 	ep->ep.ops = &npcm_ep_ops;
 	ep->stopped = 0;
+	ep->desc_invalid = 0;
 
 	if (index == 0) {
 		ep->ep.caps.type_control = true;
