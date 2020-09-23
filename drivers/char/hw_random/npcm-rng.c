@@ -23,7 +23,8 @@
 #define NPCM_RNG_ENABLE		BIT(0)
 #define NPCM_RNG_M1ROSEL	BIT(1)
 
-#define NPCM_RNG_TIMEOUT_POLL	20
+#define NPCM_RNG_TIMEOUT_USEC	20000
+#define NPCM_RNG_POLL_USEC	1000
 
 #define to_npcm_rng(p)	container_of(p, struct npcm_rng, rng)
 
@@ -35,11 +36,9 @@ struct npcm_rng {
 static int npcm_rng_init(struct hwrng *rng)
 {
 	struct npcm_rng *priv = to_npcm_rng(rng);
-	u32 val;
 
-	val = readl(priv->base + NPCM_RNGCS_REG);
-	val |= NPCM_RNG_ENABLE;
-	writel(val, priv->base + NPCM_RNGCS_REG);
+	writel(NPCM_RNG_CLK_SET_25MHZ | NPCM_RNG_ENABLE,
+	       priv->base + NPCM_RNGCS_REG);
 
 	return 0;
 }
@@ -47,40 +46,31 @@ static int npcm_rng_init(struct hwrng *rng)
 static void npcm_rng_cleanup(struct hwrng *rng)
 {
 	struct npcm_rng *priv = to_npcm_rng(rng);
-	u32 val;
 
-	val = readl(priv->base + NPCM_RNGCS_REG);
-	val &= ~NPCM_RNG_ENABLE;
-	writel(val, priv->base + NPCM_RNGCS_REG);
-}
-
-static bool npcm_rng_wait_ready(struct hwrng *rng, bool wait)
-{
-	struct npcm_rng *priv = to_npcm_rng(rng);
-	int timeout_cnt = 0;
-	int ready;
-
-	ready = readl(priv->base + NPCM_RNGCS_REG) & NPCM_RNG_DATA_VALID;
-	while ((ready == 0) && (timeout_cnt < NPCM_RNG_TIMEOUT_POLL)) {
-		usleep_range(500, 1000);
-		ready = readl(priv->base + NPCM_RNGCS_REG) &
-			NPCM_RNG_DATA_VALID;
-		timeout_cnt++;
-	}
-
-	return !!ready;
+	writel(NPCM_RNG_CLK_SET_25MHZ, priv->base + NPCM_RNGCS_REG);
 }
 
 static int npcm_rng_read(struct hwrng *rng, void *buf, size_t max, bool wait)
 {
 	struct npcm_rng *priv = to_npcm_rng(rng);
 	int retval = 0;
+	int ready;
 
 	pm_runtime_get_sync((struct device *)priv->rng.priv);
 
 	while (max >= sizeof(u32)) {
-		if (!npcm_rng_wait_ready(rng, wait))
-			break;
+		if (wait) {
+			if (readl_poll_timeout(priv->base + NPCM_RNGCS_REG,
+					       ready,
+					       ready & NPCM_RNG_DATA_VALID,
+					       NPCM_RNG_POLL_USEC,
+					       NPCM_RNG_TIMEOUT_USEC))
+				break;
+		} else {
+			if ((readl(priv->base + NPCM_RNGCS_REG) &
+			    NPCM_RNG_DATA_VALID) == 0)
+				break;
+		}
 
 		*(u32 *)buf = readl(priv->base + NPCM_RNGD_REG);
 		retval += sizeof(u32);
@@ -98,7 +88,6 @@ static int npcm_rng_probe(struct platform_device *pdev)
 {
 	struct npcm_rng *priv;
 	struct resource *res;
-	u32 quality;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -110,39 +99,30 @@ static int npcm_rng_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
-	priv->rng.name = pdev->name;
-#ifndef CONFIG_PM
-	priv->rng.init = npcm_rng_init;
-	priv->rng.cleanup = npcm_rng_cleanup;
-#endif
-	priv->rng.read = npcm_rng_read;
-	priv->rng.priv = (unsigned long)&pdev->dev;
-	if (of_property_read_u32(pdev->dev.of_node, "quality", &quality))
-		priv->rng.quality = 1000;
-	else
-		priv->rng.quality = quality;
-
-	writel(NPCM_RNG_M1ROSEL, priv->base + NPCM_RNGMODE_REG);
-#ifndef CONFIG_PM
-	writel(NPCM_RNG_CLK_SET_25MHZ, priv->base + NPCM_RNGCS_REG);
-#else
-	writel(NPCM_RNG_CLK_SET_25MHZ | NPCM_RNG_ENABLE,
-	       priv->base + NPCM_RNGCS_REG);
-#endif
-
-	ret = devm_hwrng_register(&pdev->dev, &priv->rng);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to register rng device: %d\n",
-			ret);
-		return ret;
-	}
-
 	dev_set_drvdata(&pdev->dev, priv);
 	pm_runtime_set_autosuspend_delay(&pdev->dev, 100);
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
-	dev_info(&pdev->dev, "Random Number Generator Probed\n");
+#ifndef CONFIG_PM
+	priv->rng.init = npcm_rng_init;
+	priv->rng.cleanup = npcm_rng_cleanup;
+#endif
+	priv->rng.name = pdev->name;
+	priv->rng.read = npcm_rng_read;
+	priv->rng.priv = (unsigned long)&pdev->dev;
+	priv->rng.quality = 1000;
+
+	writel(NPCM_RNG_M1ROSEL, priv->base + NPCM_RNGMODE_REG);
+
+	ret = devm_hwrng_register(&pdev->dev, &priv->rng);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to register rng device: %d\n",
+			ret);
+		pm_runtime_disable(&pdev->dev);
+		pm_runtime_set_suspended(&pdev->dev);
+		return ret;
+	}
 
 	return 0;
 }
@@ -151,7 +131,7 @@ static int npcm_rng_remove(struct platform_device *pdev)
 {
 	struct npcm_rng *priv = platform_get_drvdata(pdev);
 
-	hwrng_unregister(&priv->rng);
+	devm_hwrng_unregister(&pdev->dev, &priv->rng);
 	pm_runtime_disable(&pdev->dev);
 	pm_runtime_set_suspended(&pdev->dev);
 
@@ -193,7 +173,6 @@ static struct platform_driver npcm_rng_driver = {
 	.driver = {
 		.name		= "npcm-rng",
 		.pm		= &npcm_rng_pm_ops,
-		.owner		= THIS_MODULE,
 		.of_match_table = of_match_ptr(rng_dt_id),
 	},
 	.probe		= npcm_rng_probe,
