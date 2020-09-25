@@ -1579,22 +1579,24 @@ static int npcm7xx_poll(struct napi_struct *napi, int budget)
 		if (likely((status & (RXDS_RXGD | RXDS_CRCE | RXDS_ALIE |
 				      RXDS_RP | (IS_VLAN ? 0 : RXDS_PTLE))) ==
 			   RXDS_RXGD) && likely(length <= MAX_PACKET_SIZE)) {
-			dma_unmap_single(&netdev->dev,
-					 (dma_addr_t)le32_to_cpu(rxbd->buffer),
-					 roundup(MAX_PACKET_SIZE_W_CRC, 4),
-					 DMA_FROM_DEVICE);
+			if (s) {
+				dma_unmap_single(&netdev->dev,
+						(dma_addr_t)le32_to_cpu(rxbd->buffer),
+						roundup(MAX_PACKET_SIZE_W_CRC, 4),
+						DMA_FROM_DEVICE);
 
-			skb_put(s, length);
-			s->protocol = eth_type_trans(s, netdev);
-			netif_receive_skb(s);
-			ether->stats.rx_packets++;
-			ether->stats.rx_bytes += length;
+				skb_put(s, length);
+				s->protocol = eth_type_trans(s, netdev);
+				netif_receive_skb(s);
+				ether->stats.rx_packets++;
+				ether->stats.rx_bytes += length;
+			} else
+				ether->stats.rx_dropped++;
 			rx_cnt++;
 			ether->rx_count_pool++;
 
 			/* now we allocate new skb instead if the used one. */
-			if (!get_new_skb(netdev, ether->cur_rx))
-				ether->stats.rx_dropped++;
+			get_new_skb(netdev, ether->cur_rx);
 		} else {
 			ether->rx_err_count++;
 			ether->stats.rx_errors++;
