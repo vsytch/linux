@@ -32,9 +32,8 @@
 /* Completion Code mask to check retry needs */
 #define PECI_DEV_CC_RETRY_CHECK_MASK			0xf0
 
-#define PECI_DEV_RETRY_TIMEOUT				msecs_to_jiffies(700)
-#define PECI_DEV_RETRY_INTERVAL_MIN_MSEC		1
-#define PECI_DEV_RETRY_INTERVAL_MAX_MSEC		128
+#define PECI_DEV_RETRY_TIME_MS				700
+#define PECI_DEV_RETRY_INTERVAL_USEC			10000
 #define PECI_DEV_RETRY_BIT				0x01
 
 /**
@@ -282,9 +281,9 @@ struct peci_wr_pkg_cfg_msg {
  * (MSRs) defined in the processor's Intel Architecture (IA).
  */
 struct peci_rd_ia_msr_msg {
-#define PECI_RDIAMSR_WRITE_LEN		5
-#define PECI_RDIAMSR_READ_LEN		9
-#define PECI_RDIAMSR_CMD		0xb1
+#define PECI_RDIAMSR_WRITE_LEN	5
+#define PECI_RDIAMSR_READ_LEN	9
+#define PECI_RDIAMSR_CMD	0xb1
 
 	__u8	addr;
 	__u8	thread_id;
@@ -334,8 +333,8 @@ struct peci_wr_ia_msr_msg {
  */
 struct peci_rd_ia_msrex_msg {
 #define PECI_RDIAMSREX_WRITE_LEN	6
-#define PECI_RDIAMSREX_READ_LEN		9
-#define PECI_RDIAMSREX_CMD		0xd1
+#define PECI_RDIAMSREX_READ_LEN	9
+#define PECI_RDIAMSREX_CMD	0xd1
 
 	__u8	addr;
 	__u8	padding0;
@@ -599,7 +598,7 @@ struct peci_crashdump_get_frame_msg {
 	__u8	data[16];
 } __attribute__((__packed__));
 
-#define PECI_IOC_BASE	0xb7
+#define PECI_IOC_BASE  0xb7
 
 #define PECI_IOC_XFER \
 	_IOWR(PECI_IOC_BASE, PECI_CMD_XFER, struct peci_xfer_msg)

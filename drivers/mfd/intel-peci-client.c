@@ -8,42 +8,43 @@
 #include <linux/of_device.h>
 #include <linux/peci.h>
 
-#define CPU_ID_MODEL_MASK	GENMASK(7, 4)
-#define CPU_ID_FAMILY_MASK	GENMASK(11, 8)
-#define CPU_ID_EXT_MODEL_MASK	GENMASK(19, 16)
-#define CPU_ID_EXT_FAMILY_MASK	GENMASK(27, 20)
+#define CPU_ID_MODEL_MASK      GENMASK(7, 4)
+#define CPU_ID_FAMILY_MASK     GENMASK(11, 8)
+#define CPU_ID_EXT_MODEL_MASK  GENMASK(19, 16)
+#define CPU_ID_EXT_FAMILY_MASK GENMASK(27, 20)
 
-#define LOWER_NIBBLE_MASK	GENMASK(3, 0)
-#define UPPER_NIBBLE_MASK	GENMASK(7, 4)
-#define LOWER_BYTE_MASK		GENMASK(7, 0)
-#define UPPER_BYTE_MASK		GENMASK(16, 8)
+#define LOWER_NIBBLE_MASK      GENMASK(3, 0)
+#define UPPER_NIBBLE_MASK      GENMASK(7, 4)
+#define LOWER_BYTE_MASK        GENMASK(7, 0)
+#define UPPER_BYTE_MASK        GENMASK(16, 8)
 
 static struct mfd_cell peci_functions[] = {
 	{ .name = "peci-cputemp", },
 	{ .name = "peci-dimmtemp", },
+	/* TODO: Add additional PECI sideband functions into here */
 };
 
 static const struct cpu_gen_info cpu_gen_info_table[] = {
 	{ /* Haswell Xeon */
-		.family        = INTEL_FAM6,
+		.family        = 6, /* Family code */
 		.model         = INTEL_FAM6_HASWELL_X,
 		.core_max      = CORE_MAX_ON_HSX,
 		.chan_rank_max = CHAN_RANK_MAX_ON_HSX,
 		.dimm_idx_max  = DIMM_IDX_MAX_ON_HSX },
 	{ /* Broadwell Xeon */
-		.family        = INTEL_FAM6,
+		.family        = 6, /* Family code */
 		.model         = INTEL_FAM6_BROADWELL_X,
 		.core_max      = CORE_MAX_ON_BDX,
 		.chan_rank_max = CHAN_RANK_MAX_ON_BDX,
 		.dimm_idx_max  = DIMM_IDX_MAX_ON_BDX },
 	{ /* Skylake Xeon */
-		.family        = INTEL_FAM6,
+		.family        = 6, /* Family code */
 		.model         = INTEL_FAM6_SKYLAKE_X,
 		.core_max      = CORE_MAX_ON_SKX,
 		.chan_rank_max = CHAN_RANK_MAX_ON_SKX,
 		.dimm_idx_max  = DIMM_IDX_MAX_ON_SKX },
 	{ /* Skylake Xeon D */
-		.family        = INTEL_FAM6,
+		.family        = 6, /* Family code */
 		.model         = INTEL_FAM6_SKYLAKE_XD,
 		.core_max      = CORE_MAX_ON_SKXD,
 		.chan_rank_max = CHAN_RANK_MAX_ON_SKXD,
@@ -119,13 +120,13 @@ static int peci_client_probe(struct peci_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_OF
+#if IS_ENABLED(CONFIG_OF)
 static const struct of_device_id peci_client_of_table[] = {
 	{ .compatible = "intel,peci-client" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, peci_client_of_table);
-#endif
+#endif /* CONFIG_OF */
 
 static const struct peci_device_id peci_client_ids[] = {
 	{ .name = "peci-client" },
@@ -134,11 +135,11 @@ static const struct peci_device_id peci_client_ids[] = {
 MODULE_DEVICE_TABLE(peci, peci_client_ids);
 
 static struct peci_driver peci_client_driver = {
-	.probe		= peci_client_probe,
-	.id_table	= peci_client_ids,
-	.driver		= {
-		.name		= KBUILD_MODNAME,
-		.of_match_table	= of_match_ptr(peci_client_of_table),
+	.probe    = peci_client_probe,
+	.id_table = peci_client_ids,
+	.driver   = {
+		.name           = KBUILD_MODNAME,
+		.of_match_table = of_match_ptr(peci_client_of_table),
 	},
 };
 module_peci_driver(peci_client_driver);
