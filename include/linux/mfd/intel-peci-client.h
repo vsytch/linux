@@ -20,8 +20,6 @@
 #define INTEL_FAM6_SKYLAKE_XD		0x56
 #endif
 
-#define INTEL_FAM6             6 /* P6 (Pentium Pro and later) */
-
 #define CORE_MAX_ON_HSX        18 /* Max number of cores on Haswell */
 #define CHAN_RANK_MAX_ON_HSX   8  /* Max number of channel ranks on Haswell */
 #define DIMM_IDX_MAX_ON_HSX    3  /* Max DIMM index per channel on Haswell */
