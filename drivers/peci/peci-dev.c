@@ -25,7 +25,7 @@ struct peci_dev {
 	struct cdev		cdev;
 };
 
-#define PECI_MINORS		MINORMASK
+#define PECI_MINORS  MINORMASK
 
 static dev_t peci_devt;
 static LIST_HEAD(peci_dev_list);

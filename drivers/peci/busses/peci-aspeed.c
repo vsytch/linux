@@ -7,7 +7,6 @@
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
-#include <linux/iopoll.h>
 #include <linux/jiffies.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -39,8 +38,8 @@
 #define ASPEED_PECI_CMD				0x08
 #define   ASPEED_PECI_CMD_PIN_MON		BIT(31)
 #define   ASPEED_PECI_CMD_STS_MASK		GENMASK(27, 24)
-#define   ASPEED_PECI_CMD_IDLE_MASK		\
-	  (ASPEED_PECI_CMD_STS_MASK | ASPEED_PECI_CMD_PIN_MON)
+#define   ASPEED_PECI_CMD_IDLE_MASK		(ASPEED_PECI_CMD_STS_MASK | \
+						 ASPEED_PECI_CMD_PIN_MON)
 #define   ASPEED_PECI_CMD_FIRE			BIT(0)
 
 /* Read/Write Length Register */
@@ -127,15 +126,24 @@ struct aspeed_peci {
 	u32			cmd_timeout_ms;
 };
 
-static inline int aspeed_peci_check_idle(struct aspeed_peci *priv)
+static int aspeed_peci_check_idle(struct aspeed_peci *priv)
 {
+	ulong timeout = jiffies + usecs_to_jiffies(ASPEED_PECI_IDLE_CHECK_TIMEOUT_USEC);
 	u32 cmd_sts;
 
-	return readl_poll_timeout(priv->base + ASPEED_PECI_CMD,
-				  cmd_sts,
-				  !(cmd_sts & ASPEED_PECI_CMD_IDLE_MASK),
-				  ASPEED_PECI_IDLE_CHECK_INTERVAL_USEC,
-				  ASPEED_PECI_IDLE_CHECK_TIMEOUT_USEC);
+	for (;;) {
+		cmd_sts = readl(priv->base + ASPEED_PECI_CMD);
+		if (!(cmd_sts & ASPEED_PECI_CMD_IDLE_MASK))
+			break;
+		if (time_after(jiffies, timeout)) {
+			cmd_sts = readl(priv->base + ASPEED_PECI_CMD);
+			break;
+		}
+		usleep_range((ASPEED_PECI_IDLE_CHECK_INTERVAL_USEC >> 2) + 1,
+			     ASPEED_PECI_IDLE_CHECK_INTERVAL_USEC);
+	}
+
+	return !(cmd_sts & ASPEED_PECI_CMD_IDLE_MASK) ? 0 : -ETIMEDOUT;
 }
 
 static int aspeed_peci_xfer(struct peci_adapter *adapter,

@@ -3,6 +3,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/crc8.h>
+#include <linux/delay.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -13,10 +14,10 @@
 #include <linux/slab.h>
 
 /* Mask for getting minor revision number from DIB */
-#define REVISION_NUM_MASK	GENMASK(15, 8)
+#define REVISION_NUM_MASK  GENMASK(15, 8)
 
 /* CRC8 table for Assured Write Frame Check */
-#define PECI_CRC8_POLYNOMIAL	0x07
+#define PECI_CRC8_POLYNOMIAL  0x07
 DECLARE_CRC8_TABLE(peci_crc8_table);
 
 static bool is_registered;
@@ -192,7 +193,6 @@ static int peci_aw_fcs(struct peci_xfer_msg *msg, int len, u8 *aw_fcs)
 static int __peci_xfer(struct peci_adapter *adapter, struct peci_xfer_msg *msg,
 		       bool do_retry, bool has_aw_fcs)
 {
-	uint interval_ms = PECI_DEV_RETRY_INTERVAL_MIN_MSEC;
 	ulong timeout = jiffies;
 	u8 aw_fcs;
 	int ret;
@@ -219,12 +219,11 @@ static int __peci_xfer(struct peci_adapter *adapter, struct peci_xfer_msg *msg,
 	 * each instance, the processor PECI client may have started the
 	 * operation but not completed it yet. When the 'retry' bit is set, the
 	 * PECI client will ignore a new request if it exactly matches a
-	 * previous valid request. For better performance and for reducing
-	 * retry traffic, the interval time will be increased exponentially.
+	 * previous valid request.
 	 */
 
 	if (do_retry)
-		timeout += PECI_DEV_RETRY_TIMEOUT;
+		timeout += msecs_to_jiffies(PECI_DEV_RETRY_TIME_MS);
 
 	for (;;) {
 		ret = adapter->xfer(adapter, msg);
@@ -249,22 +248,20 @@ static int __peci_xfer(struct peci_adapter *adapter, struct peci_xfer_msg *msg,
 			msg->tx_buf[msg->tx_len - 1] = 0x80 ^ aw_fcs;
 		}
 
-		/* Retry it for 'timeout' before returning an error. */
+		/*
+		 * Retry for at least 250ms before returning an error.
+		 * Retry interval guideline:
+		 *   No minimum < Retry Interval < No maximum
+		 *                (recommend 10ms)
+		 */
 		if (time_after(jiffies, timeout)) {
 			dev_dbg(&adapter->dev, "Timeout retrying xfer!\n");
 			ret = -ETIMEDOUT;
 			break;
 		}
 
-		set_current_state(TASK_INTERRUPTIBLE);
-		if (schedule_timeout(msecs_to_jiffies(interval_ms))) {
-			ret = -EINTR;
-			break;
-		}
-
-		interval_ms *= 2;
-		if (interval_ms > PECI_DEV_RETRY_INTERVAL_MAX_MSEC)
-			interval_ms = PECI_DEV_RETRY_INTERVAL_MAX_MSEC;
+		usleep_range((PECI_DEV_RETRY_INTERVAL_USEC >> 2) + 1,
+			     PECI_DEV_RETRY_INTERVAL_USEC);
 	}
 
 	if (ret)

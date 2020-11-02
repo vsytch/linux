@@ -14,42 +14,43 @@
 #include <linux/reset.h>
 
 /* NPCM7xx GCR module */
-#define NPCM7XX_INTCR3_OFFSET			0x9C
-#define NPCM7XX_INTCR3_PECIVSEL			BIT(19)
+#define NPCM7XX_INTCR3_OFFSET		0x9C
+#define NPCM7XX_INTCR3_PECIVSEL		BIT(19)
 
 /* NPCM PECI Registers */
-#define NPCM_PECI_CTL_STS			0x00
-#define NPCM_PECI_RD_LENGTH			0x04
-#define NPCM_PECI_ADDR				0x08
-#define NPCM_PECI_CMD				0x0C
-#define NPCM_PECI_CTL2				0x10
-#define NPCM_PECI_WR_LENGTH			0x1C
-#define NPCM_PECI_PDDR				0x2C
-#define NPCM_PECI_DAT_INOUT(n)			(0x100 + ((n) * 4))
+#define NPCM_PECI_CTL_STS	0x00
+#define NPCM_PECI_RD_LENGTH	0x04
+#define NPCM_PECI_ADDR		0x08
+#define NPCM_PECI_CMD		0x0C
+#define NPCM_PECI_CTL2		0x10
+#define NPCM_PECI_WR_LENGTH	0x1C
+#define NPCM_PECI_PDDR		0x2C
+#define NPCM_PECI_DAT_INOUT(n)	(0x100 + ((n) * 4))
 
-#define NPCM_PECI_MAX_REG			0x200
+#define NPCM_PECI_MAX_REG	0x200
 
 /* NPCM_PECI_CTL_STS - 0x00 : Control Register */
-#define NPCM_PECI_CTRL_DONE_INT_EN		BIT(6)
-#define NPCM_PECI_CTRL_ABRT_ERR			BIT(4)
-#define NPCM_PECI_CTRL_CRC_ERR			BIT(3)
-#define NPCM_PECI_CTRL_DONE			BIT(1)
-#define NPCM_PECI_CTRL_START_BUSY		BIT(0)
+#define NPCM_PECI_CTRL_DONE_INT_EN	BIT(6)
+#define NPCM_PECI_CTRL_ABRT_ERR		BIT(4)
+#define NPCM_PECI_CTRL_CRC_ERR		BIT(3)
+#define NPCM_PECI_CTRL_DONE		BIT(1)
+#define NPCM_PECI_CTRL_START_BUSY	BIT(0)
 
 /* NPCM_PECI_RD_LENGTH - 0x04 : Command Register */
-#define NPCM_PECI_RD_LEN_MASK			GENMASK(6, 0)
+#define NPCM_PECI_RD_LEN_MASK		GENMASK(6, 0)
 
 /* NPCM_PECI_CMD - 0x10 : Command Register */
-#define NPCM_PECI_CTL2_MASK			GENMASK(7, 6)
+#define NPCM_PECI_CTL2_MASK		GENMASK(7, 6)
 
 /* NPCM_PECI_WR_LENGTH - 0x1C : Command Register */
-#define NPCM_PECI_WR_LEN_MASK			GENMASK(6, 0)
+#define NPCM_PECI_WR_LEN_MASK		GENMASK(6, 0)
 
 /* NPCM_PECI_PDDR - 0x2C : Command Register */
-#define NPCM_PECI_PDDR_MASK			GENMASK(4, 0)
+#define NPCM_PECI_PDDR_MASK		GENMASK(4, 0)
 
-#define NPCM_PECI_INT_MASK			\
-	(NPCM_PECI_CTRL_ABRT_ERR | NPCM_PECI_CTRL_CRC_ERR | NPCM_PECI_CTRL_DONE)
+#define NPCM_PECI_INT_MASK	(NPCM_PECI_CTRL_ABRT_ERR | \
+				NPCM_PECI_CTRL_CRC_ERR | \
+				NPCM_PECI_CTRL_DONE)
 
 #define NPCM_PECI_IDLE_CHECK_TIMEOUT_USEC	50000
 #define NPCM_PECI_IDLE_CHECK_INTERVAL_USEC	10000
@@ -123,7 +124,7 @@ static int npcm_peci_xfer_native(struct npcm_peci *priv,
 
 	regmap_write(priv->regmap, NPCM_PECI_CMD, 0);
 
-	if (err <= 0 || priv->status != NPCM_PECI_CTRL_DONE) {
+	if (err <= 0 || priv->status  != NPCM_PECI_CTRL_DONE) {
 		if (err < 0) { /* -ERESTARTSYS */
 			rc = (int)err;
 			goto err_irqrestore;
