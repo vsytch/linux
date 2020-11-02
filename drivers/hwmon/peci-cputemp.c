@@ -9,32 +9,31 @@
 #include <linux/platform_device.h>
 #include "peci-hwmon.h"
 
-#define DEFAULT_CHANNEL_NUMS	5
-#define CORETEMP_CHANNEL_NUMS	CORE_NUMS_MAX
-#define CPUTEMP_CHANNEL_NUMS	(DEFAULT_CHANNEL_NUMS + CORETEMP_CHANNEL_NUMS)
+#define DEFAULT_CHANNEL_NUMS   5
+#define CORETEMP_CHANNEL_NUMS  CORE_NUMS_MAX
+#define CPUTEMP_CHANNEL_NUMS   (DEFAULT_CHANNEL_NUMS + CORETEMP_CHANNEL_NUMS)
 
 struct temp_group {
-	struct peci_sensor_data		die;
-	struct peci_sensor_data		dts;
-	struct peci_sensor_data		tcontrol;
-	struct peci_sensor_data		tthrottle;
-	struct peci_sensor_data		tjmax;
-	struct peci_sensor_data		core[CORETEMP_CHANNEL_NUMS];
+	struct peci_sensor_data die;
+	struct peci_sensor_data dts;
+	struct peci_sensor_data tcontrol;
+	struct peci_sensor_data tthrottle;
+	struct peci_sensor_data tjmax;
+	struct peci_sensor_data core[CORETEMP_CHANNEL_NUMS];
 };
 
 struct peci_cputemp {
-	struct peci_client_manager	*mgr;
-	struct device			*dev;
-	char				name[PECI_NAME_SIZE];
-	const struct cpu_gen_info	*gen_info;
-	struct temp_group		temp;
-	u64				core_mask;
-	u32				temp_config[CPUTEMP_CHANNEL_NUMS + 1];
-	uint				config_idx;
-	struct hwmon_channel_info	temp_info;
-	const struct hwmon_channel_info	*info[2];
-	struct hwmon_chip_info		chip;
-	char				**coretemp_label;
+	struct peci_client_manager *mgr;
+	struct device *dev;
+	char name[PECI_NAME_SIZE];
+	const struct cpu_gen_info *gen_info;
+	struct temp_group temp;
+	u64 core_mask;
+	u32 temp_config[CPUTEMP_CHANNEL_NUMS + 1];
+	uint config_idx;
+	struct hwmon_channel_info temp_info;
+	const struct hwmon_channel_info *info[2];
+	struct hwmon_chip_info chip;
 };
 
 enum cputemp_channels {
@@ -69,12 +68,19 @@ static const u32 config_table[DEFAULT_CHANNEL_NUMS + 1] = {
 	HWMON_T_CRIT_HYST,
 };
 
-static const char *cputemp_label[DEFAULT_CHANNEL_NUMS] = {
+static const char *cputemp_label[CPUTEMP_CHANNEL_NUMS] = {
 	"Die",
 	"DTS",
 	"Tcontrol",
 	"Tthrottle",
-	"Tjmax"
+	"Tjmax",
+	"Core 0", "Core 1", "Core 2", "Core 3",
+	"Core 4", "Core 5", "Core 6", "Core 7",
+	"Core 8", "Core 9", "Core 10", "Core 11",
+	"Core 12", "Core 13", "Core 14", "Core 15",
+	"Core 16", "Core 17", "Core 18", "Core 19",
+	"Core 20", "Core 21", "Core 22", "Core 23",
+	"Core 24", "Core 25", "Core 26", "Core 27",
 };
 
 static s32 ten_dot_six_to_millidegree(s32 val)
@@ -155,7 +161,7 @@ static int get_dts(struct peci_cputemp *priv)
 	if (ret)
 		return ret;
 
-	dts_margin = le16_to_cpup((__le16 *)pkg_cfg);
+	dts_margin = (pkg_cfg[1] << 8) | pkg_cfg[0];
 
 	/**
 	 * Processors return a value of DTS reading in 10.6 format
@@ -223,15 +229,10 @@ static int cputemp_read_string(struct device *dev,
 			       enum hwmon_sensor_types type,
 			       u32 attr, int channel, const char **str)
 {
-	struct peci_cputemp *priv = dev_get_drvdata(dev);
-
 	if (attr != hwmon_temp_label)
 		return -EOPNOTSUPP;
 
-	*str = (channel < DEFAULT_CHANNEL_NUMS) ?
-	       cputemp_label[channel] :
-	       (const char *)priv->coretemp_label[channel -
-						  DEFAULT_CHANNEL_NUMS];
+	*str = cputemp_label[channel];
 
 	return 0;
 }
@@ -355,19 +356,6 @@ static int check_resolved_cores(struct peci_cputemp *priv)
 	return 0;
 }
 
-static int create_core_temp_label(struct peci_cputemp *priv, int idx)
-{
-	priv->coretemp_label[idx] = devm_kzalloc(priv->dev,
-						 PECI_HWMON_LABEL_STR_LEN,
-						 GFP_KERNEL);
-	if (!priv->coretemp_label[idx])
-		return -ENOMEM;
-
-	sprintf(priv->coretemp_label[idx], "Core %d", idx);
-
-	return 0;
-}
-
 static int create_core_temp_info(struct peci_cputemp *priv)
 {
 	int ret, i;
@@ -376,23 +364,11 @@ static int create_core_temp_info(struct peci_cputemp *priv)
 	if (ret)
 		return ret;
 
-	priv->coretemp_label = devm_kzalloc(priv->dev,
-					    priv->gen_info->core_max *
-					    sizeof(char *),
-					    GFP_KERNEL);
-	if (!priv->coretemp_label)
-		return -ENOMEM;
-
 	for (i = 0; i < priv->gen_info->core_max; i++)
-		if (priv->core_mask & BIT(i)) {
+		if (priv->core_mask & BIT(i))
 			while (priv->config_idx <= i + DEFAULT_CHANNEL_NUMS)
 				priv->temp_config[priv->config_idx++] =
 					config_table[channel_core];
-
-			ret = create_core_temp_label(priv, i);
-			if (ret)
-				return ret;
-		}
 
 	return 0;
 }
@@ -461,9 +437,9 @@ static const struct platform_device_id peci_cputemp_ids[] = {
 MODULE_DEVICE_TABLE(platform, peci_cputemp_ids);
 
 static struct platform_driver peci_cputemp_driver = {
-	.probe		= peci_cputemp_probe,
-	.id_table	= peci_cputemp_ids,
-	.driver		= { .name = KBUILD_MODNAME, },
+	.probe    = peci_cputemp_probe,
+	.id_table = peci_cputemp_ids,
+	.driver   = { .name = KBUILD_MODNAME, },
 };
 module_platform_driver(peci_cputemp_driver);
 

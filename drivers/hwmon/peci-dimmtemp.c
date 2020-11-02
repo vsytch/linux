@@ -10,33 +10,36 @@
 #include <linux/workqueue.h>
 #include "peci-hwmon.h"
 
-#define DIMM_MASK_CHECK_DELAY_JIFFIES	msecs_to_jiffies(5000)
-#define DIMM_MASK_CHECK_RETRY_MAX	60 /* 60 x 5 secs = 5 minutes */
+#define DIMM_MASK_CHECK_DELAY_JIFFIES  msecs_to_jiffies(5000)
+#define DIMM_MASK_CHECK_RETRY_MAX      60 /* 60 x 5 secs = 5 minutes */
 
 struct peci_dimmtemp {
-	struct peci_client_manager	*mgr;
-	struct device			*dev;
-	char				name[PECI_NAME_SIZE];
-	const struct cpu_gen_info	*gen_info;
-	struct workqueue_struct		*work_queue;
-	struct delayed_work		work_handler;
-	struct peci_sensor_data		temp[DIMM_NUMS_MAX];
-	long				temp_max[DIMM_NUMS_MAX];
-	long				temp_crit[DIMM_NUMS_MAX];
-	u32				dimm_mask;
-	int				retry_count;
-	u32				temp_config[DIMM_NUMS_MAX + 1];
-	struct hwmon_channel_info	temp_info;
-	const struct hwmon_channel_info	*info[2];
-	struct hwmon_chip_info		chip;
-	char				**dimmtemp_label;
+	struct peci_client_manager *mgr;
+	struct device *dev;
+	char name[PECI_NAME_SIZE];
+	const struct cpu_gen_info *gen_info;
+	struct workqueue_struct *work_queue;
+	struct delayed_work work_handler;
+	struct peci_sensor_data temp[DIMM_NUMS_MAX];
+	long temp_max[DIMM_NUMS_MAX];
+	long temp_crit[DIMM_NUMS_MAX];
+	u32 dimm_mask;
+	int retry_count;
+	u32 temp_config[DIMM_NUMS_MAX + 1];
+	struct hwmon_channel_info temp_info;
+	const struct hwmon_channel_info *info[2];
+	struct hwmon_chip_info chip;
 };
 
-static const u8 support_model[] = {
-	INTEL_FAM6_HASWELL_X,
-	INTEL_FAM6_BROADWELL_X,
-	INTEL_FAM6_SKYLAKE_X,
-	INTEL_FAM6_SKYLAKE_XD,
+static const char *dimmtemp_label[CHAN_RANK_MAX][DIMM_IDX_MAX] = {
+	{ "DIMM A1", "DIMM A2", "DIMM A3" },
+	{ "DIMM B1", "DIMM B2", "DIMM B3" },
+	{ "DIMM C1", "DIMM C2", "DIMM C3" },
+	{ "DIMM D1", "DIMM D2", "DIMM D3" },
+	{ "DIMM E1", "DIMM E2", "DIMM E3" },
+	{ "DIMM F1", "DIMM F2", "DIMM F3" },
+	{ "DIMM G1", "DIMM G2", "DIMM G3" },
+	{ "DIMM H1", "DIMM H2", "DIMM H3" },
 };
 
 static inline int read_ddr_dimm_temp_config(struct peci_dimmtemp *priv,
@@ -160,11 +163,15 @@ static int dimmtemp_read_string(struct device *dev,
 				u32 attr, int channel, const char **str)
 {
 	struct peci_dimmtemp *priv = dev_get_drvdata(dev);
+	u32 dimm_idx_max = priv->gen_info->dimm_idx_max;
+	int chan_rank, dimm_idx;
 
 	if (attr != hwmon_temp_label)
 		return -EOPNOTSUPP;
 
-	*str = (const char *)priv->dimmtemp_label[channel];
+	chan_rank = channel / dimm_idx_max;
+	dimm_idx = channel % dimm_idx_max;
+	*str = dimmtemp_label[chan_rank][dimm_idx];
 
 	return 0;
 }
@@ -247,28 +254,10 @@ static int check_populated_dimms(struct peci_dimmtemp *priv)
 	return 0;
 }
 
-static int create_dimm_temp_label(struct peci_dimmtemp *priv, int chan)
-{
-	int rank, idx;
-
-	priv->dimmtemp_label[chan] = devm_kzalloc(priv->dev,
-						  PECI_HWMON_LABEL_STR_LEN,
-						  GFP_KERNEL);
-	if (!priv->dimmtemp_label[chan])
-		return -ENOMEM;
-
-	rank = chan / priv->gen_info->dimm_idx_max;
-	idx = chan % priv->gen_info->dimm_idx_max;
-
-	sprintf(priv->dimmtemp_label[chan], "DIMM %c%d", 'A' + rank, idx);
-
-	return 0;
-}
-
 static int create_dimm_temp_info(struct peci_dimmtemp *priv)
 {
 	int ret, i, config_idx, channels;
-	struct device *dev;
+	struct device *hwmon_dev;
 
 	ret = check_populated_dimms(priv);
 	if (ret) {
@@ -292,24 +281,12 @@ static int create_dimm_temp_info(struct peci_dimmtemp *priv)
 
 	channels = priv->gen_info->chan_rank_max *
 		   priv->gen_info->dimm_idx_max;
-
-	priv->dimmtemp_label = devm_kzalloc(priv->dev,
-					    channels * sizeof(char *),
-					    GFP_KERNEL);
-	if (!priv->dimmtemp_label)
-		return -ENOMEM;
-
 	for (i = 0, config_idx = 0; i < channels; i++)
-		if (priv->dimm_mask & BIT(i)) {
+		if (priv->dimm_mask & BIT(i))
 			while (i >= config_idx)
 				priv->temp_config[config_idx++] =
 					HWMON_T_LABEL | HWMON_T_INPUT |
 					HWMON_T_MAX | HWMON_T_CRIT;
-
-			ret = create_dimm_temp_label(priv, i);
-			if (ret)
-				return ret;
-		}
 
 	priv->chip.ops = &dimmtemp_ops;
 	priv->chip.info = priv->info;
@@ -319,19 +296,17 @@ static int create_dimm_temp_info(struct peci_dimmtemp *priv)
 	priv->temp_info.type = hwmon_temp;
 	priv->temp_info.config = priv->temp_config;
 
-	dev = devm_hwmon_device_register_with_info(priv->dev,
-						   priv->name,
-						   priv,
-						   &priv->chip,
-						   NULL);
-	if (IS_ERR(dev)) {
-		dev_err(priv->dev, "Failed to register hwmon device\n");
-		return PTR_ERR(dev);
-	}
+	hwmon_dev = devm_hwmon_device_register_with_info(priv->dev,
+							 priv->name,
+							 priv,
+							 &priv->chip,
+							 NULL);
+	ret = PTR_ERR_OR_ZERO(hwmon_dev);
+	if (!ret)
+		dev_dbg(priv->dev, "%s: sensor '%s'\n",
+			dev_name(hwmon_dev), priv->name);
 
-	dev_dbg(priv->dev, "%s: sensor '%s'\n", dev_name(dev), priv->name);
-
-	return 0;
+	return ret;
 }
 
 static void create_dimm_temp_info_delayed(struct work_struct *work)
@@ -351,18 +326,11 @@ static int peci_dimmtemp_probe(struct platform_device *pdev)
 	struct peci_client_manager *mgr = dev_get_drvdata(pdev->dev.parent);
 	struct device *dev = &pdev->dev;
 	struct peci_dimmtemp *priv;
-	int ret, i;
+	int ret;
 
 	if ((mgr->client->adapter->cmd_mask &
 	    (BIT(PECI_CMD_GET_TEMP) | BIT(PECI_CMD_RD_PKG_CFG))) !=
 	    (BIT(PECI_CMD_GET_TEMP) | BIT(PECI_CMD_RD_PKG_CFG)))
-		return -ENODEV;
-
-	for (i = 0; i < ARRAY_SIZE(support_model); i++) {
-		if (mgr->gen_info->model == support_model[i])
-			break;
-	}
-	if (i == ARRAY_SIZE(support_model))
 		return -ENODEV;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
@@ -385,7 +353,7 @@ static int peci_dimmtemp_probe(struct platform_device *pdev)
 
 	ret = create_dimm_temp_info(priv);
 	if (ret && ret != -EAGAIN) {
-		dev_dbg(dev, "Failed to create DIMM temp info\n");
+		dev_err(dev, "Failed to create DIMM temp info\n");
 		goto err_free_wq;
 	}
 
@@ -413,10 +381,10 @@ static const struct platform_device_id peci_dimmtemp_ids[] = {
 MODULE_DEVICE_TABLE(platform, peci_dimmtemp_ids);
 
 static struct platform_driver peci_dimmtemp_driver = {
-	.probe		= peci_dimmtemp_probe,
-	.remove		= peci_dimmtemp_remove,
-	.id_table	= peci_dimmtemp_ids,
-	.driver		= { .name = KBUILD_MODNAME, },
+	.probe    = peci_dimmtemp_probe,
+	.remove   = peci_dimmtemp_remove,
+	.id_table = peci_dimmtemp_ids,
+	.driver   = { .name = KBUILD_MODNAME, },
 };
 module_platform_driver(peci_dimmtemp_driver);
 

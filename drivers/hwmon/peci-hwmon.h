@@ -6,10 +6,8 @@
 
 #include <linux/peci.h>
 
-#define TEMP_TYPE_PECI			6 /* Sensor type 6: Intel PECI */
-#define UPDATE_INTERVAL			HZ
-
-#define PECI_HWMON_LABEL_STR_LEN	10
+#define TEMP_TYPE_PECI   6 /* Sensor type 6: Intel PECI */
+#define UPDATE_INTERVAL  HZ
 
 /**
  * struct peci_sensor_data - PECI sensor information
