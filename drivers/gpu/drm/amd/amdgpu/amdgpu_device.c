@@ -3070,11 +3070,11 @@ int amdgpu_device_suspend(struct drm_device *dev, bool suspend, bool fbcon)
 		}
 	}
 
-	amdgpu_amdkfd_suspend(adev);
-
 	amdgpu_ras_suspend(adev);
 
 	r = amdgpu_device_ip_suspend_phase1(adev);
+
+	amdgpu_amdkfd_suspend(adev);
 
 	/* evict vram memory */
 	amdgpu_bo_evict_vram(adev);
@@ -3890,7 +3890,7 @@ retry:	/* Rest of adevs pre asic reset from XGMI hive. */
 
 		amdgpu_device_lock_adev(tmp_adev, false);
 		r = amdgpu_device_pre_asic_reset(tmp_adev,
-						 NULL,
+						 (tmp_adev == adev) ? job : NULL,
 						 &need_full_reset);
 		/*TODO Should we stop ?*/
 		if (r) {

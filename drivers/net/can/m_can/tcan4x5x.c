@@ -164,6 +164,28 @@ static void tcan4x5x_check_wake(struct tcan4x5x_priv *priv)
 	}
 }
 
+static int tcan4x5x_reset(struct tcan4x5x_priv *priv)
+{
+	int ret = 0;
+
+	if (priv->reset_gpio) {
+		gpiod_set_value(priv->reset_gpio, 1);
+
+		/* tpulse_width minimum 30us */
+		usleep_range(30, 100);
+		gpiod_set_value(priv->reset_gpio, 0);
+	} else {
+		ret = regmap_write(priv->regmap, TCAN4X5X_CONFIG,
+				   TCAN4X5X_SW_RESET);
+		if (ret)
+			return ret;
+	}
+
+	usleep_range(700, 1000);
+
+	return ret;
+}
+
 static int regmap_spi_gather_write(void *context, const void *reg,
 				   size_t reg_len, const void *val,
 				   size_t val_len)
@@ -341,6 +363,7 @@ static int tcan4x5x_init(struct m_can_classdev *cdev)
 static int tcan4x5x_parse_config(struct m_can_classdev *cdev)
 {
 	struct tcan4x5x_priv *tcan4x5x = cdev->device_data;
+	int ret;
 
 	tcan4x5x->device_wake_gpio = devm_gpiod_get(cdev->dev, "device-wake",
 						    GPIOD_OUT_HIGH);
@@ -354,7 +377,9 @@ static int tcan4x5x_parse_config(struct m_can_classdev *cdev)
 	if (IS_ERR(tcan4x5x->reset_gpio))
 		tcan4x5x->reset_gpio = NULL;
 
-	usleep_range(700, 1000);
+	ret = tcan4x5x_reset(tcan4x5x);
+	if (ret)
+		return ret;
 
 	tcan4x5x->device_state_gpio = devm_gpiod_get_optional(cdev->dev,
 							      "device-state",
@@ -442,6 +467,10 @@ static int tcan4x5x_can_probe(struct spi_device *spi)
 
 	priv->regmap = devm_regmap_init(&spi->dev, &tcan4x5x_bus,
 					&spi->dev, &tcan4x5x_regmap);
+	if (IS_ERR(priv->regmap)) {
+		ret = PTR_ERR(priv->regmap);
+		goto out_clk;
+	}
 
 	tcan4x5x_power_enable(priv->power, 1);
 
@@ -472,9 +501,9 @@ static int tcan4x5x_can_remove(struct spi_device *spi)
 {
 	struct tcan4x5x_priv *priv = spi_get_drvdata(spi);
 
-	tcan4x5x_power_enable(priv->power, 0);
-
 	m_can_class_unregister(priv->mcan_dev);
+
+	tcan4x5x_power_enable(priv->power, 0);
 
 	return 0;
 }

@@ -968,17 +968,19 @@ void xas_pause(struct xa_state *xas)
 	if (xas_invalid(xas))
 		return;
 
+	xas->xa_node = XAS_RESTART;
 	if (node) {
-		unsigned int offset = xas->xa_offset;
+		unsigned long offset = xas->xa_offset;
 		while (++offset < XA_CHUNK_SIZE) {
 			if (!xa_is_sibling(xa_entry(xas->xa, node, offset)))
 				break;
 		}
 		xas->xa_index += (offset - xas->xa_offset) << node->shift;
+		if (xas->xa_index == 0)
+			xas->xa_node = XAS_BOUNDS;
 	} else {
 		xas->xa_index++;
 	}
-	xas->xa_node = XAS_RESTART;
 }
 EXPORT_SYMBOL_GPL(xas_pause);
 
@@ -1080,7 +1082,7 @@ void *xas_find(struct xa_state *xas, unsigned long max)
 {
 	void *entry;
 
-	if (xas_error(xas))
+	if (xas_error(xas) || xas->xa_node == XAS_BOUNDS)
 		return NULL;
 	if (xas->xa_index > max)
 		return set_bounds(xas);
@@ -1088,7 +1090,7 @@ void *xas_find(struct xa_state *xas, unsigned long max)
 	if (!xas->xa_node) {
 		xas->xa_index = 1;
 		return set_bounds(xas);
-	} else if (xas_top(xas->xa_node)) {
+	} else if (xas->xa_node == XAS_RESTART) {
 		entry = xas_load(xas);
 		if (entry || xas_not_node(xas->xa_node))
 			return entry;
@@ -1206,6 +1208,8 @@ void *xas_find_marked(struct xa_state *xas, unsigned long max, xa_mark_t mark)
 		}
 
 		entry = xa_entry(xas->xa, xas->xa_node, xas->xa_offset);
+		if (!entry && !(xa_track_free(xas->xa) && mark == XA_FREE_MARK))
+			continue;
 		if (!xa_is_node(entry))
 			return entry;
 		xas->xa_node = xa_to_node(entry);
@@ -1837,7 +1841,8 @@ static bool xas_sibling(struct xa_state *xas)
 	if (!node)
 		return false;
 	mask = (XA_CHUNK_SIZE << node->shift) - 1;
-	return (xas->xa_index & mask) > (xas->xa_offset << node->shift);
+	return (xas->xa_index & mask) >
+		((unsigned long)xas->xa_offset << node->shift);
 }
 
 /**
