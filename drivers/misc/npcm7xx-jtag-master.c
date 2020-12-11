@@ -87,7 +87,7 @@ struct jtag_xfer {
 	__u8	direction;
 	__u8	from;
 	__u8	endstate;
-	__u8	padding;
+	__u32	padding;
 	__u32	length;
 	__u64	tdio;
 };
