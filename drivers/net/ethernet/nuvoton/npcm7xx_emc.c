@@ -1882,7 +1882,8 @@ static int npcm7xx_mii_setup(struct net_device *netdev)
 	writel(readl((ether->reg + REG_MCMDR)) | MCMDR_ENMDC,
 	       (ether->reg + REG_MCMDR));
 
-	if (mdiobus_register(ether->mii_bus)) {
+	err = mdiobus_register(ether->mii_bus);
+	if (err) {
 		dev_err(&pdev->dev, "mdiobus_register() failed\n");
 		goto out2;
 	}
@@ -1890,6 +1891,7 @@ static int npcm7xx_mii_setup(struct net_device *netdev)
 	phydev = phy_find_first(ether->mii_bus);
 	if (!phydev) {
 		dev_err(&pdev->dev, "phy_find_first() failed\n");
+		err = -ENODEV;
 		goto out3;
 	}
 
@@ -1920,8 +1922,8 @@ out3:
 out2:
 	kfree(ether->mii_bus->irq);
 	mdiobus_free(ether->mii_bus);
+	platform_set_drvdata(ether->pdev, NULL);
 out0:
-
 	return err;
 }
 
@@ -2060,10 +2062,10 @@ static int npcm7xx_ether_probe(struct platform_device *pdev)
 		}
 	} else {
 		ether->use_ncsi = false;
-	error = npcm7xx_mii_setup(netdev);
-	if (error < 0) {
-		dev_err(&pdev->dev, "npcm7xx_mii_setup err\n");
-		goto failed_free_napi;
+		error = npcm7xx_mii_setup(netdev);
+		if (error < 0) {
+			dev_err(&pdev->dev, "npcm7xx_mii_setup err\n");
+			goto failed_free_napi;
 		}
 	}
 
