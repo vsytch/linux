@@ -508,9 +508,11 @@ static void npcm_fiux_set_direct_wr(struct npcm_fiu_spi *fiu)
 			   DWR_DBPCK_4_BIT_PER_CLK << NPCM_FIU_DWR_DBPCK_SHIFT);
 }
 
-static void npcm_fiux_set_direct_rd(struct npcm_fiu_spi *fiu)
+static void npcm_fiux_set_direct_rd(struct npcm_fiu_spi *fiu,
+				    const struct spi_mem_op *op)
 {
 	u32 rx_dummy = 0;
+	u32 data_reg;
 
 	regmap_write(fiu->regmap, NPCM_FIU_DRD_CFG,
 		     NPCM_FIU_DRD_16_BYTE_BURST);
@@ -519,7 +521,7 @@ static void npcm_fiux_set_direct_rd(struct npcm_fiu_spi *fiu)
 			   DRD_SPI_X_MODE << NPCM_FIU_DRD_ACCTYPE_SHIFT);
 	regmap_update_bits(fiu->regmap, NPCM_FIU_DRD_CFG,
 			   NPCM_FIU_DRD_CFG_DBW,
-			   rx_dummy << NPCM_FIU_DRD_DBW_SHIFT);
+			   op->dummy.nbytes << NPCM_FIU_DRD_DBW_SHIFT);
 }
 
 static int npcm_fiu_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
@@ -631,7 +633,7 @@ static int npcm_fiu_dirmap_create(struct spi_mem_dirmap_desc *desc)
 		if (!fiu->spix_mode)
 			npcm_fiu_set_drd(fiu, &desc->info.op_tmpl);
 		else
-			npcm_fiux_set_direct_rd(fiu);
+			npcm_fiux_set_direct_rd(fiu, &desc->info.op_tmpl);
 
 	} else {
 		npcm_fiux_set_direct_wr(fiu);
