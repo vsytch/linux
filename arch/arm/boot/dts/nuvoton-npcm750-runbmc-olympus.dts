@@ -62,27 +62,6 @@
 			<&adc 4>, <&adc 5>, <&adc 6>, <&adc 7>;
 	};
 
-	jtag_master {
-		compatible = "nuvoton,npcm750-jtag-master";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		dev-num = <0>; /* /dev/jtag0 */
-		mode = "pspi"; /* pspi or gpio */
-
-		/* pspi mode */
-		pspi-controller = <2>; /* pspi2 */
-		reg = <0xf0201000 0x1000>;
-		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
-		clocks = <&clk NPCM7XX_CLK_APB5>;
-
-		jtag-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>, /* TCK */
-				<&gpio0 18 GPIO_ACTIVE_HIGH>, /* TDI */
-				<&gpio0 17 GPIO_ACTIVE_HIGH>, /* TDO */
-				<&gpio0 16 GPIO_ACTIVE_HIGH>; /* TMS */
-		status = "okay";
-	};
-
 	ahb {
 		gmac0: eth@f0802000 {
 			phy-mode = "rgmii-id";
@@ -1034,7 +1013,27 @@
 			};
 
 			spi1: spi@201000 {
-				status = "disabled";
+				cs-gpios = <&gpio6 0 GPIO_ACTIVE_HIGH>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&gpio17_pins &gpio18o_pins
+					&gpio19ol_pins>;
+				status = "okay";
+				jtag_master {
+					compatible = "nuvoton,npcm750-jtag-master";
+					spi-max-frequency = <25000000>;
+					reg = <0>;
+
+					pinctrl-names = "pspi", "gpio";
+					pinctrl-0 = <&pspi2_pins>;
+					pinctrl-1 = <&gpio17_pins &gpio18o_pins
+							&gpio19ol_pins>;
+
+					tck-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+					tdi-gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
+					tdo-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;
+					tms-gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+					status = "okay";
+				};
 			};
 		};
 	};

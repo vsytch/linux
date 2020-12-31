@@ -7,66 +7,20 @@
  */
 
 #include <linux/module.h>
-#include <linux/platform_device.h>
-#include <linux/gpio.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/clk.h>
 #include <linux/uaccess.h>
-#include <linux/regmap.h>
-#include <linux/mfd/syscon.h>
-#include <linux/cdev.h>
 #include <linux/miscdevice.h>
-#include <linux/interrupt.h>
+#include <linux/spi/spi.h>
+#include <linux/pinctrl/consumer.h>
+#include <linux/gpio/consumer.h>
 
-/* GPIO Port Registers */
-#define GPnDIN	0x04	/* Data In */
-#define GPnDOUT	0x0C	/* Data Out */
-#define GPnDOS	0x68	/* Data Out Set */
-#define GPnDOC	0x6C	/* Data Out Clear */
-
-/* default jtag speed in MHz */
 #define JTAG_PSPI_SPEED		(10 * 1000000)
-#define JTAG_PSPI_MAX_FREQ	(25 * 1000000)
-
-#define PSPI1	1
-#define PSPI2	2
-/* Multiple Function Pin Selection */
-#define MFSEL3_OFFSET 0x064
-#define PSPI1SEL_OFFSET	3
-#define PSPI1SEL_MASK	3
-#define PSPI1SEL_GPIO	0
-#define PSPI1SEL_PSPI	2
-#define PSPI2SEL_OFFSET	13
-#define PSPI2SEL_MASK	1
-#define PSPI2SEL_GPIO	0
-#define PSPI2SEL_PSPI	1
-
-/* PSPI registers */
-#define PSPI_DATA		0x00
-#define PSPI_CTL1		0x02
-#define PSPI_STAT		0x04
-
-#define PSPI_CTL1_SCDV6_0	9
-#define PSPI_CTL1_SCIDL		8
-#define PSPI_CTL1_SCM		7
-#define PSPI_CTL1_EIW		6
-#define PSPI_CTL1_EIR		5
-#define PSPI_CTL1_SPIEN		0
-
-#define PSPI_STAT_RBF		1
-#define PSPI_STAT_BSY		0
-
-#define BIT_MODE_8	1
-#define BIT_MODE_16	2
-
 #define JTAG_SCAN_LEN	256
 #define JTAG_MAX_XFER_DATA_LEN 65535
 
 struct tck_bitbang {
 	unsigned char     tms;
-	unsigned char     tdi;        // TDI bit value to write
-	unsigned char     tdo;        // TDO bit value to read
+	unsigned char     tdi; /* TDI bit value to write */
+	unsigned char     tdo; /* TDO bit value to read */
 };
 struct bitbang_packet {
 	struct tck_bitbang *data;
@@ -74,7 +28,7 @@ struct bitbang_packet {
 } __attribute__((__packed__));
 
 struct scan_xfer {
-	unsigned int     length;      // number of bits
+	unsigned int     length;      /* number of bits */
 	unsigned char    tdi[JTAG_SCAN_LEN];
 	unsigned int     tdi_bytes;
 	unsigned char    tdo[JTAG_SCAN_LEN];
@@ -134,6 +88,7 @@ enum jtag_reset {
 enum jtag_xfer_type {
 	JTAG_SIR_XFER = 0,
 	JTAG_SDR_XFER = 1,
+	JTAG_RUNTEST_XFER,
 };
 
 enum jtag_xfer_direction {
@@ -142,15 +97,6 @@ enum jtag_xfer_direction {
 	JTAG_READ_WRITE_XFER = 3,
 };
 
-/* generic/legacy ioctl definitions */
-#define JTAGIOC_BASE    'T'
-#define JTAG_SLAVECONTLR      _IOW(JTAGIOC_BASE, 8, unsigned int)
-#define JTAG_RUNTEST          _IOW(JTAGIOC_BASE, 9, unsigned int)
-#define JTAG_DIRECTGPIO       _IOW(JTAGIOC_BASE, 10, unsigned int)
-#define JTAG_PSPI             _IOW(JTAGIOC_BASE, 11, unsigned int)
-#define JTAG_PSPI_IRQ         _IOW(JTAGIOC_BASE, 12, unsigned int)
-
-/* ioctl definitions for ASD */
 #define __JTAG_IOCTL_MAGIC	0xb2
 #define JTAG_SIOCSTATE	_IOW(__JTAG_IOCTL_MAGIC, 0, struct jtag_tap_state)
 #define JTAG_SIOCFREQ	_IOW(__JTAG_IOCTL_MAGIC, 1, unsigned int)
@@ -159,6 +105,9 @@ enum jtag_xfer_direction {
 #define JTAG_GIOCSTATUS _IOWR(__JTAG_IOCTL_MAGIC, 4, enum JtagStates)
 #define JTAG_SIOCMODE	_IOW(__JTAG_IOCTL_MAGIC, 5, unsigned int)
 #define JTAG_IOCBITBANG	_IOW(__JTAG_IOCTL_MAGIC, 6, unsigned int)
+#define JTAG_RUNTEST    _IOW(__JTAG_IOCTL_MAGIC, 7, unsigned int)
+
+static DEFINE_IDA(jtag_ida);
 
 static unsigned char reverse[16] = {
 	0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6, 0xE,
@@ -168,46 +117,23 @@ static unsigned char reverse[16] = {
 
 static DEFINE_SPINLOCK(jtag_file_lock);
 
-struct jtag_pins {
-	struct gpio_desc *gpiod;
-	unsigned int gpio;
-	int bit_offset;
-};
-
-struct npcm_pspi {
-	struct device *dev;
-	struct completion xfer_done;
-	void __iomem *base;
-	spinlock_t lock;
-	u32 apb_clk_rate;
-	bool enable_irq;
-	int mode;
-	char *tx_buf;
-	char *rx_buf;
-	unsigned int tx_bytes;
-	unsigned int rx_bytes;
-};
-
 struct jtag_info {
 	struct device *dev;
+	struct spi_device	*spi;
 	struct miscdevice miscdev;
-	struct npcm_pspi pspi;
-	struct jtag_pins pins[pin_NUM];
-	struct regmap		*gcr_regmap;
+	struct gpio_desc	*pins[pin_NUM];
+	struct pinctrl		*pinctrl;
 	u32 freq;
-	u32 controller; /* PSPI controller */
-	u32 dev_num;
 	u8 tms_level;
 	u8 tapstate;
 	bool is_open;
+	int id;
 
 	/* transmit tck/tdi/tdo by pspi */
 	#define MODE_PSPI		0
 	/* transmit all signals by gpio */
 	#define MODE_GPIO		1
-	#define MODE_GPIO_ONLY	2 /* can't switch back to PSPI */
 	u8 mode;
-
 };
 
 /* this structure represents a TMS cycle, as expressed in a set of bits and
@@ -341,12 +267,6 @@ const struct TmsCycle _tmsCycleLookup[][16] = {
 	},
 };
 
-static inline void pspi_dump_regs(struct npcm_pspi *pspi)
-{
-	pr_info("PSPI STAT: 0x%x\n", readb(pspi->base + PSPI_STAT));
-	pr_info("PSPI CTL1: 0x%x\n", readb(pspi->base + PSPI_CTL1));
-}
-
 static u8 TCK_Cycle(struct jtag_info *jtag,
 	unsigned char no_tdo, unsigned char TMS,
 	unsigned char TDI)
@@ -357,169 +277,42 @@ static u8 TCK_Cycle(struct jtag_info *jtag,
 	 * TMS & TDI shall be sampled by the test logic on the rising edge
 	 * test logic shall change TDO on the falling edge
 	 */
-	gpiod_set_value(jtag->pins[pin_TDI].gpiod, (int)TDI);
+	gpiod_set_value(jtag->pins[pin_TDI], (int)TDI);
 	if (jtag->tms_level != (int)TMS) {
-		gpiod_set_value(jtag->pins[pin_TMS].gpiod, (int)TMS);
+		gpiod_set_value(jtag->pins[pin_TMS], (int)TMS);
 		jtag->tms_level = (int)TMS;
 	}
-	gpiod_set_value(jtag->pins[pin_TCK].gpiod, 1);
+	gpiod_set_value(jtag->pins[pin_TCK], 1);
 	if (!no_tdo)
-		tdo = gpiod_get_value(jtag->pins[pin_TDO].gpiod);
-	gpiod_set_value(jtag->pins[pin_TCK].gpiod, 0);
+		tdo = gpiod_get_value(jtag->pins[pin_TDO]);
+	gpiod_set_value(jtag->pins[pin_TCK], 0);
 
 	return tdo;
 }
 
-static int pspi_send(struct npcm_pspi *priv)
-{
-	u8 stat;
-
-	int bytes = priv->mode;
-
-	if (priv->tx_bytes < bytes) {
-		dev_err(priv->dev, "short tx buf\n");
-		return -EINVAL;
-	}
-
-	stat = readb(priv->base + PSPI_STAT);
-	if (stat & PSPI_STAT_BSY) {
-		dev_err(priv->dev, "pspi state busy\n");
-		return -EBUSY;
-	}
-
-	priv->tx_bytes -= bytes;
-	if (priv->mode == BIT_MODE_8) {
-		writeb(REVERSE(*priv->tx_buf), priv->base + PSPI_DATA);
-		priv->tx_buf++;
-	} else {
-		writew(REVERSE(*priv->tx_buf) << 8
-			| REVERSE(*(priv->tx_buf + 1)), priv->base + PSPI_DATA);
-		priv->tx_buf += 2;
-	}
-	return 0;
-}
-
-static int pspi_recv(struct npcm_pspi *priv)
-{
-	u16 val16;
-	u8 val8;
-	int bytes = priv->mode;
-
-	if (priv->rx_bytes < bytes) {
-		dev_err(priv->dev, "short rx buf\n");
-		return -EINVAL;
-	}
-
-	priv->rx_bytes -= bytes;
-	if (priv->mode == BIT_MODE_8) {
-		val8 = readb(PSPI_DATA + priv->base);
-		*priv->rx_buf++ = REVERSE(val8);
-	} else {
-		val16 = readw(PSPI_DATA + priv->base);
-		*priv->rx_buf++ = REVERSE((val16 >> 8) & 0xff);
-		*priv->rx_buf++ = REVERSE(val16 & 0xff);
-	}
-
-	return 0;
-}
-
-static int pspi_xfer(struct npcm_pspi *priv,
-	char *tx_buf, char *rx_buf, unsigned int xfer_bytes)
-{
-	u16 val;
-	u8 stat;
-	int bytes;
-	unsigned long flags;
-	int ret = 0;
-
-	bytes = priv->mode;
-
-	if (!tx_buf || !rx_buf || !xfer_bytes)
-		return -EINVAL;
-
-	if ((xfer_bytes % bytes) != 0) {
-		dev_err(priv->dev, "invalid data len\n");
-		return -EINVAL;
-	}
-
-	priv->tx_bytes = xfer_bytes;
-	priv->tx_buf = tx_buf;
-	priv->rx_bytes = xfer_bytes;
-	priv->rx_buf = rx_buf;
-
-	reinit_completion(&priv->xfer_done);
-	/* enable EIR interrupt */
-	val = readw(priv->base + PSPI_CTL1);
-	val &= ~(1 << PSPI_CTL1_EIW);
-	val |= (1 << PSPI_CTL1_EIR);
-	writew(val, priv->base + PSPI_CTL1);
-
-	stat = readb(priv->base + PSPI_STAT);
-	if ((stat & (1 << PSPI_STAT_BSY)) == 0) {
-		spin_lock_irqsave(&priv->lock, flags);
-		pspi_send(priv);
-		spin_unlock_irqrestore(&priv->lock, flags);
-	} else {
-		dev_err(priv->dev, "pspi state busy\n");
-		ret = -EBUSY;
-		goto disable_int;
-	}
-
-	wait_for_completion(&priv->xfer_done);
-disable_int:
-	val &= ~(1 << PSPI_CTL1_EIR);
-	writew(val, priv->base + PSPI_CTL1);
-
-	return ret;
-}
-
-static irqreturn_t pspi_irq_handler(int irq, void *dev_id)
-{
-	struct npcm_pspi *priv = dev_id;
-	u8 stat;
-
-	stat = readb(priv->base + PSPI_STAT);
-
-	if ((stat & (1 << PSPI_STAT_RBF))) {
-		if (priv->rx_bytes)
-			pspi_recv(priv);
-		if (priv->rx_bytes == 0)
-			complete(&priv->xfer_done);
-	}
-	if (((stat & (1 << PSPI_STAT_BSY)) == 0)) {
-		if (priv->tx_bytes)
-			pspi_send(priv);
-	}
-
-	return IRQ_HANDLED;
-}
-
-static inline void npcm_jtag_bitbang(struct jtag_info *jtag,
-		struct tck_bitbang *bitbang)
-{
-	bitbang->tdo = TCK_Cycle(jtag, 0, bitbang->tms, bitbang->tdi);
-}
-
-static inline void npcm_jtag_bitbangs(struct jtag_info *jtag,
+static inline void npcm7xx_jtag_bitbangs(struct jtag_info *jtag,
 		struct bitbang_packet *bitbangs,
 		struct tck_bitbang *bitbang_data)
 {
 	int i;
 
-	for (i = 0; i < bitbangs->length; i++)
-		npcm_jtag_bitbang(jtag, &bitbang_data[i]);
+	for (i = 0; i < bitbangs->length; i++) {
+		bitbang_data[i].tdo =
+			TCK_Cycle(jtag, 0, bitbang_data[i].tms,
+					bitbang_data[i].tdi);
+		cond_resched();
+	}
 }
 
-static int npcm_jtag_set_tapstate(struct jtag_info *jtag,
-	enum JtagStates from_state, enum JtagStates end_state)
+static int npcm7xx_jtag_set_tapstate(struct jtag_info *jtag,
+	enum JtagStates from, enum JtagStates to)
 {
 	unsigned char i;
 	unsigned char tmsbits;
 	unsigned char count;
-	enum JtagStates from, to;
 
-	from = from_state;
-	to = end_state;
+	if (from == to)
+		return 0;
 	if (from == JTAG_STATE_CURRENT)
 		from = jtag->tapstate;
 
@@ -549,278 +342,165 @@ static int npcm_jtag_set_tapstate(struct jtag_info *jtag,
 	return 0;
 }
 
-/* configure jtag pins(except TMS) function */
-static inline void npcm_jtag_config_pins(struct jtag_info *jtag,
-		int sel_pspi)
+static int npcm7xx_jtag_switch_pin_func(struct jtag_info *jtag,
+		u8 mode)
 {
-	int val;
+	struct pinctrl_state	*state;
 
-	if (jtag->controller == PSPI1) {
-		val = sel_pspi ? PSPI1SEL_PSPI : PSPI1SEL_GPIO;
-		regmap_update_bits(jtag->gcr_regmap, MFSEL3_OFFSET,
-			(PSPI1SEL_MASK << PSPI1SEL_OFFSET),
-			(val << PSPI1SEL_OFFSET));
-	} else if (jtag->controller == PSPI2) {
-		val = sel_pspi ? PSPI2SEL_PSPI : PSPI2SEL_GPIO;
-		regmap_update_bits(jtag->gcr_regmap, MFSEL3_OFFSET,
-			(PSPI2SEL_MASK << PSPI2SEL_OFFSET),
-			(val << PSPI2SEL_OFFSET));
+	if (mode == MODE_PSPI) {
+		state = pinctrl_lookup_state(jtag->pinctrl,
+				"pspi");
+		if (IS_ERR(state))
+			return -ENOENT;
+
+		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TCK]));
+		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TDI]));
+		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TDO]));
+		pinctrl_select_state(jtag->pinctrl, state);
+	} else if (mode == MODE_GPIO) {
+		state = pinctrl_lookup_state(jtag->pinctrl,
+				"gpio");
+		if (IS_ERR(state))
+			return -ENOENT;
+
+		pinctrl_select_state(jtag->pinctrl, state);
+		pinctrl_gpio_request(desc_to_gpio(jtag->pins[pin_TCK]));
+		pinctrl_gpio_request(desc_to_gpio(jtag->pins[pin_TDI]));
+		pinctrl_gpio_request(desc_to_gpio(jtag->pins[pin_TDO]));
+		jtag->tms_level = gpiod_get_value(jtag->pins[pin_TMS]);
 	}
-}
-
-static void jtag_switch_pspi(struct jtag_info *jtag,
-		bool enable)
-{
-	struct npcm_pspi *priv = &jtag->pspi;
-	int divisor;
-
-	if (enable) {
-		divisor = (priv->apb_clk_rate / (2 * jtag->freq)) - 1;
-		if (divisor <= 0) {
-			dev_err(jtag->dev, "Invalid PSPI frequency\n");
-			return;
-		}
-
-		/* disable */
-		writew(readw(priv->base + PSPI_CTL1) & ~(0x1 << PSPI_CTL1_SPIEN),
-			priv->base + PSPI_CTL1);
-
-		/* configure pin function to pspi */
-		npcm_jtag_config_pins(jtag, 1);
-
-		/* configure Shift Clock Divider value */
-		writew((readw(priv->base + PSPI_CTL1) & ~(0x7f << PSPI_CTL1_SCDV6_0)) |
-				(divisor << PSPI_CTL1_SCDV6_0),
-				priv->base + PSPI_CTL1);
-
-		/* configure TCK to be low when idle */
-		writew(readw(priv->base + PSPI_CTL1) &
-				~(0x1 << PSPI_CTL1_SCIDL),
-				priv->base + PSPI_CTL1);
-
-		/* TDI is shifted out on the falling edge,
-		 * TDO is sampled on the rising edge
-		 */
-		writew(readw(priv->base + PSPI_CTL1) &
-				~(0x1 << PSPI_CTL1_SCM),
-				priv->base + PSPI_CTL1);
-
-		/* set 16 bit mode and enable pspi */
-		writew(readw(priv->base + PSPI_CTL1) | (0x1 << PSPI_CTL1_SPIEN)
-				| (1 << 2), priv->base + PSPI_CTL1);
-
-		if (readb(priv->base + PSPI_STAT) & (0x1 << PSPI_STAT_RBF))
-			readw(priv->base + PSPI_STAT);
-	} else {
-		writew(readw(priv->base + PSPI_CTL1) & ~(0x1 << PSPI_CTL1_SPIEN),
-			priv->base + PSPI_CTL1);
-		npcm_jtag_config_pins(jtag, 0);
-
-		jtag->tms_level = gpiod_get_value(jtag->pins[pin_TMS].gpiod);
-	}
-}
-
-static int npcm_jtag_readwrite_scan(struct jtag_info *jtag,
-		struct scan_xfer *scan_xfer, u8 *tdi, u8 *tdo)
-{
-	struct npcm_pspi *pspi = &jtag->pspi;
-	unsigned int unit_len = pspi->mode * 8;
-	unsigned int remain_bits = scan_xfer->length;
-	unsigned int bit_index = 0;
-	unsigned int use_pspi = 0, use_gpio = 0;
-	unsigned int xfer_bytes, xfer_bits = remain_bits;
-	unsigned int tdi_bytes = scan_xfer->tdi_bytes;
-	unsigned int tdo_bytes = scan_xfer->tdo_bytes;
-	u8 *tdi_p = tdi;
-	u8 *tdo_p = tdo;
-	int ret;
-
-	if ((jtag->tapstate != JtagShfDR) &&
-		(jtag->tapstate != JtagShfIR)) {
-		dev_err(jtag->dev, "bad current tapstate %d\n",
-				jtag->tapstate);
-		return -EINVAL;
-	}
-	if (scan_xfer->length == 0) {
-		dev_err(jtag->dev, "bad length 0\n");
-		return -EINVAL;
-	}
-
-	if (tdi == NULL && scan_xfer->tdi_bytes != 0) {
-		dev_err(jtag->dev, "null tdi with nonzero length %u!\n",
-			scan_xfer->tdi_bytes);
-		return -EINVAL;
-	}
-
-	if (tdo == NULL && scan_xfer->tdo_bytes != 0) {
-		dev_err(jtag->dev, "null tdo with nonzero length %u!\n",
-			scan_xfer->tdo_bytes);
-		return -EINVAL;
-	}
-
-	if ((jtag->mode == MODE_PSPI) &&
-		(remain_bits > unit_len)) {
-		jtag_switch_pspi(jtag, true);
-		use_pspi = 1;
-	}
-
-	/* handle pspi transfer with irq enabled */
-	if (use_pspi && pspi->enable_irq) {
-		xfer_bytes = (remain_bits / unit_len) * (unit_len / 8);
-
-		/* the last transfer must be transmitted using bitbang
-		 *  to toggle tms signal
-		 */
-		if (((remain_bits % unit_len) == 0) &&
-				(xfer_bytes > 0))
-			xfer_bytes -= (unit_len / 8);
-
-		ret = pspi_xfer(pspi, tdi_p, tdo_p, xfer_bytes);
-		if (ret) {
-			dev_err(jtag->dev, "pspi_xfer err\n");
-			jtag_switch_pspi(jtag, false);
-			return ret;
-		}
-		remain_bits -= (xfer_bytes * 8);
-		xfer_bits = remain_bits;
-		tdi_p += xfer_bytes;
-		tdo_p += xfer_bytes;
-		tdi_bytes -= xfer_bytes;
-		tdo_bytes -= xfer_bytes;
-	}
-
-	while (bit_index < xfer_bits) {
-		unsigned long timeout;
-		int bit_offset = (bit_index % 8);
-		int this_input_bit = 0;
-		int tms_high_or_low;
-		int this_output_bit;
-		u16 tdo_byte;
-
-		/* last transfer are transmitted using gpio bitbang */
-		if ((jtag->mode != MODE_PSPI) || (remain_bits < unit_len) ||
-			((remain_bits == unit_len) &&
-			 (scan_xfer->end_tap_state != JtagShfDR)))
-			use_gpio = 1;
-		else
-			use_gpio = 0;
-
-		if (use_gpio) {
-			/* transmit using gpio bitbang */
-			if (use_pspi) {
-				jtag_switch_pspi(jtag, false);
-				use_pspi = 0;
-			}
-			if (bit_index / 8 < tdi_bytes)
-				this_input_bit = (*tdi_p >> bit_offset) & 1;
-
-			/* If this is the last bit, leave TMS high */
-			tms_high_or_low = (bit_index == xfer_bits - 1) &&
-				(scan_xfer->end_tap_state != JtagShfDR) &&
-				(scan_xfer->end_tap_state != JtagShfIR);
-			this_output_bit = TCK_Cycle(jtag, 0, tms_high_or_low, this_input_bit);
-			/* If it was the last bit in the scan and the end_tap_state is
-			 * something other than shiftDR or shiftIR then go to Exit1.
-			 * IMPORTANT Note: if the end_tap_state is ShiftIR/DR and the
-			 * next call to this function is a shiftDR/IR then the driver
-			 * will not change state!
-			 */
-			if (tms_high_or_low) {
-				jtag->tapstate = (jtag->tapstate == JtagShfDR) ?
-					JtagEx1DR : JtagEx1IR;
-			}
-			if (bit_index / 8 < tdo_bytes) {
-				if (bit_index % 8 == 0) {
-					/* Zero the output buffer before writing data */
-					*tdo_p = 0;
-				}
-				*tdo_p |= this_output_bit << bit_offset;
-			}
-			/* reach byte boundary, approach to next byte */
-			if (bit_offset == 7) {
-				tdo_p++;
-				tdi_p++;
-			}
-			bit_index++;
-		} else {
-			/* transmit using pspi */
-			if (!use_pspi) {
-				jtag_switch_pspi(jtag, true);
-				use_pspi = 1;
-			}
-			/* PSPI is 16 bit transfer mode */
-			timeout = jiffies + msecs_to_jiffies(100);
-			while (readb(pspi->base + PSPI_STAT) &
-					(0x1 << PSPI_STAT_BSY)) {
-				if (time_after(jiffies, timeout)) {
-					jtag_switch_pspi(jtag, false);
-					dev_err(jtag->dev, "PSPI_STAT_BSY timeout\n");
-					return -ETIMEDOUT;
-				}
-				cond_resched();
-			}
-
-			if (((bit_index / 8) + 1) < tdi_bytes)
-				writew(REVERSE(*tdi_p) << 8 | REVERSE(*(tdi_p+1)),
-					pspi->base + PSPI_DATA);
-			else
-				writew(0x0, pspi->base + PSPI_DATA);
-
-			timeout = jiffies + msecs_to_jiffies(100);
-			while (!(readb(pspi->base + PSPI_STAT) &
-					(0x1 << PSPI_STAT_RBF))) {
-				if (time_after(jiffies, timeout)) {
-					jtag_switch_pspi(jtag, false);
-					dev_err(jtag->dev, "PSPI_STAT_RBF timeout\n");
-					pspi_dump_regs(&jtag->pspi);
-					return -ETIMEDOUT;
-				}
-				cond_resched();
-			}
-
-			tdo_byte = readw(pspi->base + PSPI_DATA);
-			if ((bit_index / 8) + 1 < tdo_bytes) {
-				*tdo_p = REVERSE((tdo_byte >> 8) & 0xff);
-				*(tdo_p + 1) = REVERSE(tdo_byte & 0xff);
-			}
-
-			bit_index += unit_len;
-			remain_bits -= unit_len;
-			tdo_p += unit_len / 8;
-			tdi_p += unit_len / 8;
-		}
-	}
-	if (use_pspi)
-		jtag_switch_pspi(jtag, false);
-
-	npcm_jtag_set_tapstate(jtag, JTAG_STATE_CURRENT,
-		scan_xfer->end_tap_state);
 
 	return 0;
 }
 
-static int npcm_jtag_xfer(struct jtag_info *jtag,
+static int npcm7xx_jtag_xfer_spi(struct jtag_info *jtag,
+		u32 xfer_bytes, u8 *out, u8 *in)
+{
+	struct spi_message m;
+	struct spi_transfer spi_xfer;
+	int err;
+	int i;
+
+	err = npcm7xx_jtag_switch_pin_func(jtag, MODE_PSPI);
+	if (err)
+		return err;
+
+	for (i = 0; i < xfer_bytes; i++)
+		out[i] = REVERSE(out[i]);
+
+	memset(&spi_xfer, 0, sizeof(spi_xfer));
+	spi_xfer.speed_hz = jtag->freq;
+	spi_xfer.tx_buf = out;
+	spi_xfer.rx_buf = in;
+	spi_xfer.len = xfer_bytes;
+
+	spi_message_init(&m);
+	spi_message_add_tail(&spi_xfer, &m);
+	err = spi_sync(jtag->spi, &m);
+
+	for (i = 0; i < xfer_bytes; i++)
+		in[i] = REVERSE(in[i]);
+
+	err = npcm7xx_jtag_switch_pin_func(jtag, MODE_GPIO);
+
+	return err;
+}
+
+static int npcm7xx_jtag_xfer_gpio(struct jtag_info *jtag,
+		struct jtag_xfer *xfer, u8 *out, u8 *in)
+{
+	unsigned long *bitmap_tdi = (unsigned long *)out;
+	unsigned long *bitmap_tdo = (unsigned long *)in;
+	u32 xfer_bits = xfer->length;
+	u32 bit_index = 0;
+	u8 tdi, tdo, tms;
+
+	while (bit_index < xfer_bits) {
+		tdi = tms = 0;
+
+		if (test_bit(bit_index, bitmap_tdi))
+			tdi = 1;
+
+		/* If this is the last bit, leave TMS high */
+		if ((bit_index == xfer_bits - 1)
+				&& (xfer->endstate != JtagShfDR)
+				&& (xfer->endstate != JtagShfIR)
+				&& (xfer->endstate != JTAG_STATE_CURRENT))
+			tms = 1;
+
+		/* shift 1 bit */
+		tdo = TCK_Cycle(jtag, 0, tms, tdi);
+		cond_resched();
+		/* If it was the last bit in the scan and the end_tap_state is
+		 * something other than shiftDR or shiftIR then go to Exit1.
+		 * IMPORTANT Note: if the end_tap_state is ShiftIR/DR and the
+		 * next call to this function is a shiftDR/IR then the driver
+		 * will not change state!
+		 */
+		if (tms)
+			jtag->tapstate = (jtag->tapstate == JtagShfDR) ?
+				JtagEx1DR : JtagEx1IR;
+
+		if (tdo)
+			bitmap_set(bitmap_tdo, bit_index, 1);
+
+		bit_index++;
+	}
+
+	return 0;
+}
+
+static int npcm7xx_jtag_readwrite_scan(struct jtag_info *jtag,
+		struct jtag_xfer *xfer, u8 *tdi, u8 *tdo)
+{
+	u32 xfer_bytes = DIV_ROUND_UP(xfer->length, BITS_PER_BYTE);
+	u32 remain_bits = xfer->length;
+	u32 spi_xfer_bytes = 0;
+
+	if ((xfer_bytes > 1) && (jtag->mode == MODE_PSPI)) {
+		/* The last byte should be sent using gpio bitbang
+		 * (TMS needed)
+		 */
+		spi_xfer_bytes = xfer_bytes - 1;
+		if (npcm7xx_jtag_xfer_spi(jtag, spi_xfer_bytes, tdi, tdo))
+			return -EIO;
+		remain_bits -= spi_xfer_bytes * 8;
+	}
+
+	if (remain_bits) {
+		xfer->length = remain_bits;
+		npcm7xx_jtag_xfer_gpio(jtag, xfer, tdi + spi_xfer_bytes,
+				tdo + spi_xfer_bytes);
+	}
+
+	npcm7xx_jtag_set_tapstate(jtag, JTAG_STATE_CURRENT,
+			xfer->endstate);
+
+	return 0;
+}
+
+
+static int npcm7xx_jtag_xfer(struct jtag_info *npcm7xx_jtag,
 		struct jtag_xfer *xfer, u8 *data, u32 bytes)
 {
-	struct scan_xfer scan;
 	u8 *tdo;
 	int ret;
 
-	tdo = kmalloc(bytes, GFP_KERNEL);
+	if (xfer->length == 0)
+		return 0;
+
+	tdo = kzalloc(bytes, GFP_KERNEL);
 	if (tdo == NULL)
 		return -ENOMEM;
 
 	if (xfer->type == JTAG_SIR_XFER)
-		npcm_jtag_set_tapstate(jtag, xfer->from,
+		npcm7xx_jtag_set_tapstate(npcm7xx_jtag, xfer->from,
 					  JtagShfIR);
-	else
-		npcm_jtag_set_tapstate(jtag, xfer->from,
+	else if (xfer->type == JTAG_SDR_XFER)
+		npcm7xx_jtag_set_tapstate(npcm7xx_jtag, xfer->from,
 					  JtagShfDR);
-	scan.end_tap_state = xfer->endstate;
-	scan.length = xfer->length;
-	scan.tdi_bytes = scan.tdo_bytes = bytes;
 
-	ret = npcm_jtag_readwrite_scan(jtag, &scan, data, tdo);
+	ret = npcm7xx_jtag_readwrite_scan(npcm7xx_jtag, xfer, data, tdo);
 	memcpy(data, tdo, bytes);
 	kfree(tdo);
 
@@ -828,17 +508,14 @@ static int npcm_jtag_xfer(struct jtag_info *jtag,
 }
 
 /* Run in current state for specific number of tcks */
-static int npcm_jtag_runtest(struct jtag_info *jtag,
+static int npcm7xx_jtag_runtest(struct jtag_info *jtag,
 		unsigned int tcks)
 {
-	struct npcm_pspi *pspi = &jtag->pspi;
-	unsigned int unit_len = pspi->mode * 8;
-	unsigned int units = tcks  / unit_len;
-	unsigned int bytes = units * pspi->mode;
-	unsigned int remain_bits = tcks % unit_len;
-	char *txbuf, *rxbuf;
-	unsigned int i, ret;
-	unsigned long timeout;
+	struct jtag_xfer xfer;
+	u32 bytes = DIV_ROUND_UP(tcks, BITS_PER_BYTE);
+	u8 *buf;
+	u32 i;
+	int err;
 
 	if (jtag->mode != MODE_PSPI) {
 		for (i = 0; i < tcks; i++) {
@@ -848,74 +525,16 @@ static int npcm_jtag_runtest(struct jtag_info *jtag,
 		return 0;
 	}
 
-	if (units == 0) {
-		for (i = 0; i < remain_bits; i++)
-			TCK_Cycle(jtag, 0, 0, 1);
-		return 0;
-	}
+	buf = kzalloc(bytes, GFP_KERNEL);
+	xfer.type = JTAG_RUNTEST_XFER;
+	xfer.direction = JTAG_WRITE_XFER;
+	xfer.from = xfer.endstate = JTAG_STATE_CURRENT;
+	xfer.length = tcks;
 
-	jtag_switch_pspi(jtag, true);
+	err = npcm7xx_jtag_xfer(jtag, &xfer, buf, bytes);
+	kfree(buf);
 
-	if (jtag->pspi.enable_irq) {
-		txbuf = kzalloc(bytes, GFP_KERNEL);
-		if (!txbuf) {
-			dev_err(jtag->dev, "kzalloc err\n");
-			ret = -ENOMEM;
-			goto err_pspi;
-		}
-		rxbuf = kzalloc(bytes, GFP_KERNEL);
-		if (!rxbuf) {
-			dev_err(jtag->dev, "kzalloc err\n");
-			ret = -ENOMEM;
-			goto err_pspi;
-		}
-		ret = pspi_xfer(&jtag->pspi, txbuf, rxbuf, bytes);
-		kfree(txbuf);
-		kfree(rxbuf);
-		units = 0;
-		if (ret)
-			goto err_pspi;
-	}
-
-	for (i = 0; i < units; i++) {
-
-		timeout = jiffies + msecs_to_jiffies(100);
-		while (readb(pspi->base + PSPI_STAT) &
-				(0x1 << PSPI_STAT_BSY)) {
-			if (time_after(jiffies, timeout)) {
-				dev_err(jtag->dev, "PSPI_STAT timeout");
-				ret = -ETIMEDOUT;
-				goto err_pspi;
-			}
-			cond_resched();
-		}
-
-		writew(0x0, pspi->base + PSPI_DATA);
-
-		timeout = jiffies + msecs_to_jiffies(100);
-		while (!(readb(pspi->base + PSPI_STAT) &
-				(0x1 << PSPI_STAT_RBF))) {
-			if (time_after(jiffies, timeout)) {
-				dev_err(jtag->dev, "PSPI_RBF timeout");
-				ret = -ETIMEDOUT;
-				goto err_pspi;
-			}
-			cond_resched();
-		}
-		readw(pspi->base + PSPI_DATA);
-	}
-
-	jtag_switch_pspi(jtag, false);
-
-	if (remain_bits) {
-		for (i = 0; i < remain_bits; i++)
-			TCK_Cycle(jtag, 0, 0, 1);
-	}
-	return 0;
-
-err_pspi:
-	jtag_switch_pspi(jtag, false);
-	return ret;
+	return err;
 }
 
 static long jtag_ioctl(struct file *file,
@@ -936,7 +555,7 @@ static long jtag_ioctl(struct file *file,
 	case JTAG_SIOCFREQ:
 		if (get_user(value, (__u32 __user *)arg))
 			return -EFAULT;
-		if (value <= JTAG_PSPI_MAX_FREQ)
+		if (value <= priv->spi->max_speed_hz)
 			priv->freq = value;
 		else {
 			dev_err(priv->dev, "%s: invalid jtag freq %u\n",
@@ -962,7 +581,7 @@ static long jtag_ioctl(struct file *file,
 		if (IS_ERR(bitbang_data))
 			return -EFAULT;
 
-		npcm_jtag_bitbangs(priv, &bitbang, bitbang_data);
+		npcm7xx_jtag_bitbangs(priv, &bitbang, bitbang_data);
 		ret = copy_to_user((void __user *)bitbang.data,
 				   (void *)bitbang_data, data_size);
 		kfree(bitbang_data);
@@ -983,8 +602,10 @@ static long jtag_ioctl(struct file *file,
 		if (tapstate.reset > JTAG_FORCE_RESET)
 			return -EINVAL;
 		if (tapstate.reset == JTAG_FORCE_RESET)
-			npcm_jtag_set_tapstate(priv, JTAG_STATE_CURRENT, JtagTLR);
-		npcm_jtag_set_tapstate(priv, tapstate.from, tapstate.endstate);
+			npcm7xx_jtag_set_tapstate(priv, JTAG_STATE_CURRENT,
+					JtagTLR);
+		npcm7xx_jtag_set_tapstate(priv, tapstate.from,
+				tapstate.endstate);
 		break;
 	case JTAG_GIOCSTATUS:
 		ret = put_user(priv->tapstate, (__u32 __user *)arg);
@@ -1012,7 +633,7 @@ static long jtag_ioctl(struct file *file,
 		xfer_data = memdup_user(u64_to_user_ptr(xfer.tdio), data_size);
 		if (IS_ERR(xfer_data))
 			return -EFAULT;
-		ret = npcm_jtag_xfer(priv, &xfer, xfer_data, data_size);
+		ret = npcm7xx_jtag_xfer(priv, &xfer, xfer_data, data_size);
 		if (ret) {
 			kfree(xfer_data);
 			return -EIO;
@@ -1028,31 +649,17 @@ static long jtag_ioctl(struct file *file,
 			return -EFAULT;
 		break;
 	case JTAG_SIOCMODE:
+		if (get_user(value, (__u32 __user *)arg))
+			return -EFAULT;
+		if (value != MODE_GPIO && value != MODE_PSPI)
+			return -EINVAL;
+		priv->mode = value;
 		break;
 	case JTAG_RUNTEST:
-		ret = npcm_jtag_runtest(priv, (unsigned int)arg);
-		break;
-	case JTAG_DIRECTGPIO:
-		/* legacy: no more supported */
-		break;
-	case JTAG_PSPI:
-		if (priv->mode == MODE_GPIO_ONLY)
-			break;
-		if (!arg)
-			priv->mode = MODE_GPIO;
-		else
-			priv->mode = MODE_PSPI;
-		break;
-	case JTAG_PSPI_IRQ:
-		if (!arg)
-			priv->pspi.enable_irq = false;
-		else
-			priv->pspi.enable_irq = true;
-		break;
-	case JTAG_SLAVECONTLR:
+		ret = npcm7xx_jtag_runtest(priv, (unsigned int)arg);
 		break;
 	default:
-		return -ENOTTY;
+		return -EINVAL;
 	}
 
 	return ret;
@@ -1095,181 +702,103 @@ const struct file_operations npcm_jtag_fops = {
 	.release           = jtag_release,
 };
 
-
 static int jtag_register_device(struct jtag_info *jtag)
 {
 	struct device *dev = jtag->dev;
 	int err;
+	int id;
 
 	if (!dev)
 		return -ENODEV;
 
+	id = ida_simple_get(&jtag_ida, 0, 0, GFP_KERNEL);
+	if (id < 0)
+		return id;
+
+	jtag->id = id;
 	/* register miscdev */
 	jtag->miscdev.parent = dev;
 	jtag->miscdev.fops =  &npcm_jtag_fops;
 	jtag->miscdev.minor = MISC_DYNAMIC_MINOR;
-	jtag->miscdev.name = kasprintf(GFP_KERNEL, "jtag%d", jtag->dev_num);
-	if (!jtag->miscdev.name)
-		return -ENOMEM;
+	jtag->miscdev.name = kasprintf(GFP_KERNEL, "jtag%d", id);
+	if (!jtag->miscdev.name) {
+		err = -ENOMEM;
+		goto err;
+	}
 
 	err = misc_register(&jtag->miscdev);
 	if (err) {
 		dev_err(jtag->miscdev.parent,
 			"Unable to register device, err %d\n", err);
 		kfree(jtag->miscdev.name);
-		return err;
+		goto err;
 	}
+
+	return 0;
+
+err:
+	ida_simple_remove(&jtag_ida, id);
+	return err;
+}
+
+static int npcm7xx_jtag_init(struct device *dev,
+		struct jtag_info *npcm7xx_jtag)
+{
+	struct pinctrl		*pinctrl;
+	int i;
+
+	pinctrl = devm_pinctrl_get(dev);
+	if (IS_ERR(pinctrl))
+		return PTR_ERR(pinctrl);
+
+	npcm7xx_jtag->pinctrl = pinctrl;
+
+	/* jtag pins */
+	npcm7xx_jtag->pins[pin_TCK] = gpiod_get(dev, "tck", GPIOD_OUT_LOW);
+	npcm7xx_jtag->pins[pin_TDI] = gpiod_get(dev, "tdi", GPIOD_OUT_HIGH);
+	npcm7xx_jtag->pins[pin_TDO] = gpiod_get(dev, "tdo", GPIOD_IN);
+	npcm7xx_jtag->pins[pin_TMS] = gpiod_get(dev, "tms", GPIOD_OUT_HIGH);
+	for (i = 0; i < pin_NUM; i++) {
+		if (IS_ERR(npcm7xx_jtag->pins[i]))
+			return PTR_ERR(npcm7xx_jtag->pins[i]);
+	}
+
+	npcm7xx_jtag->freq = JTAG_PSPI_SPEED;
+	npcm7xx_jtag->tms_level = gpiod_get_value(npcm7xx_jtag->pins[pin_TMS]);
+	npcm7xx_jtag_set_tapstate(npcm7xx_jtag, JTAG_STATE_CURRENT,
+			JtagTLR);
+	npcm7xx_jtag->mode = MODE_PSPI;
 
 	return 0;
 }
 
-static void npcm_jtag_init(struct jtag_info *priv)
-{
-	priv->freq = JTAG_PSPI_SPEED;
-	priv->pspi.mode = BIT_MODE_16;
-	priv->pspi.enable_irq = false;
-
-	/* initialize pins to gpio function */
-	npcm_jtag_config_pins(priv, 0);
-	gpiod_direction_output(priv->pins[pin_TCK].gpiod, 0);
-	gpiod_direction_output(priv->pins[pin_TDI].gpiod, 1);
-	gpiod_direction_input(priv->pins[pin_TDO].gpiod);
-	gpiod_direction_output(priv->pins[pin_TMS].gpiod, 1);
-	priv->tms_level = gpiod_get_value(priv->pins[pin_TMS].gpiod);
-
-	npcm_jtag_set_tapstate(priv, JTAG_STATE_CURRENT, JtagTLR);
-}
-
-static int npcm_jtag_pspi_probe(struct platform_device *pdev,
-		struct npcm_pspi *priv)
-{
-	struct resource *res;
-	struct clk *apb_clk;
-	int irq;
-	int ret = 0;
-
-	dev_info(&pdev->dev, "%s", __func__);
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	priv->base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(priv->base))
-		return PTR_ERR(priv->base);
-
-	priv->dev = &pdev->dev;
-
-	apb_clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(apb_clk)) {
-		dev_err(&pdev->dev, "can't read apb clk\n");
-		return -ENODEV;
-	}
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0) {
-		dev_err(&pdev->dev, "failed to get IRQ\n");
-		return irq;
-	}
-
-	ret = devm_request_irq(&pdev->dev, irq, pspi_irq_handler, 0,
-			       "npcm-jtag-master", priv);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to request IRQ\n");
-		return ret;
-	}
-
-	spin_lock_init(&priv->lock);
-	init_completion(&priv->xfer_done);
-
-	clk_prepare_enable(apb_clk);
-
-	priv->apb_clk_rate = clk_get_rate(apb_clk);
-
-	return 0;
-}
-
-static int npcm_jtag_probe(struct platform_device *pdev)
+static int npcm7xx_jtag_probe(struct spi_device *spi)
 {
 	struct jtag_info *npcm_jtag;
-	struct gpio_desc *gpiod;
-	struct gpio_chip *chip;
-	const char *mode;
-	u32 value;
-	int i, ret;
-	enum gpiod_flags pin_flags[pin_NUM] = {
-		GPIOD_OUT_LOW, GPIOD_OUT_HIGH,
-		GPIOD_IN, GPIOD_OUT_HIGH,
-		};
+	int ret;
 
-	dev_info(&pdev->dev, "%s", __func__);
+	dev_info(&spi->dev, "%s", __func__);
 
 	npcm_jtag = kzalloc(sizeof(struct jtag_info), GFP_KERNEL);
 	if (!npcm_jtag)
 		return -ENOMEM;
-	npcm_jtag->dev = &pdev->dev;
 
-	npcm_jtag->gcr_regmap =
-		syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
-	if (IS_ERR(npcm_jtag->gcr_regmap)) {
-		dev_err(&pdev->dev, "can't find npcm750-gcr\n");
-		ret = PTR_ERR(npcm_jtag->gcr_regmap);
+	npcm_jtag->dev = &spi->dev;
+	npcm_jtag->spi = spi;
+	spi->mode = SPI_MODE_0 | SPI_NO_CS;
+
+	/* Initialize device*/
+	ret = npcm7xx_jtag_init(&spi->dev, npcm_jtag);
+	if (ret)
 		goto err;
-	}
 
-	ret = of_property_read_string(pdev->dev.of_node,
-				   "mode", &mode);
-	if (ret < 0) {
-		dev_info(&pdev->dev, "No mode");
-		return -EINVAL;
-	}
-	if (!strcmp(mode, "gpio")) {
-		npcm_jtag->mode = MODE_GPIO_ONLY;
-		dev_info(&pdev->dev, "gpio-only mode");
-	} else
-		npcm_jtag->mode = MODE_PSPI;
-
-
-	/* jtag pins */
-	for (i = 0; i < pin_NUM; i++) {
-		gpiod = gpiod_get_index(&pdev->dev, "jtag",
-			i, pin_flags[i]);
-		if (IS_ERR(gpiod)) {
-			dev_err(&pdev->dev, "No jtag pin: %d", i);
-			return PTR_ERR(gpiod);
-		}
-		chip = gpiod_to_chip(gpiod);
-		npcm_jtag->pins[i].gpiod = gpiod;
-
-		npcm_jtag->pins[i].bit_offset = desc_to_gpio(gpiod)
-			- chip->base;
-	}
-
-	ret = of_property_read_u32(pdev->dev.of_node,
-			"dev-num", &value);
-	if (ret < 0) {
-		dev_err(&pdev->dev,
-				"Could not read dev_num\n");
-		value = 0;
-	}
-	npcm_jtag->dev_num = value;
-
-	if (npcm_jtag->mode != MODE_GPIO_ONLY) {
-		/* setup pspi */
-		value = PSPI1;
-		ret = of_property_read_u32(pdev->dev.of_node,
-				"pspi-controller", &value);
-		if (ret < 0 || (value != PSPI1 && value != PSPI2))
-			dev_err(&pdev->dev,
-					"Could not read pspi index\n");
-		npcm_jtag->controller = value;
-		npcm_jtag_pspi_probe(pdev, &npcm_jtag->pspi);
-	}
-
-	npcm_jtag_init(npcm_jtag);
-
+	/* Register a misc device */
 	ret = jtag_register_device(npcm_jtag);
 	if (ret) {
-		dev_err(&pdev->dev, "failed to create device\n");
+		dev_err(&spi->dev, "failed to create device\n");
 		goto err;
 	}
-	platform_set_drvdata(pdev, npcm_jtag);
+	spi_set_drvdata(spi, npcm_jtag);
 
 	return 0;
 err:
@@ -1277,9 +806,9 @@ err:
 	return ret;
 }
 
-static int npcm_jtag_remove(struct platform_device *pdev)
+static int npcm7xx_jtag_remove(struct spi_device  *spi)
 {
-	struct jtag_info *jtag = platform_get_drvdata(pdev);
+	struct jtag_info *jtag = spi_get_drvdata(spi);
 	int i;
 
 	if (!jtag)
@@ -1288,32 +817,33 @@ static int npcm_jtag_remove(struct platform_device *pdev)
 	misc_deregister(&jtag->miscdev);
 	kfree(jtag->miscdev.name);
 	for (i = 0; i < pin_NUM; i++) {
-		gpiod_direction_input(jtag->pins[i].gpiod);
-		gpiod_put(jtag->pins[i].gpiod);
+		gpiod_direction_input(jtag->pins[i]);
+		gpiod_put(jtag->pins[i]);
 	}
 	kfree(jtag);
+	ida_simple_remove(&jtag_ida, jtag->id);
 
 	return 0;
 }
 
 
-static const struct of_device_id npcm_jtag_id[] = {
+static const struct of_device_id npcm7xx_jtag_of_match[] = {
 	{ .compatible = "nuvoton,npcm750-jtag-master", },
 	{},
 };
-MODULE_DEVICE_TABLE(of, npcm_jtag_id);
+MODULE_DEVICE_TABLE(of, npcm7xx_jtag_of_match);
 
-static struct platform_driver npcm_jtag_driver = {
-	.probe          = npcm_jtag_probe,
-	.remove			= npcm_jtag_remove,
-	.driver         = {
-		.name   = "jtag-master",
-		.owner	= THIS_MODULE,
-		.of_match_table = npcm_jtag_id,
+
+static struct spi_driver npcm7xx_jtag_driver = {
+	.driver = {
+		.name		= "npcm7xx_jtag",
+		.of_match_table = npcm7xx_jtag_of_match,
 	},
+	.probe		= npcm7xx_jtag_probe,
+	.remove		= npcm7xx_jtag_remove,
 };
 
-module_platform_driver(npcm_jtag_driver);
+module_spi_driver(npcm7xx_jtag_driver);
 
 MODULE_AUTHOR("Nuvoton Technology Corp.");
 MODULE_DESCRIPTION("NPCM7xx JTAG Master Driver");
