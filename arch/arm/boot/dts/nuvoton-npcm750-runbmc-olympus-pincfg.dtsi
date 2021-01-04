@@ -78,6 +78,11 @@
 			bias-disable;
 			output-low;
 		};
+		gpio18o_pins: gpio18o-pins {
+			pins = "GPIO18/PSPI2D0/SMB4BSDA";
+			bias-disable;
+			output-high;
+		};
 		gpio20_pins: gpio20-pins {
 			pins = "GPIO20/SMB4CSDA/SMB15SDA";
 			bias-disable;
