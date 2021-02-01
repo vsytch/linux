@@ -14,14 +14,15 @@
 #include <linux/gpio/consumer.h>
 
 #define JTAG_PSPI_SPEED		(10 * 1000000)
-#define JTAG_SCAN_LEN	256
-#define JTAG_MAX_XFER_DATA_LEN 65535
+#define JTAG_SCAN_LEN		256
+#define JTAG_MAX_XFER_DATA_LEN	65535
 
 struct tck_bitbang {
 	unsigned char     tms;
 	unsigned char     tdi; /* TDI bit value to write */
 	unsigned char     tdo; /* TDO bit value to read */
 };
+
 struct bitbang_packet {
 	struct tck_bitbang *data;
 	__u32	length;
@@ -52,23 +53,24 @@ struct jtag_tap_state {
 	__u8	endstate;
 	__u8	tck;
 };
-enum JtagStates {
-	JtagTLR,
-	JtagRTI,
-	JtagSelDR,
-	JtagCapDR,
-	JtagShfDR,
-	JtagEx1DR,
-	JtagPauDR,
-	JtagEx2DR,
-	JtagUpdDR,
-	JtagSelIR,
-	JtagCapIR,
-	JtagShfIR,
-	JtagEx1IR,
-	JtagPauIR,
-	JtagEx2IR,
-	JtagUpdIR,
+
+enum jtagstates {
+	jtagtlr,
+	jtagrti,
+	jtagseldr,
+	jtagcapdr,
+	jtagshfdr,
+	jtagex1dr,
+	jtagpaudr,
+	jtagex2dr,
+	jtagupddr,
+	jtagselir,
+	jtagcapir,
+	jtagshfir,
+	jtagex1ir,
+	jtagpauir,
+	jtagex2ir,
+	jtagupdir,
 	JTAG_STATE_CURRENT
 };
 
@@ -102,7 +104,7 @@ enum jtag_xfer_direction {
 #define JTAG_SIOCFREQ	_IOW(__JTAG_IOCTL_MAGIC, 1, unsigned int)
 #define JTAG_GIOCFREQ	_IOR(__JTAG_IOCTL_MAGIC, 2, unsigned int)
 #define JTAG_IOCXFER	_IOWR(__JTAG_IOCTL_MAGIC, 3, struct jtag_xfer)
-#define JTAG_GIOCSTATUS _IOWR(__JTAG_IOCTL_MAGIC, 4, enum JtagStates)
+#define JTAG_GIOCSTATUS _IOWR(__JTAG_IOCTL_MAGIC, 4, enum jtagstates)
 #define JTAG_SIOCMODE	_IOW(__JTAG_IOCTL_MAGIC, 5, unsigned int)
 #define JTAG_IOCBITBANG	_IOW(__JTAG_IOCTL_MAGIC, 6, unsigned int)
 #define JTAG_RUNTEST    _IOW(__JTAG_IOCTL_MAGIC, 7, unsigned int)
@@ -113,7 +115,8 @@ static unsigned char reverse[16] = {
 	0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6, 0xE,
 	0x1, 0x9, 0x5, 0xD, 0x3, 0xB, 0x7, 0xF
 };
-#define REVERSE(x)  ((reverse[(x & 0x0f)] << 4) | reverse[(x & 0xf0) >> 4])
+
+#define REVERSE(x)  ((reverse[((x) & 0x0f)] << 4) | reverse[((x) & 0xf0) >> 4])
 
 static DEFINE_SPINLOCK(jtag_file_lock);
 
@@ -140,7 +143,7 @@ struct jtag_info {
  * a count of bits (note: there are no start->end state transitions that
  * require more than 1 byte of TMS cycles)
  */
-struct TmsCycle {
+struct tmscycle {
 	unsigned char tmsbits;
 	unsigned char count;
 };
@@ -148,7 +151,7 @@ struct TmsCycle {
 /* this is the complete set TMS cycles for going from any TAP state to
  * any other TAP state, following a “shortest path” rule
  */
-const struct TmsCycle _tmsCycleLookup[][16] = {
+const struct tmscycle _tmscyclelookup[][16] = {
 /*      TLR        RTI       SelDR      CapDR      SDR      */
 /*      Ex1DR      PDR       Ex2DR      UpdDR      SelIR    */
 /*      CapIR      SIR       Ex1IR      PIR        Ex2IR    */
@@ -267,9 +270,9 @@ const struct TmsCycle _tmsCycleLookup[][16] = {
 	},
 };
 
-static u8 TCK_Cycle(struct jtag_info *jtag,
-	unsigned char no_tdo, unsigned char TMS,
-	unsigned char TDI)
+static u8 TCK_cycle(struct jtag_info *jtag,
+		    unsigned char no_tdo, unsigned char TMS,
+		    unsigned char TDI)
 {
 	u32 tdo = 0;
 
@@ -291,21 +294,21 @@ static u8 TCK_Cycle(struct jtag_info *jtag,
 }
 
 static inline void npcm7xx_jtag_bitbangs(struct jtag_info *jtag,
-		struct bitbang_packet *bitbangs,
-		struct tck_bitbang *bitbang_data)
+					 struct bitbang_packet *bitbangs,
+					 struct tck_bitbang *bitbang_data)
 {
 	int i;
 
 	for (i = 0; i < bitbangs->length; i++) {
 		bitbang_data[i].tdo =
-			TCK_Cycle(jtag, 0, bitbang_data[i].tms,
-					bitbang_data[i].tdi);
+			TCK_cycle(jtag, 0, bitbang_data[i].tms,
+				  bitbang_data[i].tdi);
 		cond_resched();
 	}
 }
 
 static int npcm7xx_jtag_set_tapstate(struct jtag_info *jtag,
-	enum JtagStates from, enum JtagStates to)
+				     enum jtagstates from, enum jtagstates to)
 {
 	unsigned char i;
 	unsigned char tmsbits;
@@ -316,40 +319,37 @@ static int npcm7xx_jtag_set_tapstate(struct jtag_info *jtag,
 	if (from == JTAG_STATE_CURRENT)
 		from = jtag->tapstate;
 
-	if ((from > JTAG_STATE_CURRENT) || (to > JTAG_STATE_CURRENT))
+	if (from > JTAG_STATE_CURRENT || to > JTAG_STATE_CURRENT)
 		return -1;
 
-	if (to == JtagTLR) {
+	if (to == jtagtlr) {
 		for (i = 0; i < 9; i++)
-			TCK_Cycle(jtag, 1, 1, 1);
-		jtag->tapstate = JtagTLR;
+			TCK_cycle(jtag, 1, 1, 1);
+		jtag->tapstate = jtagtlr;
 		return 0;
 	}
 
-	tmsbits = _tmsCycleLookup[from][to].tmsbits;
-	count   = _tmsCycleLookup[from][to].count;
+	tmsbits = _tmscyclelookup[from][to].tmsbits;
+	count   = _tmscyclelookup[from][to].count;
 
 	if (count == 0)
 		return 0;
 
 	for (i = 0; i < count; i++) {
-		TCK_Cycle(jtag, 1, (tmsbits & 1), 1);
+		TCK_cycle(jtag, 1, (tmsbits & 1), 1);
 		tmsbits >>= 1;
 	}
-	pr_debug("jtag: change state %d -> %d\n",
-		from, to);
+	pr_debug("jtag: change state %d -> %d\n", from, to);
 	jtag->tapstate = to;
 	return 0;
 }
 
-static int npcm7xx_jtag_switch_pin_func(struct jtag_info *jtag,
-		u8 mode)
+static int npcm7xx_jtag_switch_pin_func(struct jtag_info *jtag, u8 mode)
 {
 	struct pinctrl_state	*state;
 
 	if (mode == MODE_PSPI) {
-		state = pinctrl_lookup_state(jtag->pinctrl,
-				"pspi");
+		state = pinctrl_lookup_state(jtag->pinctrl, "pspi");
 		if (IS_ERR(state))
 			return -ENOENT;
 
@@ -358,8 +358,7 @@ static int npcm7xx_jtag_switch_pin_func(struct jtag_info *jtag,
 		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TDO]));
 		pinctrl_select_state(jtag->pinctrl, state);
 	} else if (mode == MODE_GPIO) {
-		state = pinctrl_lookup_state(jtag->pinctrl,
-				"gpio");
+		state = pinctrl_lookup_state(jtag->pinctrl, "gpio");
 		if (IS_ERR(state))
 			return -ENOENT;
 
@@ -373,8 +372,8 @@ static int npcm7xx_jtag_switch_pin_func(struct jtag_info *jtag,
 	return 0;
 }
 
-static int npcm7xx_jtag_xfer_spi(struct jtag_info *jtag,
-		u32 xfer_bytes, u8 *out, u8 *in)
+static int npcm7xx_jtag_xfer_spi(struct jtag_info *jtag, u32 xfer_bytes,
+				 u8 *out, u8 *in)
 {
 	struct spi_message m;
 	struct spi_transfer spi_xfer;
@@ -407,7 +406,7 @@ static int npcm7xx_jtag_xfer_spi(struct jtag_info *jtag,
 }
 
 static int npcm7xx_jtag_xfer_gpio(struct jtag_info *jtag,
-		struct jtag_xfer *xfer, u8 *out, u8 *in)
+				  struct jtag_xfer *xfer, u8 *out, u8 *in)
 {
 	unsigned long *bitmap_tdi = (unsigned long *)out;
 	unsigned long *bitmap_tdo = (unsigned long *)in;
@@ -416,20 +415,19 @@ static int npcm7xx_jtag_xfer_gpio(struct jtag_info *jtag,
 	u8 tdi, tdo, tms;
 
 	while (bit_index < xfer_bits) {
-		tdi = tms = 0;
+		tdi = 0;
+		tms = 0;
 
 		if (test_bit(bit_index, bitmap_tdi))
 			tdi = 1;
 
 		/* If this is the last bit, leave TMS high */
-		if ((bit_index == xfer_bits - 1)
-				&& (xfer->endstate != JtagShfDR)
-				&& (xfer->endstate != JtagShfIR)
-				&& (xfer->endstate != JTAG_STATE_CURRENT))
+		if ((bit_index == xfer_bits - 1) && xfer->endstate != jtagshfdr &&
+		    xfer->endstate != jtagshfir && xfer->endstate != JTAG_STATE_CURRENT)
 			tms = 1;
 
 		/* shift 1 bit */
-		tdo = TCK_Cycle(jtag, 0, tms, tdi);
+		tdo = TCK_cycle(jtag, 0, tms, tdi);
 		cond_resched();
 		/* If it was the last bit in the scan and the end_tap_state is
 		 * something other than shiftDR or shiftIR then go to Exit1.
@@ -438,8 +436,8 @@ static int npcm7xx_jtag_xfer_gpio(struct jtag_info *jtag,
 		 * will not change state!
 		 */
 		if (tms)
-			jtag->tapstate = (jtag->tapstate == JtagShfDR) ?
-				JtagEx1DR : JtagEx1IR;
+			jtag->tapstate = (jtag->tapstate == jtagshfdr) ?
+				jtagex1dr : jtagex1ir;
 
 		if (tdo)
 			bitmap_set(bitmap_tdo, bit_index, 1);
@@ -451,13 +449,13 @@ static int npcm7xx_jtag_xfer_gpio(struct jtag_info *jtag,
 }
 
 static int npcm7xx_jtag_readwrite_scan(struct jtag_info *jtag,
-		struct jtag_xfer *xfer, u8 *tdi, u8 *tdo)
+				       struct jtag_xfer *xfer, u8 *tdi, u8 *tdo)
 {
 	u32 xfer_bytes = DIV_ROUND_UP(xfer->length, BITS_PER_BYTE);
 	u32 remain_bits = xfer->length;
 	u32 spi_xfer_bytes = 0;
 
-	if ((xfer_bytes > 1) && (jtag->mode == MODE_PSPI)) {
+	if (xfer_bytes > 1 && jtag->mode == MODE_PSPI) {
 		/* The last byte should be sent using gpio bitbang
 		 * (TMS needed)
 		 */
@@ -470,18 +468,16 @@ static int npcm7xx_jtag_readwrite_scan(struct jtag_info *jtag,
 	if (remain_bits) {
 		xfer->length = remain_bits;
 		npcm7xx_jtag_xfer_gpio(jtag, xfer, tdi + spi_xfer_bytes,
-				tdo + spi_xfer_bytes);
+				       tdo + spi_xfer_bytes);
 	}
 
-	npcm7xx_jtag_set_tapstate(jtag, JTAG_STATE_CURRENT,
-			xfer->endstate);
+	npcm7xx_jtag_set_tapstate(jtag, JTAG_STATE_CURRENT, xfer->endstate);
 
 	return 0;
 }
 
-
 static int npcm7xx_jtag_xfer(struct jtag_info *npcm7xx_jtag,
-		struct jtag_xfer *xfer, u8 *data, u32 bytes)
+			     struct jtag_xfer *xfer, u8 *data, u32 bytes)
 {
 	u8 *tdo;
 	int ret;
@@ -490,15 +486,13 @@ static int npcm7xx_jtag_xfer(struct jtag_info *npcm7xx_jtag,
 		return 0;
 
 	tdo = kzalloc(bytes, GFP_KERNEL);
-	if (tdo == NULL)
+	if (!tdo)
 		return -ENOMEM;
 
 	if (xfer->type == JTAG_SIR_XFER)
-		npcm7xx_jtag_set_tapstate(npcm7xx_jtag, xfer->from,
-					  JtagShfIR);
+		npcm7xx_jtag_set_tapstate(npcm7xx_jtag, xfer->from, jtagshfir);
 	else if (xfer->type == JTAG_SDR_XFER)
-		npcm7xx_jtag_set_tapstate(npcm7xx_jtag, xfer->from,
-					  JtagShfDR);
+		npcm7xx_jtag_set_tapstate(npcm7xx_jtag, xfer->from, jtagshfdr);
 
 	ret = npcm7xx_jtag_readwrite_scan(npcm7xx_jtag, xfer, data, tdo);
 	memcpy(data, tdo, bytes);
@@ -508,8 +502,7 @@ static int npcm7xx_jtag_xfer(struct jtag_info *npcm7xx_jtag,
 }
 
 /* Run in current state for specific number of tcks */
-static int npcm7xx_jtag_runtest(struct jtag_info *jtag,
-		unsigned int tcks)
+static int npcm7xx_jtag_runtest(struct jtag_info *jtag, unsigned int tcks)
 {
 	struct jtag_xfer xfer;
 	u32 bytes = DIV_ROUND_UP(tcks, BITS_PER_BYTE);
@@ -519,7 +512,7 @@ static int npcm7xx_jtag_runtest(struct jtag_info *jtag,
 
 	if (jtag->mode != MODE_PSPI) {
 		for (i = 0; i < tcks; i++) {
-			TCK_Cycle(jtag, 0, 0, 1);
+			TCK_cycle(jtag, 0, 0, 1);
 			cond_resched();
 		}
 		return 0;
@@ -528,7 +521,8 @@ static int npcm7xx_jtag_runtest(struct jtag_info *jtag,
 	buf = kzalloc(bytes, GFP_KERNEL);
 	xfer.type = JTAG_RUNTEST_XFER;
 	xfer.direction = JTAG_WRITE_XFER;
-	xfer.from = xfer.endstate = JTAG_STATE_CURRENT;
+	xfer.from = JTAG_STATE_CURRENT;
+	xfer.endstate = JTAG_STATE_CURRENT;
 	xfer.length = tcks;
 
 	err = npcm7xx_jtag_xfer(jtag, &xfer, buf, bytes);
@@ -537,8 +531,7 @@ static int npcm7xx_jtag_runtest(struct jtag_info *jtag,
 	return err;
 }
 
-static long jtag_ioctl(struct file *file,
-		unsigned int cmd, unsigned long arg)
+static long jtag_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct jtag_info *priv = file->private_data;
 	struct jtag_tap_state tapstate;
@@ -555,9 +548,9 @@ static long jtag_ioctl(struct file *file,
 	case JTAG_SIOCFREQ:
 		if (get_user(value, (__u32 __user *)arg))
 			return -EFAULT;
-		if (value <= priv->spi->max_speed_hz)
+		if (value <= priv->spi->max_speed_hz) {
 			priv->freq = value;
-		else {
+		} else {
 			dev_err(priv->dev, "%s: invalid jtag freq %u\n",
 				__func__, value);
 			ret = -EINVAL;
@@ -569,7 +562,7 @@ static long jtag_ioctl(struct file *file,
 		break;
 	case JTAG_IOCBITBANG:
 		if (copy_from_user(&bitbang, (const void __user *)arg,
-		   sizeof(struct bitbang_packet)))
+				   sizeof(struct bitbang_packet)))
 			return -EFAULT;
 
 		if (bitbang.length >= JTAG_MAX_XFER_DATA_LEN)
@@ -603,9 +596,9 @@ static long jtag_ioctl(struct file *file,
 			return -EINVAL;
 		if (tapstate.reset == JTAG_FORCE_RESET)
 			npcm7xx_jtag_set_tapstate(priv, JTAG_STATE_CURRENT,
-					JtagTLR);
+						  jtagtlr);
 		npcm7xx_jtag_set_tapstate(priv, tapstate.from,
-				tapstate.endstate);
+					  tapstate.endstate);
 		break;
 	case JTAG_GIOCSTATUS:
 		ret = put_user(priv->tapstate, (__u32 __user *)arg);
@@ -741,8 +734,7 @@ err:
 	return err;
 }
 
-static int npcm7xx_jtag_init(struct device *dev,
-		struct jtag_info *npcm7xx_jtag)
+static int npcm7xx_jtag_init(struct device *dev, struct jtag_info *npcm7xx_jtag)
 {
 	struct pinctrl		*pinctrl;
 	int i;
@@ -765,8 +757,7 @@ static int npcm7xx_jtag_init(struct device *dev,
 
 	npcm7xx_jtag->freq = JTAG_PSPI_SPEED;
 	npcm7xx_jtag->tms_level = gpiod_get_value(npcm7xx_jtag->pins[pin_TMS]);
-	npcm7xx_jtag_set_tapstate(npcm7xx_jtag, JTAG_STATE_CURRENT,
-			JtagTLR);
+	npcm7xx_jtag_set_tapstate(npcm7xx_jtag, JTAG_STATE_CURRENT, jtagtlr);
 	npcm7xx_jtag->mode = MODE_PSPI;
 
 	return 0;
@@ -826,13 +817,11 @@ static int npcm7xx_jtag_remove(struct spi_device  *spi)
 	return 0;
 }
 
-
 static const struct of_device_id npcm7xx_jtag_of_match[] = {
 	{ .compatible = "nuvoton,npcm750-jtag-master", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, npcm7xx_jtag_of_match);
-
 
 static struct spi_driver npcm7xx_jtag_driver = {
 	.driver = {
@@ -845,7 +834,6 @@ static struct spi_driver npcm7xx_jtag_driver = {
 
 module_spi_driver(npcm7xx_jtag_driver);
 
-MODULE_AUTHOR("Nuvoton Technology Corp.");
+MODULE_AUTHOR("Stanley Chu <yschu@nuvoton.com>");
 MODULE_DESCRIPTION("NPCM7xx JTAG Master Driver");
 MODULE_LICENSE("GPL");
-
