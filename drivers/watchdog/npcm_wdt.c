@@ -58,12 +58,11 @@
  */
 
 struct npcm_wdt {
-	struct watchdog_device  wdd;
+	struct watchdog_device	wdd;
 	void __iomem		*reg;
-	u32 			card_reset;
-	u32 			ext1_reset;
-	u32 			ext2_reset;
-
+	u32			card_reset;
+	u32			ext1_reset;
+	u32			ext2_reset;
 };
 
 static inline struct npcm_wdt *to_npcm_wdt(struct watchdog_device *wdd)
@@ -124,30 +123,29 @@ static int npcm_wdt_stop(struct watchdog_device *wdd)
 	return 0;
 }
 
-
 static int npcm_wdt_set_timeout(struct watchdog_device *wdd,
 				unsigned int timeout)
 {
 	if (timeout < 2)
 		wdd->timeout = 1;
 	else if (timeout < 3)
-	      wdd->timeout = 2;
+		wdd->timeout = 2;
 	else if (timeout < 6)
-	      wdd->timeout = 5;
+		wdd->timeout = 5;
 	else if (timeout < 11)
-	      wdd->timeout = 10;
+		wdd->timeout = 10;
 	else if (timeout < 22)
-	      wdd->timeout = 21;
+		wdd->timeout = 21;
 	else if (timeout < 44)
-	      wdd->timeout = 43;
+		wdd->timeout = 43;
 	else if (timeout < 87)
-	      wdd->timeout = 86;
+		wdd->timeout = 86;
 	else if (timeout < 173)
-	      wdd->timeout = 172;
+		wdd->timeout = 172;
 	else if (timeout < 688)
-	      wdd->timeout = 687;
+		wdd->timeout = 687;
 	else
-	      wdd->timeout = 2750;
+		wdd->timeout = 2750;
 
 	if (watchdog_active(wdd))
 		npcm_wdt_start(wdd);
@@ -203,26 +201,24 @@ static void npcm_get_reset_status(struct npcm_wdt *wdt, struct device *dev)
 	struct regmap *gcr_regmap;
 	u32 rstval;
 
-	if (of_device_is_compatible(dev->of_node, "nuvoton,npcm750-wdt")) {
-		gcr_regmap = syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
-		if (IS_ERR(gcr_regmap)) {
-			dev_warn(dev, "Failed to find nuvoton,npcm750-gcr WD reset status not supported\n");
-		}
-
-		regmap_read(gcr_regmap, NPCM7XX_RESSR_OFFSET, &rstval);
-		if (!rstval) {
-			regmap_read(gcr_regmap, NPCM7XX_INTCR2_OFFSET, &rstval);
-			rstval = ~rstval;
-		}
-
-		if(rstval & wdt->card_reset)
-			wdt->wdd.bootstatus |= WDIOF_CARDRESET;
-		if(rstval & wdt->ext1_reset)
-			wdt->wdd.bootstatus |= WDIOF_EXTERN1;
-		if(rstval & wdt->ext2_reset)
-			wdt->wdd.bootstatus |= WDIOF_EXTERN2;
+	gcr_regmap = syscon_regmap_lookup_by_phandle(dev->of_node, "syscon");
+	if (IS_ERR(gcr_regmap)) {
+		dev_warn(dev, "Failed to find gcr syscon, WD reset status not supported\n");
+		return;
 	}
 
+	regmap_read(gcr_regmap, NPCM7XX_RESSR_OFFSET, &rstval);
+	if (!rstval) {
+		regmap_read(gcr_regmap, NPCM7XX_INTCR2_OFFSET, &rstval);
+		rstval = ~rstval;
+	}
+
+	if (rstval & wdt->card_reset)
+		wdt->wdd.bootstatus |= WDIOF_CARDRESET;
+	if (rstval & wdt->ext1_reset)
+		wdt->wdd.bootstatus |= WDIOF_EXTERN1;
+	if (rstval & wdt->ext2_reset)
+		wdt->wdd.bootstatus |= WDIOF_EXTERN2;
 }
 
 static u32 npcm_wdt_reset_type(const char *reset_type)
@@ -256,7 +252,6 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	const char *ext1_reset_type;
 	const char *ext2_reset_type;
 	struct npcm_wdt *wdt;
-	struct resource *res;
 	u32 priority;
 	int irq;
 	int ret;
@@ -265,8 +260,7 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	if (!wdt)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	wdt->reg = devm_ioremap_resource(dev, res);
+	wdt->reg = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(wdt->reg))
 		return PTR_ERR(wdt->reg);
 
@@ -274,7 +268,7 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	if (irq < 0)
 		return irq;
 
-	if (of_property_read_u32(pdev->dev.of_node, "nuvoton,restart-priority", 
+	if (of_property_read_u32(pdev->dev.of_node, "nuvoton,restart-priority",
 				 &priority))
 		watchdog_set_restart_priority(&wdt->wdd, 128);
 	else
@@ -283,9 +277,9 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	ret = of_property_read_string(pdev->dev.of_node,
 				      "nuvoton,card-reset-type",
 				      &card_reset_type);
-	if (ret)
+	if (ret) {
 		wdt->card_reset = NPCM7XX_PORST;
-	else {
+	} else {
 		wdt->card_reset = npcm_wdt_reset_type(card_reset_type);
 		if (!wdt->card_reset)
 			wdt->card_reset = NPCM7XX_PORST;
@@ -294,9 +288,9 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	ret = of_property_read_string(pdev->dev.of_node,
 				      "nuvoton,ext1-reset-type",
 				      &ext1_reset_type);
-	if (ret)
+	if (ret) {
 		wdt->ext1_reset = NPCM7XX_WD0RST;
-	else {
+	} else {
 		wdt->ext1_reset = npcm_wdt_reset_type(ext1_reset_type);
 		if (!wdt->ext1_reset)
 			wdt->ext1_reset = NPCM7XX_WD0RST;
@@ -305,9 +299,9 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	ret = of_property_read_string(pdev->dev.of_node,
 				      "nuvoton,ext2-reset-type",
 				      &ext2_reset_type);
-	if (ret)
+	if (ret) {
 		wdt->ext2_reset = NPCM7XX_SWR1RST;
-	else {
+	} else {
 		wdt->ext2_reset = npcm_wdt_reset_type(ext2_reset_type);
 		if (!wdt->ext2_reset)
 			wdt->ext2_reset = NPCM7XX_SWR1RST;
@@ -332,17 +326,14 @@ static int npcm_wdt_probe(struct platform_device *pdev)
 	}
 
 	npcm_get_reset_status(wdt, dev);
-
-	ret = devm_request_irq(dev, irq, npcm_wdt_interrupt, 0,
-			       "watchdog", wdt);
+	ret = devm_request_irq(dev, irq, npcm_wdt_interrupt, 0, "watchdog",
+			       wdt);
 	if (ret)
 		return ret;
 
 	ret = devm_watchdog_register_device(dev, &wdt->wdd);
-	if (ret) {
-		dev_err(dev, "failed to register watchdog\n");
+	if (ret)
 		return ret;
-	}
 
 	dev_info(dev, "NPCM watchdog driver enabled\n");
 
