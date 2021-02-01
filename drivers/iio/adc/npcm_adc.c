@@ -85,7 +85,8 @@ struct npcm_adc {
 #define FUSE_CALIB_ADDR		24
 #define FUSE_CALIB_SIZE		8
 #define DATA_CALIB_SIZE		4
-#define FUSE_READ_TIMEOUT	0xDEADBEEF
+#define FUSE_READ_SLEEP		500
+#define FUSE_READ_TIMEOUT	1000000
 
 #define NPCM_ADC_CHAN(ch) {					\
 	.type = IIO_VOLTAGE,					\
@@ -107,39 +108,28 @@ static const struct iio_chan_spec npcm_adc_iio_channels[] = {
 	NPCM_ADC_CHAN(7),
 };
 
-static int npcm750_fuse_wait_for_ready(struct regmap *fuse_regmap, u32 timeout)
-{
-	u32 time = timeout;
-	u32 fstreg;
-
-	while (--time > 1) {
-		regmap_read(fuse_regmap, NPCM7XX_FST, &fstreg);
-		if (fstreg & NPCM7XX_FST_RDY) {
-			regmap_write_bits(fuse_regmap, NPCM7XX_FST,
-					  NPCM7XX_FST_RDST, NPCM7XX_FST_RDST);
-			return 0;
-		}
-	}
-
-	/* try to clear the status in case it was set */
-	regmap_write_bits(fuse_regmap, NPCM7XX_FST, NPCM7XX_FST_RDST,
-			  NPCM7XX_FST_RDST);
-
-	return -EINVAL;
-}
-
 static void npcm750_fuse_read(struct regmap *fuse_regmap, u32 addr, u8 *data)
 {
 	u32 val;
+	u32 fstreg;
 
-	npcm750_fuse_wait_for_ready(fuse_regmap, FUSE_READ_TIMEOUT);
+	regmap_read_poll_timeout(fuse_regmap, NPCM7XX_FST, fstreg,
+				 fstreg & NPCM7XX_FST_RDY, FUSE_READ_SLEEP,
+				 FUSE_READ_TIMEOUT);
+	regmap_write_bits(fuse_regmap, NPCM7XX_FST,
+			  NPCM7XX_FST_RDST, NPCM7XX_FST_RDST);
 
 	regmap_write_bits(fuse_regmap, NPCM7XX_FADDR,
 			  NPCM7XX_FADDR_BYTEADDR_MASK, addr);
 	regmap_read(fuse_regmap, NPCM7XX_FADDR, &val);
 	regmap_write(fuse_regmap, NPCM7XX_FCTL, NPCM7XX_FCTL_RDST);
 
-	npcm750_fuse_wait_for_ready(fuse_regmap, FUSE_READ_TIMEOUT);
+	regmap_read_poll_timeout(fuse_regmap, NPCM7XX_FST, fstreg,
+				 fstreg & NPCM7XX_FST_RDY, FUSE_READ_SLEEP,
+				 FUSE_READ_TIMEOUT);
+	regmap_write_bits(fuse_regmap, NPCM7XX_FST,
+			  NPCM7XX_FST_RDST, NPCM7XX_FST_RDST);
+
 	regmap_read(fuse_regmap, NPCM7XX_FDATA, &val);
 	*data = (u8)val;
 
@@ -198,7 +188,7 @@ static int npcm750_read_nibble_parity(u8 *block_ECC, u8 *ADC_calib)
 }
 
 static int npcm750_fuse_calibration_read(struct platform_device *pdev,
-					struct npcm_adc *info)
+					 struct npcm_adc *info)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct regmap *fuse_regmap;
@@ -207,29 +197,26 @@ static int npcm750_fuse_calibration_read(struct platform_device *pdev,
 	u32 ADC_calib;
 	u32 addr = FUSE_CALIB_ADDR;
 
-	if (of_device_is_compatible(np, "nuvoton,npcm750-adc")) {
-		fuse_regmap = syscon_regmap_lookup_by_compatible
-			("nuvoton,npcm750-fuse");
-		if (IS_ERR(fuse_regmap)) {
-			dev_warn(&pdev->dev, "Failed to find nuvoton,npcm750-fuse\n");
-			return PTR_ERR(fuse_regmap);
-		}
-
-		while (bytes_read < FUSE_CALIB_SIZE) {
-			npcm750_fuse_read(fuse_regmap, addr,
-					  &read_buf[bytes_read]);
-			bytes_read++;
-			addr++;
-		}
-
-		if (npcm750_read_nibble_parity(read_buf, (u8 *)&ADC_calib)) {
-			dev_warn(info->dev, "FUSE Clibration read failed\n");
-			return -EINVAL;
-		}
-
-		info->R05 = ADC_calib & 0xFFFF;
-		info->R15 = ADC_calib >> 16;
+	fuse_regmap = syscon_regmap_lookup_by_phandle(np, "syscon");
+	if (IS_ERR(fuse_regmap)) {
+		dev_warn(&pdev->dev, "Failed to find syscon\n");
+		return PTR_ERR(fuse_regmap);
 	}
+
+	while (bytes_read < FUSE_CALIB_SIZE) {
+		npcm750_fuse_read(fuse_regmap, addr,
+				  &read_buf[bytes_read]);
+		bytes_read++;
+		addr++;
+	}
+
+	if (npcm750_read_nibble_parity(read_buf, (u8 *)&ADC_calib)) {
+		dev_warn(info->dev, "FUSE Calibration read failed\n");
+		return -EINVAL;
+	}
+
+	info->R05 = ADC_calib & 0xFFFF;
+	info->R15 = ADC_calib >> 16;
 
 	return 0;
 }
@@ -368,7 +355,6 @@ static int npcm_adc_probe(struct platform_device *pdev)
 	int irq;
 	u32 div;
 	u32 reg_con;
-	struct resource *res;
 	struct npcm_adc *info;
 	struct iio_dev *indio_dev;
 	struct device *dev = &pdev->dev;
@@ -380,10 +366,13 @@ static int npcm_adc_probe(struct platform_device *pdev)
 
 	info->dev = &pdev->dev;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	info->regs = devm_ioremap_resource(&pdev->dev, res);
+	info->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(info->regs))
 		return PTR_ERR(info->regs);
+
+	info->reset = devm_reset_control_get(&pdev->dev, NULL);
+	if (IS_ERR(info->reset))
+		return PTR_ERR(info->reset);
 
 	info->adc_clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(info->adc_clk)) {
@@ -408,16 +397,6 @@ static int npcm_adc_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(dev, "failed requesting interrupt\n");
 		goto err_disable_clk;
-	}
-
-	info->reset = devm_reset_control_get(&pdev->dev, NULL);
-	if (IS_ERR(info->reset)) {
-		ret = PTR_ERR(info->reset);
-		if (ret != -ENOENT)
-			return ret;
-
-		dev_dbg(&pdev->dev, "no reset control found\n");
-		info->reset = NULL;
 	}
 
 	reg_con = ioread32(info->regs + NPCM_ADCCON);
