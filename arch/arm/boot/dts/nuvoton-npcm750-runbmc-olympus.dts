@@ -1014,20 +1014,13 @@
 
 			spi1: spi@201000 {
 				cs-gpios = <&gpio6 0 GPIO_ACTIVE_HIGH>;
-				pinctrl-names = "default";
-				pinctrl-0 = <&gpio17_pins &gpio18o_pins
-					&gpio19ol_pins>;
 				status = "okay";
 				jtag_master {
 					compatible = "nuvoton,npcm750-jtag-master";
 					spi-max-frequency = <25000000>;
 					reg = <0>;
-
-					pinctrl-names = "pspi", "gpio";
-					pinctrl-0 = <&pspi2_pins>;
-					pinctrl-1 = <&gpio17_pins &gpio18o_pins
-							&gpio19ol_pins>;
-
+					gcr-mfsel = <0x64 0x2000 0x2000>,  //pspi
+						<0x64 0x2000 0x0>;  //gpio
 					tck-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
 					tdi-gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
 					tdo-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;
