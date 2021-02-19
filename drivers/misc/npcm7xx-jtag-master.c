@@ -10,10 +10,8 @@
 #include <linux/uaccess.h>
 #include <linux/miscdevice.h>
 #include <linux/spi/spi.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/gpio/consumer.h>
-#include <linux/of.h>
-#include <linux/regmap.h>
-#include <linux/mfd/syscon.h>
 
 #define JTAG_PSPI_SPEED		(10 * 1000000)
 #define JTAG_SCAN_LEN		256
@@ -122,20 +120,12 @@ static unsigned char reverse[16] = {
 
 static DEFINE_SPINLOCK(jtag_file_lock);
 
-#define NUM_MFSEL_REG	2
-struct mfsel_reg {
-	__u32	offset;
-	__u32	mask;
-	__u32	val;
-} __attribute__((__packed__));
-
 struct jtag_info {
 	struct device *dev;
 	struct spi_device	*spi;
 	struct miscdevice miscdev;
 	struct gpio_desc	*pins[pin_NUM];
-	struct regmap		*gcr_regmap;
-	struct mfsel_reg	mfsel[NUM_MFSEL_REG];
+	struct pinctrl		*pinctrl;
 	u32 freq;
 	u8 tms_level;
 	u8 tapstate;
@@ -356,16 +346,28 @@ static int npcm7xx_jtag_set_tapstate(struct jtag_info *jtag,
 
 static int npcm7xx_jtag_switch_pin_func(struct jtag_info *jtag, u8 mode)
 {
-	struct mfsel_reg *mfsel;
+	struct pinctrl_state	*state;
 
-	if (mode != MODE_PSPI && mode != MODE_GPIO)
-		return -EINVAL;
+	if (mode == MODE_PSPI) {
+		state = pinctrl_lookup_state(jtag->pinctrl, "pspi");
+		if (IS_ERR(state))
+			return -ENOENT;
 
-	mfsel = &jtag->mfsel[mode];
-	regmap_update_bits(jtag->gcr_regmap, mfsel->offset,
-			mfsel->mask, mfsel->val);
-	if (mode == MODE_GPIO)
+		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TCK]));
+		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TDI]));
+		pinctrl_gpio_free(desc_to_gpio(jtag->pins[pin_TDO]));
+		pinctrl_select_state(jtag->pinctrl, state);
+	} else if (mode == MODE_GPIO) {
+		state = pinctrl_lookup_state(jtag->pinctrl, "gpio");
+		if (IS_ERR(state))
+			return -ENOENT;
+
+		pinctrl_select_state(jtag->pinctrl, state);
+		pinctrl_gpio_request(desc_to_gpio(jtag->pins[pin_TCK]));
+		pinctrl_gpio_request(desc_to_gpio(jtag->pins[pin_TDI]));
+		pinctrl_gpio_request(desc_to_gpio(jtag->pins[pin_TDO]));
 		jtag->tms_level = gpiod_get_value(jtag->pins[pin_TMS]);
+	}
 
 	return 0;
 }
@@ -377,9 +379,6 @@ static int npcm7xx_jtag_xfer_spi(struct jtag_info *jtag, u32 xfer_bytes,
 	struct spi_transfer spi_xfer;
 	int err;
 	int i;
-
-	if (xfer_bytes == 0)
-		return 0;
 
 	err = npcm7xx_jtag_switch_pin_func(jtag, MODE_PSPI);
 	if (err)
@@ -393,16 +392,10 @@ static int npcm7xx_jtag_xfer_spi(struct jtag_info *jtag, u32 xfer_bytes,
 	spi_xfer.tx_buf = out;
 	spi_xfer.rx_buf = in;
 	spi_xfer.len = xfer_bytes;
-	spi_xfer.bits_per_word = 16;
 
 	spi_message_init(&m);
 	spi_message_add_tail(&spi_xfer, &m);
 	err = spi_sync(jtag->spi, &m);
-	if (err) {
-		dev_err(jtag->dev, "spi_sync err %d, len %d\n", err, xfer_bytes);
-		npcm7xx_jtag_switch_pin_func(jtag, MODE_GPIO);
-		return err;
-	}
 
 	for (i = 0; i < xfer_bytes; i++)
 		in[i] = REVERSE(in[i]);
@@ -463,11 +456,10 @@ static int npcm7xx_jtag_readwrite_scan(struct jtag_info *jtag,
 	u32 spi_xfer_bytes = 0;
 
 	if (xfer_bytes > 1 && jtag->mode == MODE_PSPI) {
-		/* PSPI transfer len should be even because bits_per_word=16 */
 		/* The last byte should be sent using gpio bitbang
 		 * (TMS needed)
 		 */
-		spi_xfer_bytes = round_down((xfer_bytes - 1), 2);
+		spi_xfer_bytes = xfer_bytes - 1;
 		if (npcm7xx_jtag_xfer_spi(jtag, spi_xfer_bytes, tdi, tdo))
 			return -EIO;
 		remain_bits -= spi_xfer_bytes * 8;
@@ -744,7 +736,14 @@ err:
 
 static int npcm7xx_jtag_init(struct device *dev, struct jtag_info *npcm7xx_jtag)
 {
+	struct pinctrl		*pinctrl;
 	int i;
+
+	pinctrl = devm_pinctrl_get(dev);
+	if (IS_ERR(pinctrl))
+		return PTR_ERR(pinctrl);
+
+	npcm7xx_jtag->pinctrl = pinctrl;
 
 	/* jtag pins */
 	npcm7xx_jtag->pins[pin_TCK] = gpiod_get(dev, "tck", GPIOD_OUT_LOW);
@@ -755,7 +754,6 @@ static int npcm7xx_jtag_init(struct device *dev, struct jtag_info *npcm7xx_jtag)
 		if (IS_ERR(npcm7xx_jtag->pins[i]))
 			return PTR_ERR(npcm7xx_jtag->pins[i]);
 	}
-	npcm7xx_jtag_switch_pin_func(npcm7xx_jtag, MODE_GPIO);
 
 	npcm7xx_jtag->freq = JTAG_PSPI_SPEED;
 	npcm7xx_jtag->tms_level = gpiod_get_value(npcm7xx_jtag->pins[pin_TMS]);
@@ -768,11 +766,7 @@ static int npcm7xx_jtag_init(struct device *dev, struct jtag_info *npcm7xx_jtag)
 static int npcm7xx_jtag_probe(struct spi_device *spi)
 {
 	struct jtag_info *npcm_jtag;
-	struct device_node *np = spi->dev.of_node;
-	int ret = -EINVAL;
-	u32 tmp;
-	int offset;
-	int i;
+	int ret;
 
 	dev_info(&spi->dev, "%s", __func__);
 
@@ -783,38 +777,6 @@ static int npcm7xx_jtag_probe(struct spi_device *spi)
 	npcm_jtag->dev = &spi->dev;
 	npcm_jtag->spi = spi;
 	spi->mode = SPI_MODE_0 | SPI_NO_CS;
-	spi->irq = -1; /* a hint of using poll mode */
-
-	npcm_jtag->gcr_regmap =
-		syscon_regmap_lookup_by_compatible("nuvoton,npcm750-gcr");
-	if (IS_ERR(npcm_jtag->gcr_regmap))
-		goto err;
-
-	if (!of_get_property(np, "gcr-mfsel", &tmp))
-		goto err;
-
-	if ((tmp / sizeof(struct mfsel_reg)) != NUM_MFSEL_REG)
-		goto err;
-
-	for (i = 0; i < NUM_MFSEL_REG; i++) {
-		offset = i * (sizeof(struct mfsel_reg) / sizeof(u32));
-		if (of_property_read_u32_index(np,
-					       "gcr-mfsel",
-					       offset, &tmp))
-			goto err;
-		npcm_jtag->mfsel[i].offset = tmp;
-		if (of_property_read_u32_index(np,
-					       "gcr-mfsel",
-					       offset + 1, &tmp))
-			goto err;
-		npcm_jtag->mfsel[i].mask = tmp;
-
-		if (of_property_read_u32_index(np,
-					       "gcr-mfsel",
-					       offset + 2, &tmp))
-			goto err;
-		npcm_jtag->mfsel[i].val = tmp;
-	}
 
 	/* Initialize device*/
 	ret = npcm7xx_jtag_init(&spi->dev, npcm_jtag);
