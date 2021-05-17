@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.13"
+#define VCD_VERSION "0.0.14"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -394,6 +394,7 @@ static const res_tlb res_tlbs[] = {
 	{"800 x 480", 800, 480},
 	{"800 x 600", 800, 600},
 	{"832 x 624", 832, 624},
+	{"848 x 480", 848, 480},
 	{"854 x 480", 854, 480},
 	{"1024 x 600", 1024, 600},
 	{"1024 x 768", 1024, 768},
