@@ -367,14 +367,14 @@ static int npcm_i2c_get_SCL(struct i2c_adapter *_adap)
 {
 	struct npcm_i2c *bus = container_of(_adap, struct npcm_i2c, adap);
 
-	return !!(I2CCTL3_SCL_LVL & ioread32(bus->reg + NPCM_I2CCTL3));
+	return !!(I2CCTL3_SCL_LVL & ioread8(bus->reg + NPCM_I2CCTL3));
 }
 
 static int npcm_i2c_get_SDA(struct i2c_adapter *_adap)
 {
 	struct npcm_i2c *bus = container_of(_adap, struct npcm_i2c, adap);
 
-	return !!(I2CCTL3_SDA_LVL & ioread32(bus->reg + NPCM_I2CCTL3));
+	return !!(I2CCTL3_SDA_LVL & ioread8(bus->reg + NPCM_I2CCTL3));
 }
 
 static inline u16 npcm_i2c_get_index(struct npcm_i2c *bus)
@@ -586,6 +586,15 @@ static void npcm_i2c_slave_int_enable(struct npcm_i2c *bus, bool enable)
 	iowrite8(i2cctl1, bus->reg + NPCM_I2CCTL1);
 }
 
+static inline void npcm_i2c_clear_master_status(struct npcm_i2c *bus)
+{
+	u8 val;
+
+	/* Clear NEGACK, STASTR and BER bits */
+	val = NPCM_I2CST_BER | NPCM_I2CST_NEGACK | NPCM_I2CST_STASTR;
+	iowrite8(val, bus->reg + NPCM_I2CST);
+}
+
 static int npcm_i2c_slave_enable(struct npcm_i2c *bus, enum i2c_addr addr_type,
 				 u8 addr, bool enable)
 {
@@ -650,8 +659,8 @@ static void npcm_i2c_reset(struct npcm_i2c *bus)
 	iowrite8(NPCM_I2CCST_BB, bus->reg + NPCM_I2CCST);
 	iowrite8(0xFF, bus->reg + NPCM_I2CST);
 
-	/* Clear EOB bit */
-	iowrite8(NPCM_I2CCST3_EO_BUSY, bus->reg + NPCM_I2CCST3);
+	/* Clear and disable EOB */
+	npcm_i2c_eob_int(bus, false);
 
 	/* Clear all fifo bits: */
 	iowrite8(NPCM_I2CFIF_CTS_CLR_FIFO, bus->reg + NPCM_I2CFIF_CTS);
@@ -662,6 +671,9 @@ static void npcm_i2c_reset(struct npcm_i2c *bus)
 		npcm_i2c_slave_enable(bus, I2C_SLAVE_ADDR1, addr, true);
 	}
 #endif
+
+	/* clear status bits for spurious interrupts */
+	npcm_i2c_clear_master_status(bus);
 
 	bus->state = I2C_IDLE;
 }
@@ -823,15 +835,6 @@ static void npcm_i2c_read_fifo(struct npcm_i2c *bus, u8 bytes_in_fifo)
 	}
 }
 
-static inline void npcm_i2c_clear_master_status(struct npcm_i2c *bus)
-{
-	u8 val;
-
-	/* Clear NEGACK, STASTR and BER bits */
-	val = NPCM_I2CST_BER | NPCM_I2CST_NEGACK | NPCM_I2CST_STASTR;
-	iowrite8(val, bus->reg + NPCM_I2CST);
-}
-
 static void npcm_i2c_master_abort(struct npcm_i2c *bus)
 {
 	/* Only current master is allowed to issue a stop condition */
@@ -926,11 +929,15 @@ static int npcm_i2c_slave_get_wr_buf(struct npcm_i2c *bus)
 	for (i = 0; i < I2C_HW_FIFO_SIZE; i++) {
 		if (bus->slv_wr_size >= I2C_HW_FIFO_SIZE)
 			break;
-		i2c_slave_event(bus->slave, I2C_SLAVE_READ_REQUESTED, &value);
+		if (bus->state == I2C_SLAVE_MATCH) {
+			i2c_slave_event(bus->slave, I2C_SLAVE_READ_REQUESTED, &value);
+			bus->state = I2C_OPER_STARTED;
+		} else {
+			i2c_slave_event(bus->slave, I2C_SLAVE_READ_PROCESSED, &value);
+		}
 		ind = (bus->slv_wr_ind + bus->slv_wr_size) % I2C_HW_FIFO_SIZE;
 		bus->slv_wr_buf[ind] = value;
 		bus->slv_wr_size++;
-		i2c_slave_event(bus->slave, I2C_SLAVE_READ_PROCESSED, &value);
 	}
 	return I2C_HW_FIFO_SIZE - ret;
 }
@@ -978,7 +985,6 @@ static void npcm_i2c_slave_xmit(struct npcm_i2c *bus, u16 nwrite,
 	if (nwrite == 0)
 		return;
 
-	bus->state = I2C_OPER_STARTED;
 	bus->operation = I2C_WRITE_OPER;
 
 	/* get the next buffer */
@@ -1726,8 +1732,10 @@ static int npcm_i2c_recovery_tgclk(struct i2c_adapter *_adap)
 		iowrite8(NPCM_I2CCST_TGSCL, bus->reg + NPCM_I2CCST);
 		usleep_range(20, 30);
 		/* If SDA line is inactive (high), stop */
-		if (npcm_i2c_get_SDA(_adap))
+		if (npcm_i2c_get_SDA(_adap)) {
 			done = true;
+			status = 0;
+		}
 	} while (!done && iter--);
 
 	/* If SDA line is released: send start-addr-stop, to re-sync. */
@@ -1736,7 +1744,8 @@ static int npcm_i2c_recovery_tgclk(struct i2c_adapter *_adap)
 		npcm_i2c_wr_byte(bus, bus->dest_addr);
 		npcm_i2c_master_start(bus);
 		/* Wait until START condition is sent */
-		readx_poll_timeout(npcm_i2c_get_SCL, _adap, val, !val, 20, 200);
+		status = readx_poll_timeout(npcm_i2c_get_SCL, _adap, val, !val,
+					    20, 200);
 		/* If START condition was sent */
 		if (npcm_i2c_is_master(bus) > 0) {
 			usleep_range(20, 30);
@@ -1958,8 +1967,17 @@ static int npcm_i2c_init_module(struct npcm_i2c *bus, enum i2c_mode mode,
 	iowrite8(val, bus->reg + NPCM_I2CCTL1);
 
 	npcm_i2c_reset(bus);
-	npcm_i2c_int_enable(bus, true);
 
+	/* check HW is OK: SDA and SCL should be high at this point. */
+	if ((npcm_i2c_get_SDA(&bus->adap) == 0) ||
+	    (npcm_i2c_get_SCL(&bus->adap) == 0)) {
+		dev_err(bus->dev, "I2C%d init fail: lines are low", bus->num);
+		dev_err(bus->dev, "SDA=%d SCL=%d", npcm_i2c_get_SDA(&bus->adap),
+			npcm_i2c_get_SCL(&bus->adap));
+		return -ENXIO;
+	}
+
+	npcm_i2c_int_enable(bus, true);
 	return 0;
 }
 
@@ -2007,7 +2025,8 @@ static irqreturn_t npcm_i2c_bus_irq(int irq, void *dev_id)
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
 	if (bus->slave) {
 		bus->master_or_slave = I2C_SLAVE;
-		return npcm_i2c_int_slave_handler(bus);
+		if (npcm_i2c_int_slave_handler(bus))
+			return IRQ_HANDLED;
 	}
 #endif
 	/* clear status bits for spurious interrupts */
@@ -2126,7 +2145,7 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		return -EINVAL;
 	}
 
-	time_left = jiffies + msecs_to_jiffies(DEFAULT_STALL_COUNT) + 1;
+	time_left = jiffies + msecs_to_jiffies(timeout) + 1;
 	do {
 		/*
 		 * we must clear slave address immediately when the bus is not
@@ -2189,8 +2208,9 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	    (NPCM_I2CRXF_CTL_LAST_PEC & ioread8(bus->reg + NPCM_I2CRXF_CTL)))
 		npcm_i2c_reset(bus);
 
-	/* after any xfer, successful or not, stall must be disabled */
+	/* after any xfer, successful or not, stall and EOB must be disabled */
 	npcm_i2c_stall_after_start(bus, false);
+	npcm_i2c_eob_int(bus, false);
 
 #if IS_ENABLED(CONFIG_I2C_SLAVE)
 	/* reenable slave if it was enabled */
@@ -2257,6 +2277,8 @@ static int i2c_speed_set(void *data, u64 val)
 
 	if (ret)
 		return -EAGAIN;
+
+	npcm_i2c_int_enable(bus, true);
 
 	return 0;
 }
