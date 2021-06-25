@@ -32,7 +32,7 @@
 #include <asm/fb.h>
 #include <linux/completion.h>
 
-#define VCD_VERSION "0.0.14"
+#define VCD_VERSION "0.0.15"
 
 #define VCD_IOC_MAGIC     'v'
 #define VCD_IOCGETINFO	_IOR(VCD_IOC_MAGIC,  1, struct vcd_info)
@@ -743,9 +743,10 @@ static void npcm750_vcd_update_info(struct npcm750_vcd *priv)
 	if (priv->info.vdisp > VCD_MAX_HIGHT)
 		priv->info.vdisp = VCD_MAX_HIGHT;
 
-	regmap_read(vcd, VCD_HOR_AC_TIM, &priv->hortact);
-	priv->hortact &= VCD_HOR_AC_TIM_MASK;
-
+	if (priv->de_mode) {
+		regmap_read(vcd, VCD_HOR_AC_TIM, &priv->hortact);
+		priv->hortact &= VCD_HOR_AC_TIM_MASK;
+	}
 }
 
 static void npcm750_vcd_detect_video_mode(struct npcm750_vcd *priv)
