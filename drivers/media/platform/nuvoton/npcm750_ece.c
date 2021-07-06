@@ -582,6 +582,7 @@ static int npcm750_ece_probe(struct platform_device *pdev)
 	int ret = 0;
 	void __iomem *regs;
 	struct npcm750_ece *priv = NULL;
+	struct resource *res;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -591,7 +592,8 @@ static int npcm750_ece_probe(struct platform_device *pdev)
 	spin_lock_init(&priv->lock);
 	init_completion(&priv->complete);
 
-	regs = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	regs = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(regs)) {
 		dev_err(&pdev->dev, "Failed to get regmap!\n");
 		ret = PTR_ERR(regs);

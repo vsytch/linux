@@ -1551,6 +1551,7 @@ static int npcm750_vcd_probe(struct platform_device *pdev)
 {
 	struct npcm750_vcd *priv;
 	void __iomem *regs;
+	struct resource *res;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -1578,7 +1579,9 @@ static int npcm750_vcd_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	regs = devm_platform_ioremap_resource(pdev, 0);
+
+        res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+        regs = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(regs)) {
 		dev_err(&pdev->dev, "Failed to get regmap!\n");
 		ret = PTR_ERR(regs);
