@@ -125,6 +125,7 @@ static int npcm_fiux_probe(struct spi_mem *spimem)
 		.flags		= MTD_CAP_RAM,
 		._read		= npcm_fiux_read,
 		._write		= npcm_fiux_write,
+		.owner 		= THIS_MODULE,
 	};
 
 	ret = fiux_create_write_dirmap(flash);
