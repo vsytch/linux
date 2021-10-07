@@ -2088,7 +2088,7 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 	u16 nwrite, nread;
 	u8 *write_data, *read_data;
 	u8 slave_addr;
-	int timeout;
+	unsigned long timeout;
 	bool read_block = false;
 	bool read_PEC = false;
 	u8 bus_busy;
@@ -2145,7 +2145,7 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		return -EINVAL;
 	}
 
-	time_left = jiffies + msecs_to_jiffies(timeout) + 1;
+	time_left = jiffies + timeout + 1;
 	do {
 		/*
 		 * we must clear slave address immediately when the bus is not
