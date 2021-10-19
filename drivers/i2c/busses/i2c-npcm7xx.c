@@ -267,6 +267,7 @@ static const int npcm_i2caddr[I2C_NUM_OWN_ADDR] = {
 
 /* stall/stuck timeout in us */
 #define DEFAULT_STALL_COUNT		25
+#define MAX_START_TO_STOP_MS		35
 
 /* SCLFRQ field position */
 #define SCLFRQ_0_TO_6			GENMASK(6, 0)
@@ -2145,7 +2146,7 @@ static int npcm_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
 		return -EINVAL;
 	}
 
-	time_left = jiffies + timeout + 1;
+	time_left = jiffies + MAX_START_TO_STOP_MS + 1;
 	do {
 		/*
 		 * we must clear slave address immediately when the bus is not
