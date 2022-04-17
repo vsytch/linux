@@ -247,6 +247,14 @@
 			spix-mode;
 		};
 
+		/* Incase of using EVB with enabled PCI-RC
+		   we should define the GPIO RC and EP */
+		/*pci_rc: pcie@e1000000 {
+			rst-rc-pci = <&gpio0 29 1>;
+			rst-ep-pci = <&gpio0 29 1>;
+			status = "okay";
+		};*/
+
 		sdhci0: sdhci@f0842000 {
 			status = "okay";
 		};
