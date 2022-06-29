@@ -252,6 +252,7 @@ static ssize_t spi_nor_spimem_xfer_data(struct spi_nor *nor,
 					struct spi_mem_op *op)
 {
 	bool usebouncebuf = false;
+	ssize_t nbytes;
 	void *rdbuf = NULL;
 	const void *buf;
 	int ret;
@@ -278,18 +279,26 @@ static ssize_t spi_nor_spimem_xfer_data(struct spi_nor *nor,
 		}
 	}
 
-	ret = spi_mem_adjust_op_size(nor->spimem, op);
-	if (ret)
-		return ret;
+	if (nor->dirmap.rdesc && op->data.dir == SPI_MEM_DATA_IN) {
+		//("op->addr.val 0x%x op->data.nbytes %d\n",op->addr.val,op->data.nbytes);
+		nbytes = spi_mem_dirmap_read(nor->dirmap.rdesc, op->addr.val,
+					     op->data.nbytes, op->data.buf.in);
+	} else {
+		ret = spi_mem_adjust_op_size(nor->spimem, op);
+		if (ret)
+			return ret;
 
-	ret = spi_mem_exec_op(nor->spimem, op);
-	if (ret)
-		return ret;
+		ret = spi_mem_exec_op(nor->spimem, op);
+		if (ret)
+			return ret;
+			
+		nbytes =  op->data.nbytes;
+	}
 
 	if (usebouncebuf && op->data.dir == SPI_MEM_DATA_IN)
 		memcpy(rdbuf, nor->bouncebuf, op->data.nbytes);
 
-	return op->data.nbytes;
+	return nbytes;
 }
 
 /**
@@ -4979,6 +4988,32 @@ int spi_nor_scan(struct spi_nor *nor, const char *name,
 }
 EXPORT_SYMBOL_GPL(spi_nor_scan);
 
+static int spi_nor_create_read_dirmap(struct spi_nor *nor)
+{
+	struct spi_mem_dirmap_info info = {
+		.op_tmpl = SPI_MEM_OP(SPI_MEM_OP_CMD(nor->read_opcode, 1),
+				      SPI_MEM_OP_ADDR(nor->addr_width, 0, 1),
+				      SPI_MEM_OP_DUMMY(nor->read_dummy, 1),
+				      SPI_MEM_OP_DATA_IN(0, NULL, 1)),
+		.offset = 0,
+		.length = nor->mtd.size,
+	};
+	struct spi_mem_op *op = &info.op_tmpl;
+
+	/* get transfer protocols. */
+	op->cmd.buswidth = spi_nor_get_protocol_inst_nbits(nor->read_proto);
+	op->addr.buswidth = spi_nor_get_protocol_addr_nbits(nor->read_proto);
+	op->dummy.buswidth = op->addr.buswidth;
+	op->data.buswidth = spi_nor_get_protocol_data_nbits(nor->read_proto);
+
+	/* convert the dummy cycles to the number of bytes */
+	op->dummy.nbytes = (nor->read_dummy * op->dummy.buswidth) / 8;
+
+	nor->dirmap.rdesc = devm_spi_mem_dirmap_create(nor->dev, nor->spimem,
+						       &info);
+	return PTR_ERR_OR_ZERO(nor->dirmap.rdesc);
+}
+
 static int spi_nor_probe(struct spi_mem *spimem)
 {
 	struct spi_device *spi = spimem->spi;
@@ -5039,6 +5074,10 @@ static int spi_nor_probe(struct spi_mem *spimem)
 		if (!nor->bouncebuf)
 			return -ENOMEM;
 	}
+
+	ret = spi_nor_create_read_dirmap(nor);
+	if (ret)
+		return ret;
 
 	return mtd_device_register(&nor->mtd, data ? data->parts : NULL,
 				   data ? data->nr_parts : 0);

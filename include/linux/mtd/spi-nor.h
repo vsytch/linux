@@ -602,6 +602,10 @@ struct spi_nor {
 	int (*clear_sr_bp)(struct spi_nor *nor);
 	struct spi_nor_flash_parameter params;
 
+	struct {
+		struct spi_mem_dirmap_desc *rdesc;
+	} dirmap;
+
 	void *priv;
 };
 
