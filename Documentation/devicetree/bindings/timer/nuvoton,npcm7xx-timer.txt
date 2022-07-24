@@ -5,7 +5,8 @@ timer counters.
 
 Required properties:
 - compatible      : "nuvoton,npcm750-timer" for Poleg NPCM750, or
-                    "nuvoton,wpcm450-timer" for Hermon WPCM450.
+                    "nuvoton,wpcm450-timer" for Hermon WPCM450, or
+                    "nuvoton,npcm845-timer" for Arbel NPCM845.
 - reg             : Offset and length of the register set for the device.
 - interrupts      : Contain the timer interrupt of timer 0.
 - clocks          : phandle of timer reference clock (usually a 25 MHz clock).
