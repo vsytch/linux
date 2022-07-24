@@ -1,14 +1,15 @@
 Nuvoton NPCM Reset controller
 
 Required properties:
-- compatible : "nuvoton,npcm750-reset" for NPCM7XX BMC
+- compatible : "nuvoton,npcm750-reset" for Poleg NPCM7XX BMC.
+			   "nuvoton,npcm845-reset" for Arbel NPCM8XX BMC.
 - reg : specifies physical base address and size of the register.
 - #reset-cells: must be set to 2
 - nuvoton,sysgcr - Contains a phandle to access GCR registers.
 
 Optional property:
 - nuvoton,sw-reset-number - Contains the software reset number to restart the SoC.
-  NPCM7xx contain four software reset that represent numbers 1 to 4.
+  NPCM contain four software reset that represent numbers 1 to 4.
 
   If 'nuvoton,sw-reset-number' is not specified software reset is disabled.
 
