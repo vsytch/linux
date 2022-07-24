@@ -3,6 +3,7 @@
 
 /dts-v1/;
 #include "nuvoton-npcm845.dtsi"
+#include "nuvoton-npcm845-pincfg-evb.dtsi"
 
 / {
 	model = "Nuvoton npcm845 Development Board (Device Tree)";
@@ -27,4 +28,18 @@
 
 &watchdog1 {
 	status = "okay";
+};
+
+&pinctrl {
+	pinctrl-names = "default";
+	pinctrl-0 = <
+			&jtag2_pins
+			&lpc_pins
+			&spix_pins
+			&pin108_slew
+			&pin109_slew
+			&pin240_slew
+			&pin241_slew
+			&pin242_slew
+			&pin243_slew>;
 };
