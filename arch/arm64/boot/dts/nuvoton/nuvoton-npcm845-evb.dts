@@ -138,6 +138,14 @@
 	spix-mode;
 };
 
+&ehci1 {
+	status = "okay";
+};
+
+&ehci2 {
+	status = "okay";
+};
+
 &lpc_kcs {
 	kcs1: kcs1@0 {
 		status = "okay";
@@ -150,6 +158,10 @@
 	kcs3: kcs3@0 {
 		status = "okay";
 	};
+};
+
+&rng {
+	status = "okay";
 };
 
 &adc {

@@ -66,6 +66,20 @@
 			reg = <0x0 0xf0801000 0x0 0x1000>;
 		};
 
+		ehci1: usb@f0828100 {
+			compatible = "nuvoton,npcm750-ehci";
+			reg = <0x0 0xf0828100 0x0 0x1000>;
+			interrupts = <GIC_SPI 61 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
+		};
+
+		ehci2: usb@f082a100 {
+			compatible = "nuvoton,npcm750-ehci";
+			reg = <0x0 0xf082a100 0x0 0x1000>;
+			interrupts = <GIC_SPI 63 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
+		};
+
 		fiu0: spi@fb000000 {
 			compatible = "nuvoton,npcm845-fiu";
 			#address-cells = <1>;
@@ -229,6 +243,13 @@
 				clocks = <&clk NPCM8XX_CLK_UART>;
 				interrupts = <GIC_SPI 198 IRQ_TYPE_LEVEL_HIGH>;
 				reg-shift = <2>;
+				status = "disabled";
+			};
+
+			rng: rng@b000 {
+				compatible = "nuvoton,npcm845-rng";
+				reg = <0xb000 0x8>;
+				clocks = <&clk NPCM8XX_CLK_APB1>;
 				status = "disabled";
 			};
 
