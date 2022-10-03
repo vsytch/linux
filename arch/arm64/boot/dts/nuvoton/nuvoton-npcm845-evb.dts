@@ -557,6 +557,10 @@
 			&jtag2_pins
 			&lpc_pins
 			&spix_pins
+			&pin4_slew
+			&pin5_slew
+			&pin6_slew
+			&pin7_slew
 			&pin108_slew
 			&pin109_slew
 			&pin240_slew
