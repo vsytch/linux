@@ -323,18 +323,22 @@
 			serial4: serial@4000 {
 				compatible = "nuvoton,npcm845-uart", "nuvoton,npcm750-uart";
 				reg = <0x4000 0x1000>;
-				clocks = <&clk NPCM8XX_CLK_UART>;
+				clocks = <&clk NPCM8XX_CLK_UART2>;
 				interrupts = <GIC_SPI 196 IRQ_TYPE_LEVEL_HIGH>;
 				reg-shift = <2>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&bu4_pins>;
 				status = "disabled";
 			};
 
 			serial5: serial@5000 {
 				compatible = "nuvoton,npcm845-uart", "nuvoton,npcm750-uart";
 				reg = <0x5000 0x1000>;
-				clocks = <&clk NPCM8XX_CLK_UART>;
+				clocks = <&clk NPCM8XX_CLK_UART2>;
 				interrupts = <GIC_SPI 197 IRQ_TYPE_LEVEL_HIGH>;
 				reg-shift = <2>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&bu5_pins>;
 				status = "disabled";
 			};
 
@@ -1532,6 +1536,14 @@
 		hgpio7_pins: hgpio7-pins {
 			groups = "hgpio7";
 			function = "hgpio7";
+		};
+		bu4_pins: bu4-pins {
+			groups = "bu4";
+			function = "bu4";
+		};
+		bu5_pins: bu5-pins {
+			groups = "bu5";
+			function = "bu5";
 		};
 	};
 };
