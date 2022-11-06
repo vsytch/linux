@@ -1660,5 +1660,9 @@
 			groups = "bu6";
 			function = "bu6";
 		};
+		gpo187_pins: gpo187-pins {
+			groups = "gpo187";
+			function = "gpo187";
+		};
 	};
 };
