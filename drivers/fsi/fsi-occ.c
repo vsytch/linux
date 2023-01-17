@@ -45,10 +45,6 @@ struct occ {
 	char name[32];
 	int idx;
 	u8 sequence_number;
-	void *buffer;
-	void *client_buffer;
-	size_t client_buffer_size;
-	size_t client_response_size;
 	enum versions version;
 	struct miscdevice mdev;
 	struct mutex occ_lock;
@@ -318,9 +314,7 @@ static int occ_putsram(struct occ *occ, const void *data, ssize_t len,
 		       u8 seq_no, u16 checksum)
 {
 	u32 data_len = ((len + 7) / 8) * 8;	/* must be multiples of 8 B */
-	size_t cmd_len, parsed_len, resp_data_len;
-	size_t resp_len = OCC_MAX_RESP_WORDS;
-	__be32 *buf = occ->buffer;
+	__be32 *buf;
 	u8 *byte_buf;
 	int idx = 0, rc;
 
@@ -471,15 +465,12 @@ int fsi_occ_submit(struct device *dev, const void *request, size_t req_len,
 	struct occ_response *resp = response;
 	size_t user_resp_len = *resp_len;
 	u8 seq_no;
-	u8 cmd_type;
 	u16 checksum = 0;
 	u16 resp_data_length;
 	const u8 *byte_request = (const u8 *)request;
-	unsigned long end;
+	unsigned long start;
 	int rc;
 	size_t i;
-
-	*resp_len = 0;
 
 	if (!occ)
 		return -ENODEV;
@@ -489,24 +480,11 @@ int fsi_occ_submit(struct device *dev, const void *request, size_t req_len,
 		return -EINVAL;
 	}
 
-	cmd_type = byte_request[1];
-
 	/* Checksum the request, ignoring first byte (sequence number). */
 	for (i = 1; i < req_len - 2; ++i)
 		checksum += byte_request[i];
 
-	rc = mutex_lock_interruptible(&occ->occ_lock);
-	if (rc)
-		return rc;
-
-	occ->client_buffer = response;
-	occ->client_buffer_size = user_resp_len;
-	occ->client_response_size = 0;
-
-	if (!occ->buffer) {
-		rc = -ENOENT;
-		goto done;
-	}
+	mutex_lock(&occ->occ_lock);
 
 	/*
 	 * Get a sequence number and update the counter. Avoid a sequence
@@ -631,11 +609,7 @@ static int occ_probe(struct platform_device *pdev)
 	occ->version = (uintptr_t)of_device_get_match_data(dev);
 	occ->dev = dev;
 	occ->sbefifo = dev->parent;
-	/*
-	 * Quickly derive a pseudo-random number from jiffies so that
-	 * re-probing the driver doesn't accidentally overlap sequence numbers.
-	 */
-	occ->sequence_number = (u8)((jiffies % 0xff) + 1);
+	occ->sequence_number = 1;
 	mutex_init(&occ->occ_lock);
 
 	if (dev->of_node) {

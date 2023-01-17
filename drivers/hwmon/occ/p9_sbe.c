@@ -27,82 +27,17 @@ struct p9_sbe_occ {
 
 #define to_p9_sbe_occ(x)	container_of((x), struct p9_sbe_occ, occ)
 
-static ssize_t ffdc_read(struct file *filp, struct kobject *kobj,
-			 struct bin_attribute *battr, char *buf, loff_t pos,
-			 size_t count)
+static int p9_sbe_occ_send_cmd(struct occ *occ, u8 *cmd, size_t len,
+			       void *resp, size_t resp_len)
 {
-	ssize_t rc = 0;
-	struct occ *occ = dev_get_drvdata(kobj_to_dev(kobj));
 	struct p9_sbe_occ *ctx = to_p9_sbe_occ(occ);
-
-	mutex_lock(&ctx->sbe_error_lock);
-	if (ctx->sbe_error) {
-		rc = memory_read_from_buffer(buf, count, &pos, ctx->ffdc,
-					     ctx->ffdc_len);
-		if (pos >= ctx->ffdc_len)
-			ctx->sbe_error = false;
-	}
-	mutex_unlock(&ctx->sbe_error_lock);
-
-	return rc;
-}
-static BIN_ATTR_RO(ffdc, OCC_MAX_RESP_WORDS * 4);
-
-static bool p9_sbe_occ_save_ffdc(struct p9_sbe_occ *ctx, const void *resp,
-				 size_t resp_len)
-{
-	bool notify = false;
-
-	mutex_lock(&ctx->sbe_error_lock);
-	if (!ctx->sbe_error) {
-		if (resp_len > ctx->ffdc_size) {
-			if (ctx->ffdc)
-				kvfree(ctx->ffdc);
-			ctx->ffdc = kvmalloc(resp_len, GFP_KERNEL);
-			if (!ctx->ffdc) {
-				ctx->ffdc_len = 0;
-				ctx->ffdc_size = 0;
-				goto done;
-			}
-
-			ctx->ffdc_size = resp_len;
-		}
-
-		notify = true;
-		ctx->sbe_error = true;
-		ctx->ffdc_len = resp_len;
-		memcpy(ctx->ffdc, resp, resp_len);
-	}
-
-done:
-	mutex_unlock(&ctx->sbe_error_lock);
-	return notify;
-}
-
-static int p9_sbe_occ_send_cmd(struct occ *occ, u8 *cmd, size_t len)
-{
-	struct occ_response *resp = &occ->resp;
-	struct p9_sbe_occ *ctx = to_p9_sbe_occ(occ);
-	size_t resp_len = sizeof(*resp);
-	int i;
 	int rc;
 
-	for (i = 0; i < OCC_CHECKSUM_RETRIES; ++i) {
-		rc = fsi_occ_submit(ctx->sbe, cmd, len, resp, &resp_len);
-		if (rc >= 0)
-			break;
-		if (resp_len) {
-			if (p9_sbe_occ_save_ffdc(ctx, resp, resp_len))
-				sysfs_notify(&occ->bus_dev->kobj, NULL,
-					     bin_attr_ffdc.attr.name);
+	rc = fsi_occ_submit(ctx->sbe, cmd, len, resp, &resp_len);
+	if (rc < 0)
+		return rc;
 
-			return rc;
-		}
-		if (rc != -EBADE)
-			return rc;
-	}
-
-	switch (resp->return_status) {
+	switch (((struct occ_response *)resp)->return_status) {
 	case OCC_RESP_CMD_IN_PRG:
 		rc = -ETIMEDOUT;
 		break;
